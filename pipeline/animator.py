@@ -34,6 +34,7 @@ TECHNICAL REQUIREMENTS:
   - Total scene duration: approximately 60 seconds
   - Class name: ContentScene (inherits from Scene)
   - Use only standard Manim CE imports (manim, numpy)
+  - ONLY use Text() for all text — never use Tex(), MathTex(), or any LaTeX-based objects
   - Clean typography: large readable text, generous spacing, no overcrowding
   - Minimal, purposeful animations — no gratuitous effects
   - Each section of the script gets its own visual segment
