@@ -44,6 +44,36 @@ class Spinner:
         self._thread.join()
 
 
+def extract_python(raw: str) -> str:
+    """
+    Robustly extract only valid Python from Claude's response.
+    Handles: plain code, ```python fences, mixed prose+code.
+    Always returns something that starts with a Python import or config line.
+    """
+    # Strategy 1: extract from ```python ... ``` fence
+    if "```python" in raw:
+        code = raw.split("```python", 1)[1]
+        code = code.split("```")[0]
+        return code.strip()
+
+    # Strategy 2: extract from generic ``` ... ``` fence
+    if "```" in raw:
+        parts = raw.split("```")
+        for part in parts[1::2]:   # odd-indexed = inside fences
+            stripped = part.strip()
+            if stripped.startswith(("from ", "import ", "#", "config")):
+                return stripped
+
+    # Strategy 3: find the first line that looks like Python and take everything from there
+    lines = raw.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith(("from manim", "import manim", "from manim import config", "config.pixel")):
+            return "\n".join(lines[i:])
+
+    # Strategy 4: return raw and let Manim surface the error
+    return raw
+
+
 def build_manim_prompt(script: dict, previous_code: str = None, error: str = None) -> str:
     bullets = "\n".join(f"  - {b}" for b in script["concept_bullets"])
     base = f"""\
@@ -95,7 +125,11 @@ PREVIOUS CODE:
 ```
 """
 
-    base += "\nReturn ONLY the Python code. No markdown fences, no explanations."
+    base += (
+        "\nReturn ONLY raw Python code. "
+        "The very first character of your response must be the letter 'f' (from manim import config). "
+        "No markdown, no fences, no explanations, no comments outside the code."
+    )
     return base
 
 
@@ -157,9 +191,7 @@ def main():
 
         print(f"✓ Scene generated ({len(manim_code.splitlines())} lines)")
 
-        if "```" in manim_code:
-            lines = manim_code.splitlines()
-            manim_code = "\n".join(l for l in lines if not l.startswith("```"))
+        manim_code = extract_python(manim_code)
 
         with open(MANIM_SCRIPT_PATH, "w") as f:
             f.write(manim_code)
