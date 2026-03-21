@@ -47,11 +47,18 @@ _usage_log: list[dict] = []
 # ── Mode 1: Claude CLI (local Claude Code session) ────────────────────────────
 
 def _call_cli(prompt: str, stage: str) -> str:
-    result = subprocess.run(
-        ["claude", "-p", prompt],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["claude", "-p", prompt],
+            capture_output=True,
+            text=True,
+            timeout=180,   # 3 minutes max — hang protection
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"[{stage}] claude CLI timed out after 180s. "
+            "Check your Claude Code session is active and retry."
+        )
     if result.returncode != 0:
         raise RuntimeError(
             f"[{stage}] claude CLI failed (exit {result.returncode}):\n{result.stderr}"
