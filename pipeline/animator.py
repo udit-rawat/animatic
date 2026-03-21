@@ -187,7 +187,7 @@ def main():
         # ── Step 1: Claude generates the Manim code ──────────────────────────
         with Spinner(f"Claude generating Manim scene (attempt {attempt}/{MAX_RETRIES})"):
             prompt = build_manim_prompt(script, previous_code=manim_code, error=error)
-            manim_code = claude_client.call(prompt, stage="animator", max_tokens=8096)
+            manim_code = claude_client.call(prompt, stage="animator", max_tokens=4096)
 
         print(f"✓ Scene generated ({len(manim_code.splitlines())} lines)")
 

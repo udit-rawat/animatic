@@ -32,11 +32,11 @@ DEFAULT_MAX_TOKENS = 4096
 # Override any via env vars (e.g. OPENROUTER_MODEL_ANIMATOR=qwen/qwen3-coder:free)
 # OPENROUTER_MODEL overrides ALL stages (useful for quick full-pipeline benchmarks)
 OPENROUTER_STAGE_DEFAULTS = {
-    "ranker":   "deepseek/deepseek-r1:free",                  # best reasoning
-    "scripter": "meta-llama/llama-3.3-70b-instruct:free",     # best creative writing
-    "animator": "deepseek/deepseek-r1:free",                   # confirmed free + strong code gen
+    "ranker":   "meta-llama/llama-3.3-70b-instruct:free",
+    "scripter": "meta-llama/llama-3.3-70b-instruct:free",
+    "animator": "meta-llama/llama-3.3-70b-instruct:free",
 }
-OPENROUTER_FALLBACK = "deepseek/deepseek-r1:free"
+OPENROUTER_FALLBACK = "meta-llama/llama-3.3-70b-instruct:free"
 
 
 def _openrouter_model_for(stage: str) -> str:
