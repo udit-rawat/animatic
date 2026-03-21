@@ -2,6 +2,9 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import threading
+import time
 
 from pipeline import claude_client
 
@@ -9,6 +12,36 @@ SCRIPT_INPUT = os.path.join(os.path.dirname(__file__), "..", "output", "script.j
 MANIM_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "manim_scripts", "scene.py")
 OUTPUT_VIDEO = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
 MAX_RETRIES = 3
+
+
+class Spinner:
+    """Shows a live spinner + elapsed time while a long operation runs."""
+    CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self, message: str):
+        self.message = message
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+
+    def _spin(self):
+        i = 0
+        start = time.time()
+        while not self._stop.is_set():
+            elapsed = int(time.time() - start)
+            sys.stdout.write(f"\r{self.CHARS[i % len(self.CHARS)]}  {self.message} ({elapsed}s elapsed)  ")
+            sys.stdout.flush()
+            i += 1
+            time.sleep(0.1)
+        sys.stdout.write("\r" + " " * 70 + "\r")
+        sys.stdout.flush()
+
+    def __enter__(self):
+        self._thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self._stop.set()
+        self._thread.join()
 
 
 def build_manim_prompt(script: dict, previous_code: str = None, error: str = None) -> str:
@@ -67,13 +100,22 @@ PREVIOUS CODE:
 
 
 def run_manim(script_path: str) -> tuple[bool, str]:
-    result = subprocess.run(
+    """Run manim and stream its output live so the user sees frame progress."""
+    process = subprocess.Popen(
         ["manim", "-qh", script_path, "ContentScene", "--format=mp4"],
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,   # merge stderr into stdout
         text=True,
+        bufsize=1,
     )
-    if result.returncode != 0:
-        return False, result.stderr + "\n" + result.stdout
+    output_lines = []
+    for line in process.stdout:
+        print(line, end="", flush=True)
+        output_lines.append(line)
+    process.wait()
+
+    if process.returncode != 0:
+        return False, "".join(output_lines[-60:])
     return True, ""
 
 
@@ -92,7 +134,6 @@ def find_rendered_mp4(script_path: str) -> str | None:
 
 
 def cleanup_manim_media(script_path: str):
-    """Remove the manim-generated media/ folder to keep only video.mp4."""
     for search_root in [os.path.dirname(script_path), os.getcwd()]:
         media_dir = os.path.join(search_root, "media")
         if os.path.isdir(media_dir):
@@ -109,11 +150,13 @@ def main():
     error = None
 
     for attempt in range(1, MAX_RETRIES + 1):
-        print(f"Generating Manim scene (attempt {attempt}/{MAX_RETRIES})...")
-        prompt = build_manim_prompt(script, previous_code=manim_code, error=error)
-        manim_code = claude_client.call(prompt, stage="animator", max_tokens=8096)
+        # ── Step 1: Claude generates the Manim code ──────────────────────────
+        with Spinner(f"Claude generating Manim scene (attempt {attempt}/{MAX_RETRIES})"):
+            prompt = build_manim_prompt(script, previous_code=manim_code, error=error)
+            manim_code = claude_client.call(prompt, stage="animator", max_tokens=8096)
 
-        # Strip markdown fences if Claude wrapped the code anyway
+        print(f"✓ Scene generated ({len(manim_code.splitlines())} lines)")
+
         if "```" in manim_code:
             lines = manim_code.splitlines()
             manim_code = "\n".join(l for l in lines if not l.startswith("```"))
@@ -121,8 +164,11 @@ def main():
         with open(MANIM_SCRIPT_PATH, "w") as f:
             f.write(manim_code)
 
-        print(f"Rendering (attempt {attempt})...")
+        # ── Step 2: Manim renders the video (live output) ────────────────────
+        print(f"\nRendering attempt {attempt}/{MAX_RETRIES} — frame progress below:")
+        print("─" * 60)
         success, error = run_manim(MANIM_SCRIPT_PATH)
+        print("─" * 60)
 
         if success:
             mp4 = find_rendered_mp4(MANIM_SCRIPT_PATH)
@@ -130,11 +176,11 @@ def main():
                 os.makedirs(os.path.dirname(OUTPUT_VIDEO), exist_ok=True)
                 shutil.copy2(mp4, OUTPUT_VIDEO)
                 cleanup_manim_media(MANIM_SCRIPT_PATH)
-                print(f"Video saved → {OUTPUT_VIDEO}")
+                print(f"\n✓ Video saved → {OUTPUT_VIDEO}")
                 return OUTPUT_VIDEO
             error = "Manim exited 0 but no .mp4 found."
 
-        print(f"Attempt {attempt} failed:\n{error[:400]}")
+        print(f"\n✗ Attempt {attempt} failed. Last error:\n{error[:400]}\n")
 
     raise RuntimeError(f"Animator failed after {MAX_RETRIES} attempts.\nLast error:\n{error}")
 
