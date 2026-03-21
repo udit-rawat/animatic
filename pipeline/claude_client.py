@@ -127,25 +127,39 @@ def _call_cli(prompt: str, stage: str) -> str:
 
 def _call_openrouter(prompt: str, stage: str, max_tokens: int) -> str:
     import urllib.request
+    import urllib.error
+    log = _logger_mod.get()
     model = _openrouter_model_for(stage)
     payload = json.dumps({
         "model": model,
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
-    req = urllib.request.Request(
-        "https://openrouter.ai/api/v1/chat/completions",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/udit-rawat/adamax-content-engine",
-            "X-Title": "adamax-content-engine",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.loads(resp.read())
+
+    wait_times = [30, 60, 120]   # backoff schedule for 429s
+    for attempt, wait in enumerate(wait_times + [None], start=1):
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/udit-rawat/adamax-content-engine",
+                "X-Title": "adamax-content-engine",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read())
+            break   # success
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and wait is not None:
+                log.warning(f"[{stage}] OpenRouter 429 rate limit — waiting {wait}s before retry {attempt+1}")
+                print(f"⏳ Rate limited by OpenRouter — waiting {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
 
     text        = data["choices"][0]["message"]["content"]
     usage       = data.get("usage", {})
