@@ -26,7 +26,7 @@ from pipeline import logger as _logger_mod
 
 # ── Model config ──────────────────────────────────────────────────────────────
 CLAUDE_MODEL       = "claude-sonnet-4-6"
-DEFAULT_MAX_TOKENS = 8096
+DEFAULT_MAX_TOKENS = 4096
 
 # Per-stage OpenRouter models — each picked for its strength.
 # Override any via env vars (e.g. OPENROUTER_MODEL_ANIMATOR=qwen/qwen3-coder:free)
@@ -34,7 +34,7 @@ DEFAULT_MAX_TOKENS = 8096
 OPENROUTER_STAGE_DEFAULTS = {
     "ranker":   "deepseek/deepseek-r1:free",                  # best reasoning
     "scripter": "meta-llama/llama-3.3-70b-instruct:free",     # best creative writing
-    "animator": "qwen/qwen3-coder:free",                       # best code gen
+    "animator": "deepseek/deepseek-r1:free",                   # confirmed free + strong code gen
 }
 OPENROUTER_FALLBACK = "deepseek/deepseek-r1:free"
 
