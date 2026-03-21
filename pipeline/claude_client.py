@@ -48,7 +48,7 @@ _usage_log: list[dict] = []
 
 def _call_cli(prompt: str, stage: str) -> str:
     result = subprocess.run(
-        ["claude", "-p", prompt, "--model", CLAUDE_MODEL, "--output-format", "json"],
+        ["claude", "-p", prompt],
         capture_output=True,
         text=True,
     )
@@ -56,16 +56,8 @@ def _call_cli(prompt: str, stage: str) -> str:
         raise RuntimeError(
             f"[{stage}] claude CLI failed (exit {result.returncode}):\n{result.stderr}"
         )
-    raw = result.stdout.strip()
-    try:
-        envelope = json.loads(raw)
-        text     = envelope.get("result") or envelope.get("content") or raw
-        cost_usd = float(envelope.get("cost_usd", 0.0))
-    except (json.JSONDecodeError, ValueError):
-        text     = raw
-        cost_usd = 0.0
-    _usage_log.append({"stage": stage, "mode": "claude_cli", "cost_usd": round(cost_usd, 6)})
-    return text
+    _usage_log.append({"stage": stage, "mode": "claude_cli", "cost_usd": 0.0})
+    return result.stdout.strip()
 
 
 # ── Mode 2: OpenRouter (free/cheap third-party models) ───────────────────────
