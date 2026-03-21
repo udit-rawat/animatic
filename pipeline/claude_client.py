@@ -53,12 +53,20 @@ def _call_cli(prompt: str, stage: str) -> str:
     log = _logger_mod.get()
     log.debug(f"[{stage}] CLI call starting — prompt length: {len(prompt)} chars")
     t0 = time.time()
+
+    # CI=true + NO_COLOR=1 tells the Claude CLI it's running headless (no TTY).
+    # Without these, the subprocess hangs waiting for a terminal that never comes.
+    env = os.environ.copy()
+    env["CI"] = "true"
+    env["NO_COLOR"] = "1"
+
     try:
         result = subprocess.run(
             ["claude", "-p", prompt],
             capture_output=True,
             text=True,
             timeout=180,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         elapsed = int(time.time() - t0)
