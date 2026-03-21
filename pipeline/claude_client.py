@@ -32,11 +32,11 @@ DEFAULT_MAX_TOKENS = 4096
 # Override any via env vars (e.g. OPENROUTER_MODEL_ANIMATOR=qwen/qwen3-coder:free)
 # OPENROUTER_MODEL overrides ALL stages (useful for quick full-pipeline benchmarks)
 OPENROUTER_STAGE_DEFAULTS = {
-    "ranker":   "meta-llama/llama-3.3-70b-instruct:free",
-    "scripter": "meta-llama/llama-3.3-70b-instruct:free",
-    "animator": "meta-llama/llama-3.3-70b-instruct:free",
+    "ranker":   "minimax/minimax-m2:free",
+    "scripter": "minimax/minimax-m2:free",
+    "animator": "minimax/minimax-m2:free",
 }
-OPENROUTER_FALLBACK = "meta-llama/llama-3.3-70b-instruct:free"
+OPENROUTER_FALLBACK = "minimax/minimax-m2:free"
 
 
 def _openrouter_model_for(stage: str) -> str:
