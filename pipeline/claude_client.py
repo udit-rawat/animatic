@@ -1,60 +1,56 @@
 """
-Shared Anthropic SDK wrapper.
-Routes all Claude calls through one place so token usage is tracked
-across the entire pipeline run and reported by the auditor.
+Claude Code CLI wrapper.
+All LLM calls go through here using `claude -p --output-format json`
+so token cost is tracked per stage without any API key.
+Authentication is handled by the active Claude Code session.
 """
-import os
-from anthropic import Anthropic
-from dotenv import load_dotenv
-
-load_dotenv()
+import json
+import subprocess
 
 MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 8096
 
-# Sonnet 4.6 pricing (USD per million tokens)
-INPUT_COST_PER_M = 3.00
-OUTPUT_COST_PER_M = 15.00
-
-_client: Anthropic | None = None
 _usage_log: list[dict] = []
 
 
-def _get_client() -> Anthropic:
-    global _client
-    if _client is None:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set in environment / .env")
-        _client = Anthropic(api_key=api_key)
-    return _client
-
-
-def call(prompt: str, stage: str, max_tokens: int = MAX_TOKENS) -> str:
+def call(prompt: str, stage: str, max_tokens: int = 8096) -> str:
     """
-    Send a single-turn prompt to Claude and return the text response.
-    Token usage is recorded against the given stage name.
+    Send prompt to Claude via CLI and return the text response.
+    Cost is recorded against the given stage name.
     """
-    client = _get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
+    result = subprocess.run(
+        [
+            "claude",
+            "-p", prompt,
+            "--model", MODEL,
+            "--output-format", "json",
+        ],
+        capture_output=True,
+        text=True,
     )
 
-    usage = response.usage
-    input_tok = usage.input_tokens
-    output_tok = usage.output_tokens
-    cost = (input_tok * INPUT_COST_PER_M / 1_000_000) + (output_tok * OUTPUT_COST_PER_M / 1_000_000)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"[{stage}] claude CLI failed (exit {result.returncode}):\n{result.stderr}"
+        )
+
+    raw = result.stdout.strip()
+
+    # Parse the JSON envelope from --output-format json
+    try:
+        envelope = json.loads(raw)
+        text = envelope.get("result", "") or envelope.get("content", "") or raw
+        cost_usd = float(envelope.get("cost_usd", 0.0))
+    except (json.JSONDecodeError, ValueError):
+        # Fallback: treat entire stdout as plain text, no cost data
+        text = raw
+        cost_usd = 0.0
 
     _usage_log.append({
         "stage": stage,
-        "input_tokens": input_tok,
-        "output_tokens": output_tok,
-        "cost_usd": round(cost, 6),
+        "cost_usd": round(cost_usd, 6),
     })
 
-    return response.content[0].text
+    return text
 
 
 def get_usage_log() -> list[dict]:

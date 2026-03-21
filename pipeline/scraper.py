@@ -13,7 +13,7 @@ USER_AGENT = "adamax-content-engine/1.0 (daily AI video pipeline)"
 
 
 def get_subreddits() -> list[str]:
-    raw = os.environ.get("SUBREDDITS", "r/MachineLearning,r/LocalLLaMA")
+    raw = os.environ.get("SUBREDDITS", "r/MachineLearning,r/LocalLLaMA,r/deeplearning,r/mlops,r/StableDiffusion,r/Transformers,r/computervision")
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
@@ -71,7 +71,7 @@ def main():
 
     for sub in get_subreddits():
         print(f"Fetching {sub}...")
-        candidates += fetch_reddit_posts(sub, limit=5)
+        candidates += fetch_reddit_posts(sub, limit=3)
 
     print("Fetching arXiv...")
     candidates += fetch_arxiv_papers(

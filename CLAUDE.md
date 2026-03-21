@@ -22,19 +22,21 @@ Automated daily AI short-form video pipeline. Runs once per day, end-to-end:
 - Never downgrade model or reduce token budget to save cost
 
 ## Architecture Decisions
-- Anthropic Python SDK (not subprocess CLI) for all LLM calls — enables token auditing
+- All LLM calls use `claude -p --output-format json --model claude-sonnet-4-6` via subprocess
+- No Anthropic API key needed — authentication is handled by the active Claude Code session
+- Run the pipeline from within a Claude Code session: `! python run.py`
 - Subreddits are env-configurable via `SUBREDDITS` in `.env`
 - Output paths are hardcoded: `output/` for data, `manim_scripts/` for generated scenes
 - Manim `media/` folder is cleaned up after video is copied to `output/video.mp4`
 - Only `output/script.json` and `output/video.mp4` are the "final" deliverables; intermediate JSONs are kept for debugging
 
 ## Token Auditing
-- Every Claude API call is routed through `pipeline/claude_client.py`
+- Every Claude CLI call is routed through `pipeline/claude_client.py`
+- Cost is extracted from the JSON envelope (`cost_usd` field) returned by `--output-format json`
 - Usage is accumulated in-process and printed at end of full pipeline run
 - Audit saved to `output/audit.json` after each run
 
 ## Environment Variables
 See `.env.example`. Required:
-- `ANTHROPIC_API_KEY` — for all Claude API calls
 - `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` — for delivery
-- `SUBREDDITS` — comma-separated list, e.g. `r/MachineLearning,r/LocalLLaMA`
+- `SUBREDDITS` — comma-separated list, e.g. `r/MachineLearning,r/LocalLLaMA` (optional, has default)
