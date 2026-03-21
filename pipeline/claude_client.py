@@ -18,6 +18,9 @@ All calls go through call() — pipeline stages are unaware of the mode.
 import json
 import os
 import subprocess
+import time
+
+from pipeline import logger as _logger_mod
 
 # ── Model config ──────────────────────────────────────────────────────────────
 CLAUDE_MODEL       = "claude-sonnet-4-6"
@@ -47,24 +50,37 @@ _usage_log: list[dict] = []
 # ── Mode 1: Claude CLI (local Claude Code session) ────────────────────────────
 
 def _call_cli(prompt: str, stage: str) -> str:
+    log = _logger_mod.get()
+    log.debug(f"[{stage}] CLI call starting — prompt length: {len(prompt)} chars")
+    t0 = time.time()
     try:
         result = subprocess.run(
             ["claude", "-p", prompt],
             capture_output=True,
             text=True,
-            timeout=180,   # 3 minutes max — hang protection
+            timeout=180,
         )
     except subprocess.TimeoutExpired:
+        elapsed = int(time.time() - t0)
+        log.error(f"[{stage}] CLI TIMED OUT after {elapsed}s — subprocess never returned")
         raise RuntimeError(
             f"[{stage}] claude CLI timed out after 180s. "
             "Check your Claude Code session is active and retry."
         )
+
+    elapsed = round(time.time() - t0, 1)
+
     if result.returncode != 0:
+        log.error(f"[{stage}] CLI failed in {elapsed}s (exit {result.returncode})\nSTDERR: {result.stderr[:500]}")
         raise RuntimeError(
             f"[{stage}] claude CLI failed (exit {result.returncode}):\n{result.stderr}"
         )
+
+    response = result.stdout.strip()
+    log.debug(f"[{stage}] CLI success in {elapsed}s — response length: {len(response)} chars")
+    log.debug(f"[{stage}] Response preview: {response[:200]}")
     _usage_log.append({"stage": stage, "mode": "claude_cli", "cost_usd": 0.0})
-    return result.stdout.strip()
+    return response
 
 
 # ── Mode 2: OpenRouter (free/cheap third-party models) ───────────────────────
@@ -111,6 +127,9 @@ def _call_openrouter(prompt: str, stage: str, max_tokens: int) -> str:
 # ── Mode 3: Anthropic SDK (GitHub Actions / CI) ───────────────────────────────
 
 def _call_sdk(prompt: str, stage: str, max_tokens: int) -> str:
+    log = _logger_mod.get()
+    log.debug(f"[{stage}] SDK call starting — prompt: {len(prompt)} chars")
+    t0 = time.time()
     from anthropic import Anthropic
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     response = client.messages.create(
@@ -119,7 +138,9 @@ def _call_sdk(prompt: str, stage: str, max_tokens: int) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
     usage       = response.usage
-    cost_usd    = (usage.input_tokens * 3.00 + usage.output_tokens * 15.00) / 1_000_000
+    elapsed = round(time.time() - t0, 1)
+    cost_usd = (usage.input_tokens * 3.00 + usage.output_tokens * 15.00) / 1_000_000
+    log.debug(f"[{stage}] SDK success in {elapsed}s — in:{usage.input_tokens} out:{usage.output_tokens} ${cost_usd:.4f}")
     _usage_log.append({
         "stage": stage,
         "mode": "anthropic_sdk",

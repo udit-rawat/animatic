@@ -38,6 +38,8 @@ def apply_provider(provider: str, model: str | None):
 
 
 def run_stage(name: str):
+    from pipeline.logger import get as get_log
+    get_log().info(f"Stage START: {name}")
     print(f"\n--- Running: {name} ---")
     if name == "scraper":
         from pipeline.scraper import main
@@ -84,8 +86,13 @@ def main():
     if args.provider:
         apply_provider(args.provider, args.model)
 
+    from pipeline.logger import setup as log_setup
+    log = log_setup()
+
     from pipeline.claude_client import get_mode
-    print(f"\n🔧 LLM mode: {get_mode()}\n")
+    mode = get_mode()
+    log.info(f"Pipeline starting — LLM mode: {mode}")
+    print(f"\n🔧 LLM mode: {mode}\n")
 
     stages_to_run = [args.stage] if args.stage else STAGES
 
@@ -93,6 +100,8 @@ def main():
         try:
             run_stage(stage)
         except Exception as e:
+            from pipeline.logger import get as get_log
+            get_log().error(f"Stage FAILED: {stage} — {e}", exc_info=True)
             print(f"\n[ERROR] Stage '{stage}' failed: {e}", file=sys.stderr)
             sys.exit(1)
 
