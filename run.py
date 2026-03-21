@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 
 from dotenv import load_dotenv
@@ -6,6 +7,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 STAGES = ["scraper", "ranker", "scripter", "animator", "notifier"]
+
+
+def apply_provider(provider: str, model: str | None):
+    """
+    Override LLM provider via CLI flag instead of editing .env.
+    Manipulates env vars so claude_client auto-detection picks the right mode.
+    """
+    if provider == "claude":
+        os.environ.pop("OPENROUTER_API_KEY", None)
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    elif provider == "openrouter":
+        if not os.environ.get("OPENROUTER_API_KEY"):
+            print("[ERROR] --provider openrouter requires OPENROUTER_API_KEY in .env", file=sys.stderr)
+            sys.exit(1)
+        os.environ.pop("ANTHROPIC_API_KEY", None)   # ensure OpenRouter wins priority
+
+    elif provider == "anthropic":
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            print("[ERROR] --provider anthropic requires ANTHROPIC_API_KEY in .env", file=sys.stderr)
+            sys.exit(1)
+        os.environ.pop("OPENROUTER_API_KEY", None)  # ensure Anthropic wins priority
+
+    if model:
+        # Overrides all per-stage model vars — useful for single-model benchmarks
+        os.environ["OPENROUTER_MODEL"] = model
+        if provider != "openrouter":
+            print(f"[WARN] --model flag only applies to OpenRouter mode, ignored for '{provider}'")
 
 
 def run_stage(name: str):
@@ -32,7 +61,31 @@ def main():
         choices=STAGES,
         help="Run a single stage instead of the full pipeline",
     )
+    parser.add_argument(
+        "--provider",
+        choices=["claude", "openrouter", "anthropic"],
+        help=(
+            "LLM provider to use. "
+            "claude = Claude Code CLI session (default, no key needed). "
+            "openrouter = free/cheap models via OpenRouter (needs OPENROUTER_API_KEY). "
+            "anthropic = Anthropic SDK (needs ANTHROPIC_API_KEY)."
+        ),
+    )
+    parser.add_argument(
+        "--model",
+        help=(
+            "Override the OpenRouter model for all stages "
+            "(e.g. deepseek/deepseek-r1:free). "
+            "Only applies with --provider openrouter."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.provider:
+        apply_provider(args.provider, args.model)
+
+    from pipeline.claude_client import get_mode
+    print(f"\n🔧 LLM mode: {get_mode()}\n")
 
     stages_to_run = [args.stage] if args.stage else STAGES
 
@@ -43,8 +96,6 @@ def main():
             print(f"\n[ERROR] Stage '{stage}' failed: {e}", file=sys.stderr)
             sys.exit(1)
 
-    # Print token audit after full pipeline run (skip for single-stage invocations
-    # so the output stays clean during development)
     if not args.stage:
         try:
             from pipeline.auditor import build_report, print_report, save_report
