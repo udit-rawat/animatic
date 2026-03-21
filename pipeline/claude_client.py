@@ -17,6 +17,8 @@ All calls go through call() — pipeline stages are unaware of the mode.
 """
 import json
 import os
+import re
+import select
 import subprocess
 import time
 
@@ -48,47 +50,77 @@ _usage_log: list[dict] = []
 
 
 # ── Mode 1: Claude CLI (local Claude Code session) ────────────────────────────
+# Claude CLI requires a real PTY — without one it hangs indefinitely regardless
+# of CI/NO_COLOR flags. We use Python's built-in `pty` module to create one.
+_ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 def _call_cli(prompt: str, stage: str) -> str:
+    import pty
     log = _logger_mod.get()
-    log.debug(f"[{stage}] CLI call starting — prompt length: {len(prompt)} chars")
+    log.debug(f"[{stage}] CLI call starting via PTY — prompt length: {len(prompt)} chars")
     t0 = time.time()
+    timeout = 300   # 5 min ceiling
 
-    # CI=true + NO_COLOR=1 tells the Claude CLI it's running headless (no TTY).
-    # Without these, the subprocess hangs waiting for a terminal that never comes.
     env = os.environ.copy()
-    env["CI"] = "true"
     env["NO_COLOR"] = "1"
+    env["TERM"] = "dumb"
 
+    master_fd, slave_fd = pty.openpty()
+    process = subprocess.Popen(
+        ["claude", "-p", prompt],
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        close_fds=True,
+        env=env,
+    )
+    os.close(slave_fd)
+
+    chunks: list[bytes] = []
     try:
-        result = subprocess.run(
-            ["claude", "-p", prompt],
-            capture_output=True,
-            text=True,
-            timeout=180,
-            env=env,
-        )
-    except subprocess.TimeoutExpired:
-        elapsed = int(time.time() - t0)
-        log.error(f"[{stage}] CLI TIMED OUT after {elapsed}s — subprocess never returned")
-        raise RuntimeError(
-            f"[{stage}] claude CLI timed out after 180s. "
-            "Check your Claude Code session is active and retry."
-        )
+        while True:
+            elapsed = time.time() - t0
+            if elapsed > timeout:
+                process.kill()
+                log.error(f"[{stage}] CLI TIMED OUT after {int(elapsed)}s")
+                raise RuntimeError(f"[{stage}] claude CLI timed out after {timeout}s.")
+
+            if process.poll() is not None:
+                # drain any remaining bytes
+                try:
+                    while True:
+                        r, _, _ = select.select([master_fd], [], [], 0.2)
+                        if not r:
+                            break
+                        chunks.append(os.read(master_fd, 4096))
+                except OSError:
+                    pass
+                break
+
+            try:
+                r, _, _ = select.select([master_fd], [], [], 1.0)
+                if r:
+                    chunks.append(os.read(master_fd, 4096))
+            except OSError:
+                break
+    finally:
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
 
     elapsed = round(time.time() - t0, 1)
+    raw = b"".join(chunks).decode("utf-8", errors="replace")
+    raw = _ANSI_ESCAPE.sub("", raw).strip()   # strip terminal escape codes
 
-    if result.returncode != 0:
-        log.error(f"[{stage}] CLI failed in {elapsed}s (exit {result.returncode})\nSTDERR: {result.stderr[:500]}")
-        raise RuntimeError(
-            f"[{stage}] claude CLI failed (exit {result.returncode}):\n{result.stderr}"
-        )
+    if process.returncode != 0:
+        log.error(f"[{stage}] CLI failed in {elapsed}s (exit {process.returncode})\n{raw[:400]}")
+        raise RuntimeError(f"[{stage}] claude CLI failed (exit {process.returncode}):\n{raw[:400]}")
 
-    response = result.stdout.strip()
-    log.debug(f"[{stage}] CLI success in {elapsed}s — response length: {len(response)} chars")
-    log.debug(f"[{stage}] Response preview: {response[:200]}")
+    log.debug(f"[{stage}] CLI success in {elapsed}s — response length: {len(raw)} chars")
+    log.debug(f"[{stage}] Response preview: {raw[:200]}")
     _usage_log.append({"stage": stage, "mode": "claude_cli", "cost_usd": 0.0})
-    return response
+    return raw
 
 
 # ── Mode 2: OpenRouter (free/cheap third-party models) ───────────────────────
