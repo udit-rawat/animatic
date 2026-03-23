@@ -6,35 +6,49 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-STAGES = ["scraper", "ranker", "scripter", "animator", "notifier"]
+STAGES = ["scraper", "ranker", "scripter", "narrator", "animator", "mixer", "notifier"]
 
 
 def apply_provider(provider: str, model: str | None):
     """
-    Override LLM provider via CLI flag instead of editing .env.
-    Manipulates env vars so claude_client auto-detection picks the right mode.
+    Sets FORCE_PROVIDER env var so claude_client uses the right LLM backend.
+    Does NOT pop GEMINI_API_KEY — narrator TTS always needs it regardless of provider.
     """
     if provider == "claude":
-        os.environ.pop("OPENROUTER_API_KEY", None)
-        os.environ.pop("ANTHROPIC_API_KEY", None)
+        os.environ["FORCE_PROVIDER"] = "claude"
 
     elif provider == "openrouter":
         if not os.environ.get("OPENROUTER_API_KEY"):
             print("[ERROR] --provider openrouter requires OPENROUTER_API_KEY in .env", file=sys.stderr)
             sys.exit(1)
-        os.environ.pop("ANTHROPIC_API_KEY", None)   # ensure OpenRouter wins priority
+        os.environ["FORCE_PROVIDER"] = "openrouter"
+
+    elif provider == "gemini":
+        if not os.environ.get("GEMINI_API_KEY"):
+            print("[ERROR] --provider gemini requires GEMINI_API_KEY in .env", file=sys.stderr)
+            sys.exit(1)
+        os.environ["FORCE_PROVIDER"] = "gemini"
 
     elif provider == "anthropic":
         if not os.environ.get("ANTHROPIC_API_KEY"):
             print("[ERROR] --provider anthropic requires ANTHROPIC_API_KEY in .env", file=sys.stderr)
             sys.exit(1)
-        os.environ.pop("OPENROUTER_API_KEY", None)  # ensure Anthropic wins priority
+        os.environ["FORCE_PROVIDER"] = "anthropic"
+
+    elif provider == "handoff":
+        os.environ["FORCE_PROVIDER"] = "handoff"
 
     if model:
-        # Overrides all per-stage model vars — useful for single-model benchmarks
         os.environ["OPENROUTER_MODEL"] = model
         if provider != "openrouter":
             print(f"[WARN] --model flag only applies to OpenRouter mode, ignored for '{provider}'")
+
+
+def _is_gemini_active() -> bool:
+    force = os.environ.get("FORCE_PROVIDER")
+    if force:
+        return force == "gemini"
+    return bool(os.environ.get("GEMINI_API_KEY"))
 
 
 def run_stage(name: str):
@@ -49,6 +63,10 @@ def run_stage(name: str):
         from pipeline.scripter import main
     elif name == "animator":
         from pipeline.animator import main
+    elif name == "narrator":
+        from pipeline.narrator import main
+    elif name == "mixer":
+        from pipeline.mixer import main
     elif name == "notifier":
         from pipeline.notifier import main
     else:
@@ -65,9 +83,10 @@ def main():
     )
     parser.add_argument(
         "--provider",
-        choices=["claude", "openrouter", "anthropic"],
+        choices=["claude", "openrouter", "anthropic", "gemini", "handoff"],
         help=(
             "LLM provider to use. "
+            "gemini = Gemini API, free tier (needs GEMINI_API_KEY). "
             "claude = Claude Code CLI session (default, no key needed). "
             "openrouter = free/cheap models via OpenRouter (needs OPENROUTER_API_KEY). "
             "anthropic = Anthropic SDK (needs ANTHROPIC_API_KEY)."
@@ -81,10 +100,43 @@ def main():
             "Only applies with --provider openrouter."
         ),
     )
+    parser.add_argument(
+        "--handoff-animator",
+        action="store_true",
+        help=(
+            "Run the full pipeline with Gemini except the animator stage, "
+            "which pauses and waits for you to paste the prompt into a Claude session."
+        ),
+    )
+    parser.add_argument(
+        "--check-quota",
+        action="store_true",
+        help="Show Gemini daily quota status and exit (no pipeline run).",
+    )
+    parser.add_argument(
+        "--rca",
+        action="store_true",
+        help="Show day-level run audit + root cause analysis for quota spend, then exit.",
+    )
     args = parser.parse_args()
 
     if args.provider:
         apply_provider(args.provider, args.model)
+
+    if args.handoff_animator:
+        os.environ["FORCE_PROVIDER_ANIMATOR"] = "handoff"
+
+    # ── Quota / RCA check ─────────────────────────────────────────────────────
+    if args.check_quota:
+        from pipeline.quota import print_status
+        print_status(verbose=True)
+        return
+
+    if args.rca:
+        from pipeline.quota import print_status, print_rca
+        print_status(verbose=True)
+        print_rca()
+        return
 
     from pipeline.logger import setup as log_setup
     log = log_setup()
@@ -94,16 +146,55 @@ def main():
     log.info(f"Pipeline starting — LLM mode: {mode}")
     print(f"\n🔧 LLM mode: {mode}\n")
 
-    stages_to_run = [args.stage] if args.stage else STAGES
+    # Auto-print quota status before a Gemini full-pipeline run so the user
+    # knows upfront if they're likely to hit the daily limit mid-run.
+    if _is_gemini_active() and not args.stage:
+        try:
+            from pipeline.quota import print_status, get_status
+            print_status(verbose=True)
+            s = get_status()
+            if not s["can_run_minimal"]:
+                print("[ERROR] Gemini quota too low to attempt a full run.", file=sys.stderr)
+                print("        Run with --provider openrouter as a fallback.", file=sys.stderr)
+                sys.exit(1)
+        except Exception:
+            pass  # quota check is non-critical — never block the pipeline
 
+    stages_to_run = [args.stage] if args.stage else STAGES
+    run_type = args.stage if args.stage else "full"
+
+    # Record run start (Gemini-only — other providers don't have quota concerns)
+    run_id = None
+    if _is_gemini_active():
+        try:
+            from pipeline.quota import start_run
+            run_id = start_run(run_type)
+        except Exception:
+            pass
+
+    failed_stage = None
     for stage in stages_to_run:
         try:
             run_stage(stage)
         except Exception as e:
+            failed_stage = stage
             from pipeline.logger import get as get_log
             get_log().error(f"Stage FAILED: {stage} — {e}", exc_info=True)
             print(f"\n[ERROR] Stage '{stage}' failed: {e}", file=sys.stderr)
+            if run_id is not None:
+                try:
+                    from pipeline.quota import end_run
+                    end_run(run_id, outcome="failed", failed_stage=stage)
+                except Exception:
+                    pass
             sys.exit(1)
+
+    if run_id is not None:
+        try:
+            from pipeline.quota import end_run
+            end_run(run_id, outcome="success")
+        except Exception:
+            pass
 
     if not args.stage:
         try:
