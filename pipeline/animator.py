@@ -8,10 +8,11 @@ import time
 
 from pipeline import claude_client
 
-SCRIPT_INPUT = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
+SCRIPT_INPUT  = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
+TIMING_INPUT  = os.path.join(os.path.dirname(__file__), "..", "output", "narration_timing.json")
 MANIM_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "manim_scripts", "scene.py")
-OUTPUT_VIDEO = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
-MAX_RETRIES = 3
+OUTPUT_VIDEO  = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
+MAX_RETRIES   = 3
 
 
 class Spinner:
@@ -74,19 +75,68 @@ def extract_python(raw: str) -> str:
     return raw
 
 
+def strip_markdown_artifacts(code: str) -> str:
+    """Remove any stray markdown fences the LLM left inside the code."""
+    lines = code.splitlines()
+    cleaned = [ln for ln in lines if ln.strip() not in ("```", "```python", "```py")]
+    return "\n".join(cleaned)
+
+
+def _load_timing() -> dict:
+    if os.path.exists(TIMING_INPUT):
+        with open(TIMING_INPUT) as f:
+            return json.load(f)
+    return {}
+
+
+def _timing_block(script: dict, timing: dict) -> str:
+    """Build the VIDEO SCRIPT section of the prompt, with timecodes if available."""
+    if not timing:
+        bullets = "\n".join(f"  - {b}" for b in script["concept_bullets"])
+        return (
+            f"VIDEO SCRIPT:\n"
+            f"  Hook    (0-5s):   {script['hook']}\n"
+            f"  Concept (5-45s):\n{bullets}\n"
+            f"  Takeaway (45-55s): {script['takeaway']}\n"
+            f"  CTA      (55-60s): {script['cta']}\n"
+        )
+
+    def tc(key: str) -> str:
+        t = timing.get(key, {})
+        if t:
+            return f"[{t['start']:.1f}s → {t['end']:.1f}s  dur={t['duration']:.1f}s]"
+        return ""
+
+    n = len(script["concept_bullets"])
+    concept_lines = "\n".join(
+        f"  - {tc(f'concept_{i+1}')} {b}"
+        for i, b in enumerate(script["concept_bullets"])
+    )
+    total = sum(t.get("duration", 0) for t in timing.values())
+
+    return (
+        f"VIDEO SCRIPT WITH NARRATION TIMECODES (narration is pre-recorded — match these exactly):\n"
+        f"  Hook    {tc('hook')}: {script['hook']}\n"
+        f"  Concept:\n{concept_lines}\n"
+        f"  Takeaway+CTA {tc('takeaway_cta')}: {script['takeaway']} / {script['cta']}\n"
+        f"\n"
+        f"CRITICAL SYNC REQUIREMENT:\n"
+        f"  Total video duration must be exactly {total:.1f} seconds.\n"
+        f"  Use self.wait() so that each section's animations START and END at the shown timecodes.\n"
+        f"  The viewer hears narration for that section while watching its animation — they must align.\n"
+    )
+
+
 def build_manim_prompt(script: dict, previous_code: str = None, error: str = None) -> str:
-    bullets = "\n".join(f"  - {b}" for b in script["concept_bullets"])
+    timing = _load_timing()
+    script_block = _timing_block(script, timing)
+    total_dur = int(sum(t.get("duration", 0) for t in timing.values())) if timing else 60
+
     base = f"""\
 You are a Manim Community Edition expert. Generate a complete, runnable Manim Python script
-for a 60-second portrait-format explainer video for AI engineers.
+for a portrait-format explainer video for AI engineers.
 
-VIDEO SCRIPT:
-  Hook    (0-5s):   {script['hook']}
-  Concept (5-45s):
-{bullets}
-  Takeaway (45-55s): {script['takeaway']}
-  CTA      (55-60s): {script['cta']}
-
+{script_block}
 TECHNICAL REQUIREMENTS:
   - Set portrait format at the TOP of the file, before any imports take effect:
       from manim import config
@@ -94,7 +144,7 @@ TECHNICAL REQUIREMENTS:
       config.pixel_height = 1920
       config.frame_rate = 30
   - Background: BLACK
-  - Total scene duration: approximately 60 seconds
+  - Total scene duration: approximately {total_dur} seconds (match narration length)
   - Class name: ContentScene (inherits from Scene)
   - Use only standard Manim CE imports (manim, numpy)
   - ONLY use Text() for all text — never use Tex(), MathTex(), or any LaTeX-based objects
@@ -106,8 +156,10 @@ TECHNICAL REQUIREMENTS:
 CODE QUALITY:
   - Every line must be complete and runnable — no placeholder comments like "# add animation here"
   - No external assets, no custom fonts, no file I/O
-  - Use self.play() and self.wait() properly to hit the 60-second target
+  - Use self.play() and self.wait() properly to hit the {total_dur}-second target
   - Prefer FadeIn, Write, Transform — avoid experimental or version-sensitive methods
+  - Valid edge constants: UP, DOWN, LEFT, RIGHT — NEVER use TOP or BOTTOM (they don't exist in Manim)
+  - to_edge() accepts UP/DOWN/LEFT/RIGHT only
 """
 
     if previous_code and error:
@@ -192,6 +244,7 @@ def main():
         print(f"✓ Scene generated ({len(manim_code.splitlines())} lines)")
 
         manim_code = extract_python(manim_code)
+        manim_code = strip_markdown_artifacts(manim_code)
 
         with open(MANIM_SCRIPT_PATH, "w") as f:
             f.write(manim_code)
