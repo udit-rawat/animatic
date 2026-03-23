@@ -103,10 +103,6 @@ def _call_handoff(prompt: str, stage: str) -> str:
     prompt_path = _HANDOFF_PROMPT.format(stage=stage)
     output_path = _HANDOFF_OUTPUT.format(stage=stage)
 
-    # Clear any stale output from a previous attempt
-    if os.path.exists(output_path):
-        os.remove(output_path)
-
     # Write the prompt with instructions embedded at the top
     with open(prompt_path, "w") as f:
         f.write(f"# ═══ CLAUDE HANDOFF — {stage.upper()} STAGE ═══\n")
@@ -138,11 +134,11 @@ def _call_handoff(prompt: str, stage: str) -> str:
     print(f"║    {os.path.abspath(output_path)}")
     print(f"╚{sep}╝\n")
 
-    # Poll for output file
+    # Poll for output file — accept immediately if already newer than prompt
     elapsed = 0
     poll_interval = 5
     while elapsed < _HANDOFF_TIMEOUT:
-        if os.path.exists(output_path):
+        if os.path.exists(output_path) and os.path.getmtime(output_path) >= os.path.getmtime(prompt_path):
             with open(output_path) as f:
                 content = f.read().strip()
             if content:
