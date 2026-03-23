@@ -3,12 +3,12 @@ import os
 
 from pipeline import claude_client
 
-INPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "candidates.json")
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
+INPUT_PATH   = os.path.join(os.path.dirname(__file__), "..", "output", "candidates.json")
+OUTPUT_PATH  = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
+HISTORY_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "picked_history.json")
+MAX_HISTORY  = 30   # titles to remember
 
-# ── Discovery prompt ────────────────────────────────────────────────────────
-# Optimised for: AI engineering audience, 60-second Manim explainer,
-# Instagram/X short-form. Prioritises visual potential + engineer value.
+
 PROMPT_TEMPLATE = """\
 You are a content strategist for an AI engineering audience on Instagram and X (Twitter).
 Your job: pick ONE topic from the candidates below that will make the best 60-second Manim animation.
@@ -42,7 +42,7 @@ STRICTLY AVOID:
 - Topics requiring more than 4 visual steps to explain clearly
 - Papers with no public abstract or open access
 - Topics that are purely mathematical with no intuitive visual hook
-
+{already_covered}
 CANDIDATES:
 {candidates}
 
@@ -57,14 +57,42 @@ Select the single best candidate. Respond with ONLY valid JSON — no explanatio
 """
 
 
-def build_prompt(candidates: list[dict]) -> str:
+def load_history() -> list[str]:
+    if not os.path.exists(HISTORY_PATH):
+        return []
+    with open(HISTORY_PATH) as f:
+        return json.load(f)
+
+
+def save_history(history: list[str], new_title: str):
+    history = [new_title] + [t for t in history if t != new_title]
+    history = history[:MAX_HISTORY]
+    os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
+    with open(HISTORY_PATH, "w") as f:
+        json.dump(history, f, indent=2)
+
+
+def build_prompt(candidates: list[dict], history: list[str]) -> str:
     lines = []
     for i, c in enumerate(candidates, 1):
         lines.append(f"{i}. [{c['source']}] {c['title']}")
         lines.append(f"   Summary: {c['summary']}")
         lines.append(f"   URL: {c['url']}")
         lines.append("")
-    return PROMPT_TEMPLATE.format(candidates="\n".join(lines))
+
+    if history:
+        already = "\n".join(f"- {t}" for t in history)
+        already_covered = (
+            f"\nALREADY COVERED — do NOT pick these topics again, pick something fresh:\n"
+            f"{already}\n"
+        )
+    else:
+        already_covered = ""
+
+    return PROMPT_TEMPLATE.format(
+        candidates="\n".join(lines),
+        already_covered=already_covered,
+    )
 
 
 def extract_json(raw: str) -> dict:
@@ -83,9 +111,16 @@ def main():
     with open(INPUT_PATH) as f:
         candidates = json.load(f)
 
-    prompt = build_prompt(candidates)
-    raw = claude_client.call(prompt, stage="ranker")
-    topic = extract_json(raw)
+    history = load_history()
+    if history:
+        print(f"Excluding {len(history)} previously covered topics...")
+
+    prompt = build_prompt(candidates, history)
+    raw    = claude_client.call(prompt, stage="ranker")
+    topic  = extract_json(raw)
+
+    # History is saved by the notifier after successful video delivery,
+    # not here — so failed pipeline runs don't consume a history slot.
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(topic, f, indent=2)
