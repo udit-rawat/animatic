@@ -8,11 +8,12 @@ import time
 
 from pipeline import claude_client
 
-SCRIPT_INPUT  = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
-TIMING_INPUT  = os.path.join(os.path.dirname(__file__), "..", "output", "narration_timing.json")
+SCRIPT_INPUT   = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
+TIMING_INPUT   = os.path.join(os.path.dirname(__file__), "..", "output", "narration_timing.json")
+RETRIES_OUTPUT = os.path.join(os.path.dirname(__file__), "..", "output", "animator_retries.json")
 MANIM_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "manim_scripts", "scene.py")
-OUTPUT_VIDEO  = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
-MAX_RETRIES   = 3
+OUTPUT_VIDEO   = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
+MAX_RETRIES    = 3
 
 
 class Spinner:
@@ -118,7 +119,7 @@ def _timing_block(script: dict, timing: dict) -> str:
         f"VIDEO SCRIPT WITH NARRATION TIMECODES (narration is pre-recorded — match these exactly):\n"
         f"  Hook    {tc('hook')}: {script['hook']}\n"
         f"  Concept:\n{concept_lines}\n"
-        f"  Takeaway+CTA {tc('takeaway_cta')}: {script['takeaway']} / {script['cta']}\n"
+        f"  Takeaway+CTA {tc('takeaway_cta')}: {script['takeaway']} / {script.get('cta', '')}\n"
         f"\n"
         f"CRITICAL SYNC REQUIREMENT:\n"
         f"  Total video duration must be exactly {total:.1f} seconds.\n"
@@ -134,32 +135,65 @@ def build_manim_prompt(script: dict, previous_code: str = None, error: str = Non
 
     base = f"""\
 You are a Manim Community Edition expert. Generate a complete, runnable Manim Python script
-for a portrait-format explainer video for AI engineers.
+for a 16-second portrait-format Instagram dopamine-loop video for AI engineers.
 
 {script_block}
+VISUAL IDENTITY — follow exactly:
+  - Background: BLACK (#000000)
+  - Primary color: Phosphor Green (#00FF41) — use for key terms, numbers, highlights
+  - Secondary color: High-Contrast White (#FDFDFD) — use for body text
+  - Accent: dim green (#007A1F) — use for grid lines, background elements
+  - ALL text must use Text() with font="Monospace" — system terminal aesthetic
+  - NO Tex(), NO MathTex(), NO LaTeX — only Text()
+
+SCENE STRUCTURE — 4 beats, strict timing:
+  Beat 1 — The Anomaly     (0s-10s):
+    High-density chaotic dot cloud (blue/white dots scattered). Around 8s trigger a
+    snap-collapse where all points flatten to a 2D plane in one sharp Transform.
+
+  Beat 2 — The Collapse    (10s-25s):
+    Show scattered random dots collapsing into a tight grid/matrix pattern using Transform.
+    Text labels flash on screen for max 2.0 seconds then fade. No lingering text.
+
+  Beat 3 — The Contrast    (25s-45s):
+    Split screen using a vertical Line in center: LEFT side shows a rigid grid of dots
+    with straight Line connectors (syntactic). RIGHT side shows curved arcs connecting
+    clustered dots (semantic). Label LEFT "SYNTAX" and RIGHT "SEMANTICS" in phosphor
+    green using FadeIn/FadeOut.
+
+  Beat 4 — The Hook Loop   (45s-60s):
+    Animate an Arrow moving left to right across the screen using GrowArrow.
+    At 58s FadeOut everything, then FadeIn ONLY the Beat 1 opening Text object
+    to create a seamless replay loop.
+
 TECHNICAL REQUIREMENTS:
-  - Set portrait format at the TOP of the file, before any imports take effect:
+  - Portrait format at the TOP before imports:
       from manim import config
       config.pixel_width = 1080
       config.pixel_height = 1920
       config.frame_rate = 30
-  - Background: BLACK
-  - Total scene duration: approximately {total_dur} seconds (match narration length)
+  - Total duration: exactly {total_dur} seconds
   - Class name: ContentScene (inherits from Scene)
-  - Use only standard Manim CE imports (manim, numpy)
-  - ONLY use Text() for all text — never use Tex(), MathTex(), or any LaTeX-based objects
-  - Clean typography: large readable text, generous spacing, no overcrowding
-  - Minimal, purposeful animations — no gratuitous effects
-  - Each section of the script gets its own visual segment
-  - All text must fit within safe margins for portrait (avoid edges)
+  - Standard Manim CE imports + numpy only
+  - Flash text rule: no Text object stays visible more than 1.2 seconds
+  - All elements must stay within safe zone: x in [-2.5, 2.5], y in [-4.5, 4.5]
+  - Use FadeIn, FadeOut, Transform, GrowArrow, Create, Write — no experimental methods
+  - Valid edge constants: UP, DOWN, LEFT, RIGHT only — NEVER TOP or BOTTOM
+  - BANNED classes (will crash): ParametricSurface, Surface, ThreeDScene, ThreeDAxes,
+    Sphere, Cylinder, Torus, Cone — this is a 2D scene only, use Dot/Circle/Line/Arrow
+  - BANNED patterns (will crash):
+      self.camera.frame  — only works in MovingCameraScene, NOT Scene
+      Rectangle(buff=...) — buff is not a Rectangle kwarg; use SurroundingRectangle(obj, buff=0.2)
+      self.camera.animate — same, MovingCameraScene only
+      obj.to_center() — does not exist; use obj.move_to(ORIGIN) or obj.center()
+  - DO NOT zoom or move the camera — static camera only
 
 CODE QUALITY:
-  - Every line must be complete and runnable — no placeholder comments like "# add animation here"
-  - No external assets, no custom fonts, no file I/O
-  - Use self.play() and self.wait() properly to hit the {total_dur}-second target
-  - Prefer FadeIn, Write, Transform — avoid experimental or version-sensitive methods
-  - Valid edge constants: UP, DOWN, LEFT, RIGHT — NEVER use TOP or BOTTOM (they don't exist in Manim)
-  - to_edge() accepts UP/DOWN/LEFT/RIGHT only
+  - Every line complete and runnable — no "# add animation here" placeholders
+  - No external assets, no file I/O, no custom fonts beyond font="Monospace"
+  - MANDATORY: every beat must have at least one self.play() call — self.wait() alone produces a
+    static image, not a video. The scene MUST call self.play() multiple times.
+  - self.wait() durations between animations must make the total sum to {total_dur}s
 """
 
     if previous_code and error:
@@ -200,8 +234,15 @@ def run_manim(script_path: str) -> tuple[bool, str]:
         output_lines.append(line)
     process.wait()
 
+    full_output = "".join(output_lines)
     if process.returncode != 0:
-        return False, "".join(output_lines[-60:])
+        return False, full_output[-3000:]
+    if "Played 0 animations" in full_output:
+        return False, (
+            "Scene rendered but played 0 animations — no self.play() calls were found.\n"
+            "You MUST use self.play() to animate objects. self.wait() alone does NOT create video.\n"
+            "Every beat requires at least one self.play() call (FadeIn, Transform, etc.)."
+        )
     return True, ""
 
 
@@ -239,7 +280,7 @@ def main():
         # ── Step 1: Claude generates the Manim code ──────────────────────────
         with Spinner(f"Claude generating Manim scene (attempt {attempt}/{MAX_RETRIES})"):
             prompt = build_manim_prompt(script, previous_code=manim_code, error=error)
-            manim_code = claude_client.call(prompt, stage="animator", max_tokens=4096)
+            manim_code = claude_client.call(prompt, stage="animator", max_tokens=8192)
 
         print(f"✓ Scene generated ({len(manim_code.splitlines())} lines)")
 
@@ -261,12 +302,16 @@ def main():
                 os.makedirs(os.path.dirname(OUTPUT_VIDEO), exist_ok=True)
                 shutil.copy2(mp4, OUTPUT_VIDEO)
                 cleanup_manim_media(MANIM_SCRIPT_PATH)
+                with open(RETRIES_OUTPUT, "w") as f:
+                    json.dump({"attempts": attempt, "max_retries": MAX_RETRIES, "success": True}, f)
                 print(f"\n✓ Video saved → {OUTPUT_VIDEO}")
                 return OUTPUT_VIDEO
             error = "Manim exited 0 but no .mp4 found."
 
         print(f"\n✗ Attempt {attempt} failed. Last error:\n{error[:400]}\n")
 
+    with open(RETRIES_OUTPUT, "w") as f:
+        json.dump({"attempts": MAX_RETRIES, "max_retries": MAX_RETRIES, "success": False}, f)
     raise RuntimeError(f"Animator failed after {MAX_RETRIES} attempts.\nLast error:\n{error}")
 
 
