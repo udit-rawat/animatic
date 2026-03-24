@@ -104,6 +104,11 @@ def extract_json(raw: str) -> dict:
                 part = part[4:].strip()
             if part.startswith("{"):
                 return json.loads(part)
+    # Find first { ... } block
+    start = raw.find("{")
+    end   = raw.rfind("}") + 1
+    if start != -1 and end > start:
+        return json.loads(raw[start:end])
     return json.loads(raw.strip())
 
 
@@ -116,7 +121,7 @@ def main():
         print(f"Excluding {len(history)} previously covered topics...")
 
     prompt = build_prompt(candidates, history)
-    raw    = claude_client.call(prompt, stage="ranker")
+    raw    = claude_client.call(prompt, stage="ranker", json_mode=True)
     topic  = extract_json(raw)
 
     # History is saved by the notifier after successful video delivery,

@@ -35,38 +35,36 @@ def build_narration_prompt(topic: dict, script: dict) -> str:
     )
     concept_keys = ", ".join(f'"concept_{i+1}"' for i in range(n))
     return f"""\
-You are writing a segmented 60-second voiceover for an AI engineering explainer video.
-The narration is split into sections that will be time-synced to animation segments.
+You are writing a segmented 60-second voiceover for an AI engineering dopamine-loop video.
+Cold, precise, system-terminal register. No warmth. No filler. Every word is load-bearing.
 
 TOPIC: {topic['title']}
-SUMMARY: {topic['summary']}
 
-VIDEO SCRIPT:
-  hook: {script['hook']}
+VIDEO BEATS:
+  hook (Beat 1 — The Anomaly):    {script['hook']}
   concept bullets:
 {bullets}
-  takeaway: {script['takeaway']}
-  cta: {script['cta']}
+  takeaway (Beat 4 — Hook Loop):  {script['takeaway']}
+  cta:                            {script.get('cta', 'Follow for daily AI breakdowns.')}
 
 Return a JSON object with EXACTLY these keys:
-  "hook"          — 1-2 sentences for the opening hook (~5 seconds spoken)
-  {concept_keys}  — one narration section per concept bullet (~8-12 seconds each)
-  "takeaway_cta"  — closing takeaway + call to action, ending with "Follow for daily AI breakdowns." (~10 seconds)
+  "hook"          — 2-3 sentences, ~10 seconds spoken. Break expectation. Cold open.
+  {concept_keys}  — 2-3 sentences each, ~15 seconds spoken. Mechanism or contrast. Dense with facts.
+  "takeaway_cta"  — 2-3 sentences, ~15 seconds. Ends with exactly: "Follow for daily AI breakdowns."
 
-Rules for every section:
-- Explains the ACTUAL CONCEPT to the listener — what it is, why it matters, how it works
-- Sounds like a knowledgeable engineer speaking directly
-- NEVER mentions "video", "animation", "visual", "screen", "scene", "show", or "transition"
-- Direct technical language — no filler, no hype
-- Flows naturally when read aloud in isolation
+Rules:
+- Each section must stand alone — it will be spliced independently
+- NEVER mention "video", "animation", "visual", "screen", "scene", "show", "transition"
+- No hedging ("kind of", "basically", "essentially") — state facts
+- Write as if narrating a system log, not a YouTube explainer
 
-Return ONLY valid JSON. No markdown fences, no extra text.
+Return ONLY valid JSON. No markdown, no extra text.
 """
 
 
 def generate_segmented_script(topic: dict, script: dict) -> dict:
     prompt = build_narration_prompt(topic, script)
-    raw = claude_client.call(prompt, stage="narrator").strip()
+    raw = claude_client.call(prompt, stage="narrator", json_mode=True).strip()
     # Strip any accidental markdown fences
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -78,7 +76,12 @@ def generate_segmented_script(topic: dict, script: dict) -> dict:
 
 # ── Step 2: Gemini TTS ────────────────────────────────────────────────────────
 
+class _TTSRateLimited(Exception):
+    pass
+
+
 def call_tts(text: str, api_key: str) -> bytes:
+    """Single TTS call — raises _TTSRateLimited on 429 so caller can rotate keys."""
     payload = json.dumps({
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -102,18 +105,14 @@ def call_tts(text: str, api_key: str) -> bytes:
         method="POST",
     )
 
-    for attempt, wait in enumerate([30, 60, 120, None], start=1):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                data = json.loads(resp.read())
-            break
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and wait is not None:
-                print(f"  ⏳ TTS rate limited — waiting {wait}s (attempt {attempt})...")
-                time.sleep(wait)
-            else:
-                body = e.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"Gemini TTS HTTP {e.code}: {body[:400]}") from e
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            raise _TTSRateLimited() from e
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Gemini TTS HTTP {e.code}: {body[:400]}") from e
 
     audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
     return base64.b64decode(audio_b64)
@@ -133,10 +132,34 @@ def save_wav(pcm_data: bytes, path: str, sample_rate: int = 24000):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _get_tts_keys() -> list[str]:
+    """Return all available Gemini API keys for TTS rotation."""
+    multi = os.environ.get("GEMINI_API_KEYS", "")
+    if multi:
+        return [k.strip() for k in multi.split(",") if k.strip()]
+    single = os.environ.get("GEMINI_API_KEY", "")
+    return [single] if single else []
+
+
+def call_tts_with_rotation(text: str, keys: list[str]) -> bytes:
+    """Rotate through all keys on 429 — no waiting until all keys exhausted."""
+    for i, key in enumerate(keys):
+        try:
+            return call_tts(text, key)
+        except _TTSRateLimited:
+            if i < len(keys) - 1:
+                print(f" [key {i+1} RPM limit → key {i+2}]", end="", flush=True)
+                continue
+            # All keys exhausted — wait and retry from first key
+            print(f" [all {len(keys)} keys RPM-limited — waiting 30s]", flush=True)
+            time.sleep(30)
+            return call_tts_with_rotation(text, keys)
+
+
 def main():
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not set — narrator requires Gemini TTS.")
+    keys = _get_tts_keys()
+    if not keys:
+        raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS not set — narrator requires Gemini TTS.")
 
     with open(SCRIPT_PATH) as f:
         script = json.load(f)
@@ -150,8 +173,8 @@ def main():
     n_bullets = len(script["concept_bullets"])
     segment_keys = ["hook"] + [f"concept_{i+1}" for i in range(n_bullets)] + ["takeaway_cta"]
 
-    # Step 2 — TTS each segment, measure duration, stitch PCM
-    print(f"Calling Gemini TTS  model={TTS_MODEL}  voice={VOICE_NAME}...")
+    # Step 2 — TTS each segment with key rotation, measure duration, stitch PCM
+    print(f"Calling Gemini TTS  model={TTS_MODEL}  voice={VOICE_NAME}  keys={len(keys)}...")
     timing = {}
     all_pcm = b""
     cursor = 0.0
@@ -163,7 +186,7 @@ def main():
             continue
         word_count = len(text.split())
         print(f"  {key} ({word_count} words)...", end="", flush=True)
-        pcm = call_tts(text, api_key)
+        pcm = call_tts_with_rotation(text, keys)
         dur = pcm_duration(pcm)
         timing[key] = {
             "start":    round(cursor, 3),

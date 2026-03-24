@@ -10,42 +10,36 @@ OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "script.js
 def build_prompt(topic: dict) -> str:
     return f"""\
 You are a short-form video scriptwriter for AI engineers on Instagram and X (Twitter).
-You write 60-second Manim explainer scripts. Every word must earn its place.
+You write 60-second dopamine-loop Manim explainer scripts. Every word must earn its place.
 
 TOPIC: {topic['title']}
 SUMMARY: {topic['summary']}
 SOURCE: {topic['url']}
 
+FORMAT: 60 seconds total, structured as 4 beats:
+  Beat 1 — The Anomaly     (0s-10s):  1-2 sentences that break expectation
+  Beat 2 — The Collapse    (10s-25s): 2-3 sentences showing the mechanism
+  Beat 3 — The Contrast    (25s-45s): 2-3 sentences — early vs deep, simple vs complex
+  Beat 4 — The Hook Loop   (45s-60s): 1-2 provocative sentences that force a rewatch
+
 SCRIPT REQUIREMENTS:
-- Hook must create genuine curiosity or surprise in the first 5 seconds
-- Concept bullets must be visual — each one describes something you can SHOW, not just say
-- Takeaway must be a single insight an engineer can carry into their next project
-- Language: direct, technical, zero fluff — write for people who read papers
+- Every beat maps to a distinct visual moment — write what you SEE, not what you say
+- Language: system-terminal register — cold, precise, no warmth, no filler
+- End Beat 4 with the exact text: "Follow for daily AI breakdowns."
 
-Write the script using EXACTLY this structure, then immediately output the JSON:
+CAPTION: 2-3 sentences for Instagram/X — open with the anomaly, close with a question that drives saves
 
-HOOK (0-5s): <one punchy sentence — lead with the surprising result or counterintuitive claim>
+HASHTAGS: exactly 5, mix of broad and niche AI engineering tags
 
-CONCEPT (5-45s):
-- <bullet 1: describe the first visual to show>
-- <bullet 2: describe the second visual to show>
-- <bullet 3: describe the third visual to show>
-- <bullet 4: optional fourth visual if needed>
-
-TAKEAWAY (45-55s): <one clear, memorable, actionable insight>
-
-CTA (55-60s): "Follow for daily AI breakdowns"
-
-CAPTION: <2-3 sentences for Instagram/X — open with the hook, end with a question or provocation that drives saves/shares>
-
-HASHTAGS: <exactly 5 hashtags for AI engineers, mix of broad and niche>
-
-Then respond with ONLY valid JSON — no text before or after:
+Respond with ONLY valid JSON:
 {{
-  "hook": "...",
-  "concept_bullets": ["...", "...", "...", "..."],
-  "takeaway": "...",
-  "cta": "Follow for daily AI breakdowns",
+  "hook": "<Beat 1 — The Anomaly>",
+  "concept_bullets": [
+    "<Beat 2 — The Collapse visual>",
+    "<Beat 3 — The Contrast visual>"
+  ],
+  "takeaway": "<Beat 4 — The Hook Loop>",
+  "cta": "Follow for daily AI breakdowns.",
   "caption": "...",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
 }}
@@ -74,7 +68,7 @@ def main():
         topic = json.load(f)
 
     prompt = build_prompt(topic)
-    raw = claude_client.call(prompt, stage="scripter")
+    raw = claude_client.call(prompt, stage="scripter", json_mode=True)
     script = extract_json(raw)
 
     with open(OUTPUT_PATH, "w") as f:
