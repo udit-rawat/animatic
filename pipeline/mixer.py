@@ -44,13 +44,24 @@ def main():
         vf = "setpts=PTS"
         print("Mixing video + narration audio...")
 
+    # Audio post-processing — controlled via env vars, off by default
+    audio_tempo   = float(os.environ.get("AUDIO_TEMPO", "1.0"))
+    audio_lowpass = int(os.environ.get("AUDIO_LOWPASS", "0"))
+    af_parts = []
+    if audio_tempo != 1.0:
+        af_parts.append(f"atempo={audio_tempo}")
+    if audio_lowpass > 0:
+        af_parts.append(f"lowpass=f={audio_lowpass}")
+    af = ",".join(af_parts) if af_parts else "anull"
+
     result = subprocess.run(
         [
             "ffmpeg", "-y",
             "-i", VIDEO_PATH,
             "-i", AUDIO_PATH,
             "-vf", vf,
-            "-c:v", "libx264",    # re-encode needed for setpts
+            "-af", af,
+            "-c:v", "libx264",
             "-crf", "18",
             "-preset", "fast",
             "-c:a", "aac",

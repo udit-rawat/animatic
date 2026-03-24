@@ -109,6 +109,23 @@ def main():
         ),
     )
     parser.add_argument(
+        "--hop",
+        action="store_true",
+        help=(
+            "Run the full pipeline, pause at animator with NO timeout. "
+            "Copy the prompt to Claude chat, get the code, then: pbpaste > output/handoff_animator_output.txt"
+        ),
+    )
+    parser.add_argument(
+        "--gemini",
+        action="store_true",
+        help=(
+            "Run the full pipeline end-to-end on Gemini only. "
+            "Uses gemini-2.5-flash for ranker/scripter/narrator and gemini-2.5-pro for animator. "
+            "No handoff, no OpenRouter, fully automated."
+        ),
+    )
+    parser.add_argument(
         "--check-quota",
         action="store_true",
         help="Show Gemini daily quota status and exit (no pipeline run).",
@@ -120,11 +137,26 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.gemini:
+        if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEYS")):
+            print("[ERROR] --gemini requires GEMINI_API_KEY or GEMINI_API_KEYS in .env", file=sys.stderr)
+            sys.exit(1)
+        os.environ["FORCE_PROVIDER"] = "gemini"
+        # Set stage-optimal models (overridable via .env)
+        os.environ.setdefault("GEMINI_MODEL_RANKER",   "gemini-2.5-flash")
+        os.environ.setdefault("GEMINI_MODEL_SCRIPTER", "gemini-2.5-flash")
+        os.environ.setdefault("GEMINI_MODEL_NARRATOR", "gemini-2.5-flash")
+        os.environ.setdefault("GEMINI_MODEL_ANIMATOR", "gemini-2.5-pro")
+
     if args.provider:
         apply_provider(args.provider, args.model)
 
     if args.handoff_animator:
         os.environ["FORCE_PROVIDER_ANIMATOR"] = "handoff"
+
+    if args.hop:
+        os.environ["FORCE_PROVIDER_ANIMATOR"] = "handoff"
+        os.environ["HANDOFF_HOP_MODE"] = "1"
 
     # ── Quota / RCA check ─────────────────────────────────────────────────────
     if args.check_quota:

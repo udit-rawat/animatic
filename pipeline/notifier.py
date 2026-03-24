@@ -10,6 +10,7 @@ load_dotenv()
 SCRIPT_PATH      = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
 TOPIC_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
 AUDIT_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "audit.json")
+RETRIES_PATH     = os.path.join(os.path.dirname(__file__), "..", "output", "animator_retries.json")
 VIDEO_FINAL_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "video_final.mp4")
 VIDEO_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
 
@@ -50,15 +51,51 @@ def build_audit_block() -> str:
     return "\n".join(lines)
 
 
+def build_run_stats() -> str:
+    lines = []
+
+    # Animator retry info
+    if os.path.exists(RETRIES_PATH):
+        with open(RETRIES_PATH) as f:
+            r = json.load(f)
+        attempts = r.get("attempts", 1)
+        max_r    = r.get("max_retries", 3)
+        icon     = "✅" if attempts == 1 else ("⚠️" if attempts < max_r else "🔴")
+        lines.append(f"{icon} Animator: {attempts}/{max_r} attempts")
+
+    # Runs remaining today
+    try:
+        from pipeline.quota import get_status
+        s = get_status()
+        remaining_calls = s.get("remaining", 0)
+        # estimate calls per run from today's usage ÷ completed runs
+        runs = s.get("runs", [])
+        successful = [r for r in runs if r.get("outcome") == "success"]
+        if successful and s.get("calls", 0) > 0:
+            calls_per_run = s["calls"] / len(successful)
+            runs_left = int(remaining_calls / calls_per_run) if calls_per_run else 0
+        else:
+            calls_per_run = 4  # default estimate: 4 calls per run
+            runs_left = int(remaining_calls / calls_per_run)
+        lines.append(f"📊 Quota: ~{runs_left} runs remaining today")
+    except Exception:
+        pass
+
+    return "\n".join(lines)
+
+
 def build_message(topic: dict, script: dict) -> str:
     hashtags    = " ".join(script["hashtags"])
     audit_block = build_audit_block()
+    run_stats   = build_run_stats()
     msg = (
         f"\u2705 Today's video is ready\n\n"
         f"\U0001f4cc Topic: {topic['title']}\n\n"
         f"\U0001f4dd Caption:\n{script['caption']}\n\n"
         f"#\ufe0f\u20e3 Hashtags: {hashtags}"
     )
+    if run_stats:
+        msg += f"\n\n{run_stats}"
     if audit_block:
         msg += f"\n\n{audit_block}"
     return msg
