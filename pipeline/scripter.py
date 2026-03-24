@@ -25,7 +25,7 @@ FORMAT: 60 seconds total, structured as 4 beats:
 SCRIPT REQUIREMENTS:
 - Every beat maps to a distinct visual moment — write what you SEE, not what you say
 - Language: system-terminal register — cold, precise, no warmth, no filler
-- End Beat 4 with the exact text: "Follow for daily AI breakdowns."
+- End Beat 4 with a single provocative unanswered question — no CTAs, no "follow" lines
 
 CAPTION: 2-3 sentences for Instagram/X — open with the anomaly, close with a question that drives saves
 
@@ -39,7 +39,7 @@ Respond with ONLY valid JSON:
     "<Beat 3 — The Contrast visual>"
   ],
   "takeaway": "<Beat 4 — The Hook Loop>",
-  "cta": "Follow for daily AI breakdowns.",
+  "cta": "",
   "caption": "...",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
 }}

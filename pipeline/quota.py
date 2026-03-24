@@ -158,9 +158,16 @@ def get_status() -> dict:
     data = _load()
     used      = data["calls"]
     limit     = _effective_limit()
-    # exhausted only when ALL keys are marked exhausted or flag explicitly set
     exhausted_keys = data.get("exhausted_keys", [])
-    all_exhausted  = data.get("exhausted", False)
+    # Re-derive all_exhausted from current key list — stored flag goes stale when
+    # new keys are added after the flag was set.
+    try:
+        from pipeline.claude_client import _get_all_gemini_keys
+        all_keys      = _get_all_gemini_keys()
+        non_exhausted = [k for k in all_keys if _key_id(k) not in exhausted_keys]
+        all_exhausted = len(all_keys) > 0 and len(non_exhausted) == 0
+    except Exception:
+        all_exhausted = data.get("exhausted", False)
     remaining = 0 if all_exhausted else max(0, limit - used)
     return {
         "date":             data["date"],

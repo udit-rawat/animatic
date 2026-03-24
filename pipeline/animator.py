@@ -98,8 +98,7 @@ def _timing_block(script: dict, timing: dict) -> str:
             f"VIDEO SCRIPT:\n"
             f"  Hook    (0-5s):   {script['hook']}\n"
             f"  Concept (5-45s):\n{bullets}\n"
-            f"  Takeaway (45-55s): {script['takeaway']}\n"
-            f"  CTA      (55-60s): {script['cta']}\n"
+            f"  Takeaway (45-60s): {script['takeaway']}\n"
         )
 
     def tc(key: str) -> str:
@@ -119,7 +118,7 @@ def _timing_block(script: dict, timing: dict) -> str:
         f"VIDEO SCRIPT WITH NARRATION TIMECODES (narration is pre-recorded — match these exactly):\n"
         f"  Hook    {tc('hook')}: {script['hook']}\n"
         f"  Concept:\n{concept_lines}\n"
-        f"  Takeaway+CTA {tc('takeaway_cta')}: {script['takeaway']} / {script.get('cta', '')}\n"
+        f"  Takeaway {tc('takeaway_cta')}: {script['takeaway']}\n"
         f"\n"
         f"CRITICAL SYNC REQUIREMENT:\n"
         f"  Total video duration must be exactly {total:.1f} seconds.\n"
@@ -133,67 +132,116 @@ def build_manim_prompt(script: dict, previous_code: str = None, error: str = Non
     script_block = _timing_block(script, timing)
     total_dur = int(sum(t.get("duration", 0) for t in timing.values())) if timing else 60
 
+    hook_text      = script.get("hook", "")[:80]
+    concept_1_text = script["concept_bullets"][0][:80] if script.get("concept_bullets") else ""
+    concept_2_text = script["concept_bullets"][1][:80] if len(script.get("concept_bullets", [])) > 1 else ""
+    takeaway_text  = script.get("takeaway", "")[:80]
+
     base = f"""\
 You are a Manim Community Edition expert. Generate a complete, runnable Manim Python script
-for a 16-second portrait-format Instagram dopamine-loop video for AI engineers.
+for a portrait-format Instagram dopamine-loop video for AI engineers.
 
 {script_block}
-VISUAL IDENTITY — follow exactly:
-  - Background: BLACK (#000000)
-  - Primary color: Phosphor Green (#00FF41) — use for key terms, numbers, highlights
-  - Secondary color: High-Contrast White (#FDFDFD) — use for body text
-  - Accent: dim green (#007A1F) — use for grid lines, background elements
-  - ALL text must use Text() with font="Monospace" — system terminal aesthetic
-  - NO Tex(), NO MathTex(), NO LaTeX — only Text()
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COPY THESE CONSTANTS VERBATIM at the top of your script, inside the class or before it:
 
-SCENE STRUCTURE — 4 beats, strict timing:
-  Beat 1 — The Anomaly     (0s-10s):
-    High-density chaotic dot cloud (blue/white dots scattered). Around 8s trigger a
-    snap-collapse where all points flatten to a 2D plane in one sharp Transform.
+  # --- Script content ---
+  HOOK_TEXT      = "{hook_text}"
+  CONCEPT_1_TEXT = "{concept_1_text}"
+  CONCEPT_2_TEXT = "{concept_2_text}"
+  TAKEAWAY_TEXT  = "{takeaway_text}"
 
-  Beat 2 — The Collapse    (10s-25s):
-    Show scattered random dots collapsing into a tight grid/matrix pattern using Transform.
-    Text labels flash on screen for max 2.0 seconds then fade. No lingering text.
+  # --- Color palette (DO NOT change these hex values) ---
+  C_WHITE  = "#FDFDFD"   # hook text, takeaway text, body copy
+  C_GREEN  = "#00FF41"   # AFTER side dots/lines, highlights, arrow
+  C_CYAN   = "#00E5FF"   # BEFORE side dots/lines
+  C_YELLOW = "#FFD600"   # section labels (BEFORE / AFTER), concept headers
 
-  Beat 3 — The Contrast    (25s-45s):
-    Split screen using a vertical Line in center: LEFT side shows a rigid grid of dots
-    with straight Line connectors (syntactic). RIGHT side shows curved arcs connecting
-    clustered dots (semantic). Label LEFT "SYNTAX" and RIGHT "SEMANTICS" in phosphor
-    green using FadeIn/FadeOut.
+  # --- Font sizes (DO NOT use numeric literals — always use these names) ---
+  FS_HOOK     = 64   # hook text
+  FS_CONCEPT  = 56   # concept bullets
+  FS_LABEL    = 52   # BEFORE / AFTER labels
+  FS_TAKEWAY  = 60   # takeaway text
 
-  Beat 4 — The Hook Loop   (45s-60s):
-    Animate an Arrow moving left to right across the screen using GrowArrow.
-    At 58s FadeOut everything, then FadeIn ONLY the Beat 1 opening Text object
-    to create a seamless replay loop.
+  # --- Exact Y anchors (portrait frame: 7.1 wide x 12.6 tall) ---
+  Y_TOP    =  5.2   # hook text baseline
+  Y_UPPER  =  2.8   # concept 1 text / BEFORE-AFTER labels
+  Y_CENTER =  0.0   # divider line / dot grid center
+  Y_LOWER  = -2.8   # concept 2 text
+  Y_BOTTOM = -5.2   # takeaway text baseline
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ALL text: Text(font="Monospace") — NO Tex(), NO MathTex(), NO LaTeX
+Background: BLACK (#000000)
+
+SCENE STRUCTURE — beat by beat:
+
+  Beat 1 — Hook (0s–10s):
+    • self.play(FadeIn(Text(HOOK_TEXT, font_size=FS_HOOK, color=C_WHITE,
+        font="Monospace", width=6.0).move_to(UP * Y_TOP)))
+    • Simultaneously FadeIn ~60 Dot objects (radius=0.09, color=C_GREEN) scattered
+      randomly: x in [-2.5, 2.5], y in [-2.5, 2.5] (CENTER zone only — keep top clear for text)
+    • self.wait(4)
+    • self.play(Transform all dots → ordered 8×8 grid centered at [0, Y_CENTER])
+    • self.play(FadeOut hook text)   ← separate play call
+
+  Beat 2 — Collapse (10s–25s):
+    • self.play(FadeIn(Text(CONCEPT_1_TEXT, font_size=FS_CONCEPT, color=C_YELLOW,
+        font="Monospace", width=5.5).move_to(UP * Y_UPPER)))
+    • self.play(Transform dot grid → tighter 6×6 grid, scale each dot by 0.7)
+    • self.wait(3)
+    • self.play(Create 3 Line objects connecting grid dots, stroke_width=3, color=C_GREEN)
+    • self.play(FadeOut concept text)
+
+  Beat 3 — Contrast (25s–45s):
+    • self.play(FadeOut all remaining dots and lines)
+    • self.play(Create(Line(start=UP*5.0, end=DOWN*5.0, color=C_WHITE, stroke_width=2).move_to(ORIGIN)))
+    • LEFT side (x < 0): self.play(FadeIn ~12 Dots in a 3×4 rigid grid, color=C_CYAN,
+        x in [-2.5, -0.3], y in [-2.0, 2.0], then Create 4 straight Lines between them, color=C_CYAN)
+    • RIGHT side (x > 0): self.play(FadeIn ~12 Dots in loose positions, color=C_GREEN,
+        x in [0.3, 2.5], y in [-2.0, 2.0], then Create 3 ArcBetweenPoints arcs, color=C_GREEN)
+    • BEFORE label: self.play(FadeIn(Text("BEFORE", font_size=FS_LABEL, color=C_YELLOW,
+        font="Monospace").move_to(LEFT*1.5 + UP*Y_UPPER)))
+    • AFTER label:  self.play(FadeIn(Text("AFTER",  font_size=FS_LABEL, color=C_YELLOW,
+        font="Monospace").move_to(RIGHT*1.5 + UP*Y_UPPER)))
+    • self.play(FadeIn(Text(CONCEPT_2_TEXT, font_size=FS_CONCEPT, color=C_WHITE,
+        font="Monospace", width=5.5).move_to(UP * Y_LOWER)))
+    • self.wait(4)
+
+  Beat 4 — Takeaway (45s–{total_dur}s):
+    • self.play(FadeOut *everything* on screen)
+    • self.play(FadeIn(Text(TAKEAWAY_TEXT, font_size=FS_TAKEWAY, color=C_WHITE,
+        font="Monospace", width=5.8).move_to(UP * 1.5)))
+    • self.play(GrowArrow(Arrow(LEFT*2.5, RIGHT*2.5, color=C_GREEN, stroke_width=8)
+        .move_to(UP * Y_CENTER)))
+    • self.wait(5)
+    • self.play(FadeOut *everything*)
 
 TECHNICAL REQUIREMENTS:
-  - Portrait format at the TOP before imports:
+  - Portrait config (copy verbatim, before any other import):
       from manim import config
-      config.pixel_width = 1080
+      config.pixel_width  = 1080
       config.pixel_height = 1920
-      config.frame_rate = 30
+      config.frame_rate   = 30
   - Total duration: exactly {total_dur} seconds
-  - Class name: ContentScene (inherits from Scene)
-  - Standard Manim CE imports + numpy only
-  - Flash text rule: no Text object stays visible more than 1.2 seconds
-  - All elements must stay within safe zone: x in [-2.5, 2.5], y in [-4.5, 4.5]
-  - Use FadeIn, FadeOut, Transform, GrowArrow, Create, Write — no experimental methods
-  - Valid edge constants: UP, DOWN, LEFT, RIGHT only — NEVER TOP or BOTTOM
-  - BANNED classes (will crash): ParametricSurface, Surface, ThreeDScene, ThreeDAxes,
-    Sphere, Cylinder, Torus, Cone — this is a 2D scene only, use Dot/Circle/Line/Arrow
-  - BANNED patterns (will crash):
-      self.camera.frame  — only works in MovingCameraScene, NOT Scene
-      Rectangle(buff=...) — buff is not a Rectangle kwarg; use SurroundingRectangle(obj, buff=0.2)
-      self.camera.animate — same, MovingCameraScene only
-      obj.to_center() — does not exist; use obj.move_to(ORIGIN) or obj.center()
-  - DO NOT zoom or move the camera — static camera only
+  - Class name: ContentScene(Scene)
+  - Imports: from manim import * and import numpy as np only
+  - x safe zone: [-2.8, 2.8]   y safe zone: [-5.5, 5.5]
+  - Valid directions: UP, DOWN, LEFT, RIGHT — never TOP, BOTTOM, FRONT, BACK
 
-CODE QUALITY:
-  - Every line complete and runnable — no "# add animation here" placeholders
-  - No external assets, no file I/O, no custom fonts beyond font="Monospace"
-  - MANDATORY: every beat must have at least one self.play() call — self.wait() alone produces a
-    static image, not a video. The scene MUST call self.play() multiple times.
-  - self.wait() durations between animations must make the total sum to {total_dur}s
+BANNED (will crash — do not use):
+  ParametricSurface, Surface, ThreeDScene, ThreeDAxes, Sphere, Cylinder
+  self.camera.frame, self.camera.animate  (MovingCameraScene only)
+  Rectangle(buff=...)  (use SurroundingRectangle(obj, buff=0.2) instead)
+  obj.to_center()      (use obj.move_to(ORIGIN) or obj.center() instead)
+  obj.scale_to_fit_width()  (use obj.width = X or obj.scale(X) instead)
+
+MANDATORY RULES:
+  - Every beat MUST have ≥ 3 self.play() calls — self.wait() alone = static PNG not video
+  - NEVER use numeric literals for font_size — always use FS_HOOK, FS_CONCEPT, FS_LABEL, FS_TAKEWAY
+  - NEVER use "#00FF41" directly — always use C_GREEN, C_CYAN, C_YELLOW, C_WHITE
+  - Every line must be complete and runnable — no placeholders, no ellipsis
+  - No file I/O, no external assets, no custom fonts beyond font="Monospace"
 """
 
     if previous_code and error:

@@ -50,7 +50,7 @@ VIDEO BEATS:
 Return a JSON object with EXACTLY these keys:
   "hook"          — 2-3 sentences, ~10 seconds spoken. Break expectation. Cold open.
   {concept_keys}  — 2-3 sentences each, ~15 seconds spoken. Mechanism or contrast. Dense with facts.
-  "takeaway_cta"  — 2-3 sentences, ~15 seconds. Ends with exactly: "Follow for daily AI breakdowns."
+  "takeaway_cta"  — 2-3 sentences, ~15 seconds. End on an unanswered question or a sharp provocation. No CTAs, no "follow" lines.
 
 Rules:
 - Each section must stand alone — it will be spliced independently
