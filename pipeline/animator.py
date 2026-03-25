@@ -1,3 +1,4 @@
+import inspect
 import json
 import os
 import shutil
@@ -7,6 +8,46 @@ import threading
 import time
 
 from pipeline import claude_client
+
+
+def _manim_api_reference() -> str:
+    """
+    Extract real __init__ signatures from the installed Manim package.
+    Injected into the animator prompt so the LLM cannot hallucinate kwargs.
+    """
+    try:
+        import manim
+        classes = [
+            manim.Dot, manim.Line, manim.Arrow, manim.Text, manim.VGroup,
+            manim.Rectangle, manim.SurroundingRectangle, manim.Circle,
+            manim.ArcBetweenPoints, manim.Arc,
+            manim.FadeIn, manim.FadeOut, manim.Create, manim.Uncreate,
+            manim.Write, manim.Transform, manim.ReplacementTransform,
+            manim.GrowArrow, manim.GrowFromCenter,
+            manim.LaggedStart, manim.AnimationGroup,
+        ]
+        lines = []
+        for cls in classes:
+            try:
+                sig = inspect.signature(cls.__init__)
+                params = []
+                for name, p in sig.parameters.items():
+                    if name == "self":
+                        continue
+                    if p.default is inspect.Parameter.empty:
+                        params.append(name)
+                    else:
+                        default = repr(p.default)
+                        # Shorten noisy numpy/ManimColor reprs
+                        if "array" in default or "ManimColor" in default or "function" in default:
+                            default = "..."
+                        params.append("%s=%s" % (name, default))
+                lines.append("  %s(%s)" % (cls.__name__, ", ".join(params[:10])))
+            except Exception:
+                pass
+        return "\n".join(lines)
+    except Exception:
+        return "  (manim not importable — skip reference)"
 
 SCRIPT_INPUT   = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
 TIMING_INPUT   = os.path.join(os.path.dirname(__file__), "..", "output", "narration_timing.json")
@@ -137,6 +178,13 @@ def build_manim_prompt(script: dict, previous_code: str = None, error: str = Non
     concept_2_text = script["concept_bullets"][1][:80] if len(script.get("concept_bullets", [])) > 1 else ""
     takeaway_text  = script.get("takeaway", "")[:80]
 
+    try:
+        import manim as _manim
+        manim_ver = getattr(_manim, "__version__", "unknown")
+    except Exception:
+        manim_ver = "unknown"
+    manim_ref = _manim_api_reference()
+
     base = f"""\
 You are a Manim Community Edition expert. Generate a complete, runnable Manim Python script
 for a 60-second portrait-format Instagram video for AI engineers.
@@ -151,11 +199,12 @@ COPY THESE CONSTANTS VERBATIM — do not rename or change values:
   CONCEPT_2_TEXT = "{concept_2_text}"
   TAKEAWAY_TEXT  = "{takeaway_text}"
 
-  # Colors
+  # Colors — use ONLY these, never raw hex strings
   C_WHITE  = "#FDFDFD"
   C_GREEN  = "#00FF41"
   C_CYAN   = "#00E5FF"
   C_YELLOW = "#FFD600"
+  C_RED    = "#FF4444"
 
   # Font sizes — use these names, never numeric literals
   FS_HOOK    = 64
@@ -196,24 +245,48 @@ BEAT STRUCTURE — timing must match narration timecodes above:
   Beat 4 (takeaway):  Clear screen. TAKEAWAY_TEXT at Y_UPPER in C_WHITE. One strong visual.
 
 TECHNICAL REQUIREMENTS:
-  - Portrait config (copy verbatim, BEFORE any other import):
+  - Your script MUST start with EXACTLY these 5 lines — copy verbatim, change nothing:
       from manim import config
       config.pixel_width  = 1080
       config.pixel_height = 1920
       config.frame_rate   = 30
+      from manim import *
+  - Then: import numpy as np
+  - NEVER use explicit named imports like "from manim import Scene, Create, ..."
+    Use ONLY "from manim import *" — named imports hallucinate non-existent symbols
   - Total duration: exactly {total_dur} seconds
   - Class name: ContentScene(Scene)
-  - Imports: from manim import * and import numpy as np only
   - x safe zone: [-2.8, 2.8]   y safe zone: [-5.5, 5.5]
   - Valid directions: UP, DOWN, LEFT, RIGHT — never TOP, BOTTOM, FRONT, BACK
   - ALL text: Text(font="Monospace") — NO Tex(), NO MathTex(), NO LaTeX
 
+VERIFIED API SIGNATURES — extracted from manim=={manim_ver}, your exact installed version.
+These are ground truth. Do not invent kwargs not listed here:
+{manim_ref}
+
+SAFE ANIMATIONS — use ONLY these, nothing else:
+  FadeIn(obj), FadeOut(obj)
+  Create(obj), Uncreate(obj)
+  Write(text_obj)
+  Transform(a, b), ReplacementTransform(a, b)
+  GrowArrow(arrow)
+  GrowFromCenter(obj)
+  LaggedStart(*animations, lag_ratio=0.1)
+  AnimationGroup(*animations)
+  self.play(obj.animate.move_to(pos))
+  self.play(obj.animate.set_color(color))
+  self.play(obj.animate.scale(factor))
+  self.play(obj.animate.shift(direction))
+
 BANNED (crashes Manim CE 0.20 — do not use):
+  Any explicit named import from manim (use from manim import * only)
+  Flash, ShowPassingFlash, Indicate, Circumscribe, ApplyMethod, Wiggle
   ParametricSurface, Surface, ThreeDScene, ThreeDAxes, Sphere, Cylinder
   self.camera.frame, self.camera.animate
-  Rectangle(buff=...)  → use SurroundingRectangle(obj, buff=0.2)
-  obj.to_center()      → use obj.move_to(ORIGIN)
-  obj.scale_to_fit_width() → use obj.scale(factor)
+  Rectangle(buff=...)        → use SurroundingRectangle(obj, buff=0.2)
+  obj.to_center()            → use obj.move_to(ORIGIN)
+  obj.scale_to_fit_width()   → use obj.scale(factor)
+  passing radius= to any animation — radius is a Dot/Circle property, not animation kwarg
 
 MANDATORY:
   - Every beat ≥ 3 self.play() calls — self.wait() alone = static PNG, not video
