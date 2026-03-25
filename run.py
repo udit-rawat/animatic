@@ -121,7 +121,7 @@ def main():
         action="store_true",
         help=(
             "Run the full pipeline end-to-end on Gemini only. "
-            "Uses gemini-2.5-flash for ranker/scripter/narrator and gemini-2.5-pro for animator. "
+            "Uses gemini-2.5-flash-lite for all stages. "
             "No handoff, no OpenRouter, fully automated."
         ),
     )
@@ -143,10 +143,10 @@ def main():
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "gemini"
         # Set stage-optimal models (overridable via .env)
-        os.environ.setdefault("GEMINI_MODEL_RANKER",   "gemini-2.5-flash")
-        os.environ.setdefault("GEMINI_MODEL_SCRIPTER", "gemini-2.5-flash")
-        os.environ.setdefault("GEMINI_MODEL_NARRATOR", "gemini-2.5-flash")
-        os.environ.setdefault("GEMINI_MODEL_ANIMATOR", "gemini-2.5-pro")
+        os.environ.setdefault("GEMINI_MODEL_RANKER",   "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCRIPTER", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_NARRATOR", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_ANIMATOR", "gemini-2.5-flash-lite")
 
     if args.provider:
         apply_provider(args.provider, args.model)

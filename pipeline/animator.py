@@ -139,86 +139,64 @@ def build_manim_prompt(script: dict, previous_code: str = None, error: str = Non
 
     base = f"""\
 You are a Manim Community Edition expert. Generate a complete, runnable Manim Python script
-for a portrait-format Instagram dopamine-loop video for AI engineers.
+for a 60-second portrait-format Instagram video for AI engineers.
 
 {script_block}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-COPY THESE CONSTANTS VERBATIM at the top of your script, inside the class or before it:
+COPY THESE CONSTANTS VERBATIM — do not rename or change values:
 
-  # --- Script content ---
+  # Script text (rendered large on screen — not stage directions)
   HOOK_TEXT      = "{hook_text}"
   CONCEPT_1_TEXT = "{concept_1_text}"
   CONCEPT_2_TEXT = "{concept_2_text}"
   TAKEAWAY_TEXT  = "{takeaway_text}"
 
-  # --- Color palette (DO NOT change these hex values) ---
-  C_WHITE  = "#FDFDFD"   # hook text, takeaway text, body copy
-  C_GREEN  = "#00FF41"   # AFTER side dots/lines, highlights, arrow
-  C_CYAN   = "#00E5FF"   # BEFORE side dots/lines
-  C_YELLOW = "#FFD600"   # section labels (BEFORE / AFTER), concept headers
+  # Colors
+  C_WHITE  = "#FDFDFD"
+  C_GREEN  = "#00FF41"
+  C_CYAN   = "#00E5FF"
+  C_YELLOW = "#FFD600"
 
-  # --- Font sizes (DO NOT use numeric literals — always use these names) ---
-  FS_HOOK     = 64   # hook text
-  FS_CONCEPT  = 56   # concept bullets
-  FS_LABEL    = 52   # BEFORE / AFTER labels
-  FS_TAKEWAY  = 60   # takeaway text
+  # Font sizes — use these names, never numeric literals
+  FS_HOOK    = 64
+  FS_CONCEPT = 56
+  FS_LABEL   = 52
+  FS_TAKEWAY = 60
 
-  # --- Exact Y anchors (portrait frame: 7.1 wide x 12.6 tall) ---
-  Y_TOP    =  5.2   # hook text baseline
-  Y_UPPER  =  2.8   # concept 1 text / BEFORE-AFTER labels
-  Y_CENTER =  0.0   # divider line / dot grid center
-  Y_LOWER  = -2.8   # concept 2 text
-  Y_BOTTOM = -5.2   # takeaway text baseline
+  # Y anchors — portrait frame is 7.1 wide × 12.6 tall
+  Y_TOP    =  5.2
+  Y_UPPER  =  2.8
+  Y_CENTER =  0.0
+  Y_LOWER  = -2.8
+  Y_BOTTOM = -5.2
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-ALL text: Text(font="Monospace") — NO Tex(), NO MathTex(), NO LaTeX
-Background: BLACK (#000000)
+DESIGN PHILOSOPHY — read before writing a single line:
+  The animation must be TOPIC-SPECIFIC. Look at the script content above.
+  Design visuals that make sense for THAT topic — not a generic dot grid.
 
-SCENE STRUCTURE — beat by beat:
+  Examples of topic-driven visuals:
+    memory leak topic   → a bar chart that grows unbounded, then flatlines after the fix
+    attention mechanism → a matrix with highlighted cells showing attention weights
+    gradient descent    → a loss curve descending, animated step by step
+    tokenization        → words splitting into sub-word tokens, color-coded
+    model compression   → a large shape shrinking while keeping its structure
+    benchmark results   → two bars side by side, one clearly taller
 
-  Beat 1 — Hook (0s–10s):
-    • self.play(FadeIn(Text(HOOK_TEXT, font_size=FS_HOOK, color=C_WHITE,
-        font="Monospace", width=6.0).move_to(UP * Y_TOP)))
-    • Simultaneously FadeIn ~60 Dot objects (radius=0.09, color=C_GREEN) scattered
-      randomly: x in [-2.5, 2.5], y in [-2.5, 2.5] (CENTER zone only — keep top clear for text)
-    • self.wait(4)
-    • self.play(Transform all dots → ordered 8×8 grid centered at [0, Y_CENTER])
-    • self.play(FadeOut hook text)   ← separate play call
+  EVERY BEAT must use a different visual primitive — do not repeat the same shape.
+  Use the FULL vertical canvas: place elements at Y_TOP, Y_UPPER, Y_CENTER, Y_LOWER, Y_BOTTOM.
+  Beat 3 (contrast) MUST show a BEFORE/AFTER or OLD/NEW split — left=C_CYAN, right=C_GREEN,
+  labels in C_YELLOW.
 
-  Beat 2 — Collapse (10s–25s):
-    • self.play(FadeIn(Text(CONCEPT_1_TEXT, font_size=FS_CONCEPT, color=C_YELLOW,
-        font="Monospace", width=5.5).move_to(UP * Y_UPPER)))
-    • self.play(Transform dot grid → tighter 6×6 grid, scale each dot by 0.7)
-    • self.wait(3)
-    • self.play(Create 3 Line objects connecting grid dots, stroke_width=3, color=C_GREEN)
-    • self.play(FadeOut concept text)
-
-  Beat 3 — Contrast (25s–45s):
-    • self.play(FadeOut all remaining dots and lines)
-    • self.play(Create(Line(start=UP*5.0, end=DOWN*5.0, color=C_WHITE, stroke_width=2).move_to(ORIGIN)))
-    • LEFT side (x < 0): self.play(FadeIn ~12 Dots in a 3×4 rigid grid, color=C_CYAN,
-        x in [-2.5, -0.3], y in [-2.0, 2.0], then Create 4 straight Lines between them, color=C_CYAN)
-    • RIGHT side (x > 0): self.play(FadeIn ~12 Dots in loose positions, color=C_GREEN,
-        x in [0.3, 2.5], y in [-2.0, 2.0], then Create 3 ArcBetweenPoints arcs, color=C_GREEN)
-    • BEFORE label: self.play(FadeIn(Text("BEFORE", font_size=FS_LABEL, color=C_YELLOW,
-        font="Monospace").move_to(LEFT*1.5 + UP*Y_UPPER)))
-    • AFTER label:  self.play(FadeIn(Text("AFTER",  font_size=FS_LABEL, color=C_YELLOW,
-        font="Monospace").move_to(RIGHT*1.5 + UP*Y_UPPER)))
-    • self.play(FadeIn(Text(CONCEPT_2_TEXT, font_size=FS_CONCEPT, color=C_WHITE,
-        font="Monospace", width=5.5).move_to(UP * Y_LOWER)))
-    • self.wait(4)
-
-  Beat 4 — Takeaway (45s–{total_dur}s):
-    • self.play(FadeOut *everything* on screen)
-    • self.play(FadeIn(Text(TAKEAWAY_TEXT, font_size=FS_TAKEWAY, color=C_WHITE,
-        font="Monospace", width=5.8).move_to(UP * 1.5)))
-    • self.play(GrowArrow(Arrow(LEFT*2.5, RIGHT*2.5, color=C_GREEN, stroke_width=8)
-        .move_to(UP * Y_CENTER)))
-    • self.wait(5)
-    • self.play(FadeOut *everything*)
+BEAT STRUCTURE — timing must match narration timecodes above:
+  Beat 1 (hook):     Large HOOK_TEXT at Y_TOP in C_WHITE. Topic-specific visual below it.
+  Beat 2 (mechanism): CONCEPT_1_TEXT at Y_UPPER in C_YELLOW. Animate the mechanism.
+  Beat 3 (contrast):  Split screen — BEFORE (left, C_CYAN) vs AFTER (right, C_GREEN).
+                      CONCEPT_2_TEXT at Y_LOWER in C_WHITE.
+  Beat 4 (takeaway):  Clear screen. TAKEAWAY_TEXT at Y_UPPER in C_WHITE. One strong visual.
 
 TECHNICAL REQUIREMENTS:
-  - Portrait config (copy verbatim, before any other import):
+  - Portrait config (copy verbatim, BEFORE any other import):
       from manim import config
       config.pixel_width  = 1080
       config.pixel_height = 1920
@@ -228,20 +206,21 @@ TECHNICAL REQUIREMENTS:
   - Imports: from manim import * and import numpy as np only
   - x safe zone: [-2.8, 2.8]   y safe zone: [-5.5, 5.5]
   - Valid directions: UP, DOWN, LEFT, RIGHT — never TOP, BOTTOM, FRONT, BACK
+  - ALL text: Text(font="Monospace") — NO Tex(), NO MathTex(), NO LaTeX
 
-BANNED (will crash — do not use):
+BANNED (crashes Manim CE 0.20 — do not use):
   ParametricSurface, Surface, ThreeDScene, ThreeDAxes, Sphere, Cylinder
-  self.camera.frame, self.camera.animate  (MovingCameraScene only)
-  Rectangle(buff=...)  (use SurroundingRectangle(obj, buff=0.2) instead)
-  obj.to_center()      (use obj.move_to(ORIGIN) or obj.center() instead)
-  obj.scale_to_fit_width()  (use obj.width = X or obj.scale(X) instead)
+  self.camera.frame, self.camera.animate
+  Rectangle(buff=...)  → use SurroundingRectangle(obj, buff=0.2)
+  obj.to_center()      → use obj.move_to(ORIGIN)
+  obj.scale_to_fit_width() → use obj.scale(factor)
 
-MANDATORY RULES:
-  - Every beat MUST have ≥ 3 self.play() calls — self.wait() alone = static PNG not video
-  - NEVER use numeric literals for font_size — always use FS_HOOK, FS_CONCEPT, FS_LABEL, FS_TAKEWAY
-  - NEVER use "#00FF41" directly — always use C_GREEN, C_CYAN, C_YELLOW, C_WHITE
-  - Every line must be complete and runnable — no placeholders, no ellipsis
-  - No file I/O, no external assets, no custom fonts beyond font="Monospace"
+MANDATORY:
+  - Every beat ≥ 3 self.play() calls — self.wait() alone = static PNG, not video
+  - Use FS_HOOK / FS_CONCEPT / FS_LABEL / FS_TAKEWAY — never raw numbers for font_size
+  - Use C_WHITE / C_GREEN / C_CYAN / C_YELLOW — never raw hex strings
+  - Complete runnable code — no placeholders, no ellipsis, no TODO comments
+  - No file I/O, no external assets
 """
 
     if previous_code and error:
@@ -268,19 +247,49 @@ PREVIOUS CODE:
 
 
 def run_manim(script_path: str) -> tuple[bool, str]:
-    """Run manim and stream its output live so the user sees frame progress."""
+    """Run manim with a single progress bar — one bar across all animations."""
+    import re
     process = subprocess.Popen(
         ["manim", "-qh", script_path, "ContentScene", "--format=mp4"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,   # merge stderr into stdout
+        stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
     )
     output_lines = []
+    total = None
+    current = 0
+
+    bar_width = 40
+    def _draw(n, t, label=""):
+        filled = int(bar_width * n / t) if t else 0
+        bar = "█" * filled + "░" * (bar_width - filled)
+        pct = int(100 * n / t) if t else 0
+        sys.stdout.write(f"\r  Rendering  [{bar}]  {pct}%  anim {n}/{t}  {label[:30]:<30}")
+        sys.stdout.flush()
+
     for line in process.stdout:
-        print(line, end="", flush=True)
         output_lines.append(line)
+        # Manim prints "Animation N :" lines — use them to drive the bar
+        m = re.search(r"Animation\s+(\d+)\s*:", line)
+        if m:
+            current = int(m.group(1))
+            # First time we see an animation number, peek ahead for total from
+            # "Played N animations" — but we don't have it yet, so use current
+            # as a lower bound and show indeterminate if total unknown
+            if total is None:
+                total = current + 5   # optimistic placeholder
+            total = max(total, current)
+            _draw(current, total)
+        # "Played N animations" appears at the end — use for final bar
+        m2 = re.search(r"Played\s+(\d+)\s+animations", line)
+        if m2:
+            total = int(m2.group(1))
+            _draw(total, total, "done")
+
     process.wait()
+    sys.stdout.write("\n")
+    sys.stdout.flush()
 
     full_output = "".join(output_lines)
     if process.returncode != 0:
@@ -338,11 +347,9 @@ def main():
         with open(MANIM_SCRIPT_PATH, "w") as f:
             f.write(manim_code)
 
-        # ── Step 2: Manim renders the video (live output) ────────────────────
-        print(f"\nRendering attempt {attempt}/{MAX_RETRIES} — frame progress below:")
-        print("─" * 60)
+        # ── Step 2: Manim renders the video ──────────────────────────────────
+        print(f"\nRendering attempt {attempt}/{MAX_RETRIES}...")
         success, error = run_manim(MANIM_SCRIPT_PATH)
-        print("─" * 60)
 
         if success:
             mp4 = find_rendered_mp4(MANIM_SCRIPT_PATH)

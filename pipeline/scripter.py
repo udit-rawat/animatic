@@ -9,36 +9,42 @@ OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "script.js
 
 def build_prompt(topic: dict) -> str:
     return f"""\
-You are a short-form video scriptwriter for AI engineers on Instagram and X (Twitter).
-You write 60-second dopamine-loop Manim explainer scripts. Every word must earn its place.
+You are writing on-screen text for a 60-second Manim animation for AI engineers.
+These strings will be rendered directly as large text on a black screen — they are
+NOT stage directions, NOT narration, NOT descriptions of visuals.
+Every string must work as a standalone statement a viewer reads on screen.
 
 TOPIC: {topic['title']}
 SUMMARY: {topic['summary']}
-SOURCE: {topic['url']}
 
-FORMAT: 60 seconds total, structured as 4 beats:
-  Beat 1 — The Anomaly     (0s-10s):  1-2 sentences that break expectation
-  Beat 2 — The Collapse    (10s-25s): 2-3 sentences showing the mechanism
-  Beat 3 — The Contrast    (25s-45s): 2-3 sentences — early vs deep, simple vs complex
-  Beat 4 — The Hook Loop   (45s-60s): 1-2 provocative sentences that force a rewatch
+OUTPUT RULES — critical:
+- hook: 1 punchy sentence (≤12 words). The anomaly. Cold open. No "VISUAL:", no descriptions.
+  GOOD: "52GB RSS. VRAM untouched. The server OOM-killed itself."
+  BAD:  "VISUAL: Server rack showing memory usage climbing..."
+- concept_bullets[0]: 1-2 short sentences (≤18 words total). The mechanism. Dense facts.
+  GOOD: "MALLOC_ARENA_MAX=2 PYTORCH_NO_CUDA_MEMORY_CACHING=1. Two vars. Zero code changes."
+  BAD:  "VISUAL: Graph showing RSS memory steadily climbing while VRAM stays flat..."
+- concept_bullets[1]: 1-2 short sentences (≤18 words total). The contrast or proof.
+  GOOD: "Before: RSS climbs 3GB/hour. After: flat line. Same model, same load."
+  BAD:  "VISUAL: Split screen showing before/after terminal output..."
+- takeaway: 1 sharp sentence ending in an unanswered question (≤15 words).
+  GOOD: "The allocator was the leak. What else are you not watching?"
+  BAD:  "VISUAL: Clean terminal showing free -h output..."
 
-SCRIPT REQUIREMENTS:
-- Every beat maps to a distinct visual moment — write what you SEE, not what you say
-- Language: system-terminal register — cold, precise, no warmth, no filler
-- End Beat 4 with a single provocative unanswered question — no CTAs, no "follow" lines
+Language: system-terminal register — cold, precise, no warmth, no filler words.
+NEVER write "VISUAL:", "Scene:", "Animation:", "Show", "Display" or any production note.
 
-CAPTION: 2-3 sentences for Instagram/X — open with the anomaly, close with a question that drives saves
-
-HASHTAGS: exactly 5, mix of broad and niche AI engineering tags
+CAPTION: 2-3 sentences for Instagram/X. Open with the anomaly, close with a question.
+HASHTAGS: exactly 5, mix of broad (#MachineLearning) and niche (#PyTorchTips) AI tags.
 
 Respond with ONLY valid JSON:
 {{
-  "hook": "<Beat 1 — The Anomaly>",
+  "hook": "<1 punchy on-screen sentence>",
   "concept_bullets": [
-    "<Beat 2 — The Collapse visual>",
-    "<Beat 3 — The Contrast visual>"
+    "<mechanism — short on-screen statement>",
+    "<contrast/proof — short on-screen statement>"
   ],
-  "takeaway": "<Beat 4 — The Hook Loop>",
+  "takeaway": "<sharp closing question>",
   "cta": "",
   "caption": "...",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]

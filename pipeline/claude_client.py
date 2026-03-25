@@ -38,14 +38,14 @@ from pipeline import logger as _logger_mod
 
 # ── Model config ──────────────────────────────────────────────────────────────
 CLAUDE_MODEL       = "claude-sonnet-4-6"
-GEMINI_MODEL       = "gemini-2.5-flash"          # global fallback
+GEMINI_MODEL       = "gemini-2.5-flash-lite"     # global fallback
 DEFAULT_MAX_TOKENS = 4096
 
 GEMINI_STAGE_DEFAULTS = {
-    "ranker":   "gemini-2.5-flash",
-    "scripter": "gemini-2.5-flash",
-    "narrator": "gemini-2.5-flash",
-    "animator": "gemini-2.5-pro",               # heaviest stage — best model
+    "ranker":   "gemini-2.5-flash-lite",
+    "scripter": "gemini-2.5-flash-lite",
+    "narrator": "gemini-2.5-flash-lite",
+    "animator": "gemini-2.5-flash-lite",
 }
 
 OPENROUTER_STAGE_DEFAULTS = {
@@ -221,7 +221,7 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
                     print(f"⚠️  Gemini key ...{key_id} exhausted — trying next key...")
                     try:
                         from pipeline import quota as _q
-                        _q.mark_key_exhausted(api_key)
+                        _q.mark_key_exhausted(api_key, model=model)
                     except Exception:
                         pass
                     raise _GeminiQuotaExhausted(body)
@@ -278,8 +278,9 @@ def _call_gemini(prompt: str, stage: str, max_tokens: int, json_mode: bool = Fal
     if not keys:
         raise RuntimeError("No GEMINI_API_KEY or GEMINI_API_KEYS configured.")
 
+    model = _gemini_model_for(stage)
     for key in keys:
-        if _q.is_key_exhausted(key):
+        if _q.is_key_exhausted(key, model=model):
             continue
         try:
             return _call_gemini_with_key(prompt, stage, max_tokens, key, json_mode=json_mode)
