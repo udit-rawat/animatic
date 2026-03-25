@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-STAGES = ["scraper", "ranker", "scripter", "narrator", "animator", "mixer", "notifier"]
+STAGES = ["scraper", "ranker", "scripter", "scene_planner", "narrator", "param_extractor", "animator", "mixer", "notifier"]
 
 
 def apply_provider(provider: str, model: str | None):
@@ -63,6 +63,10 @@ def run_stage(name: str):
         from pipeline.scripter import main
     elif name == "animator":
         from pipeline.animator import main
+    elif name == "scene_planner":
+        from pipeline.scene_planner import main
+    elif name == "param_extractor":
+        from pipeline.param_extractor import main
     elif name == "narrator":
         from pipeline.narrator import main
     elif name == "mixer":
@@ -143,10 +147,12 @@ def main():
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "gemini"
         # Set stage-optimal models (overridable via .env)
-        os.environ.setdefault("GEMINI_MODEL_RANKER",   "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_SCRIPTER", "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_NARRATOR", "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_ANIMATOR", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_RANKER",          "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCRIPTER",        "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCENE_PLANNER",   "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_NARRATOR",        "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_PARAM_EXTRACTOR", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_ANIMATOR",        "gemini-2.5-flash-lite")
 
     if args.provider:
         apply_provider(args.provider, args.model)

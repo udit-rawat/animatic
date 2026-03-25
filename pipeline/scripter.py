@@ -9,42 +9,52 @@ OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "script.js
 
 def build_prompt(topic: dict) -> str:
     return f"""\
-You are writing on-screen text for a 60-second Manim animation for AI engineers.
-These strings will be rendered directly as large text on a black screen — they are
-NOT stage directions, NOT narration, NOT descriptions of visuals.
-Every string must work as a standalone statement a viewer reads on screen.
+You are writing on-screen text for a short Manim animation targeting AI engineers on TikTok/Shorts.
+These strings render as LARGE TEXT on a dark screen — they must be immediately readable and
+create curiosity, not describe what's happening.
+NOT stage directions. NOT narration. NOT descriptions of visuals. Just the words on screen.
 
 TOPIC: {topic['title']}
 SUMMARY: {topic['summary']}
 
-OUTPUT RULES — critical:
-- hook: 1 punchy sentence (≤12 words). The anomaly. Cold open. No "VISUAL:", no descriptions.
-  GOOD: "52GB RSS. VRAM untouched. The server OOM-killed itself."
-  BAD:  "VISUAL: Server rack showing memory usage climbing..."
-- concept_bullets[0]: 1-2 short sentences (≤18 words total). The mechanism. Dense facts.
-  GOOD: "MALLOC_ARENA_MAX=2 PYTORCH_NO_CUDA_MEMORY_CACHING=1. Two vars. Zero code changes."
-  BAD:  "VISUAL: Graph showing RSS memory steadily climbing while VRAM stays flat..."
-- concept_bullets[1]: 1-2 short sentences (≤18 words total). The contrast or proof.
-  GOOD: "Before: RSS climbs 3GB/hour. After: flat line. Same model, same load."
-  BAD:  "VISUAL: Split screen showing before/after terminal output..."
-- takeaway: 1 sharp sentence ending in an unanswered question (≤15 words).
-  GOOD: "The allocator was the leak. What else are you not watching?"
-  BAD:  "VISUAL: Clean terminal showing free -h output..."
+OUTPUT RULES:
 
-Language: system-terminal register — cold, precise, no warmth, no filler words.
-NEVER write "VISUAL:", "Scene:", "Animation:", "Show", "Display" or any production note.
+hook (≤12 words):
+  The curiosity gap opener. State the unexpected fact or contradiction that makes someone stop scrolling.
+  Short words. High contrast. Should create a "wait, how?" reaction.
+  GOOD: "52GB RSS. VRAM untouched. Server OOM-killed itself."
+  GOOD: "Two env vars. No code changes. 40% less memory."
+  BAD:  "Today we explore memory allocation issues in PyTorch."
 
-CAPTION: 2-3 sentences for Instagram/X. Open with the anomaly, close with a question.
-HASHTAGS: exactly 5, mix of broad (#MachineLearning) and niche (#PyTorchTips) AI tags.
+concept_bullets[0] (≤18 words total):
+  The mechanism — how it works. Dense facts. Must name 3-5 concrete stages or components.
+  GOOD: "MALLOC_ARENA_MAX=2. Caps glibc arenas. RSS drops immediately."
+  BAD:  "Setting this variable controls how memory is allocated by the system."
+
+concept_bullets[1] (≤18 words total):
+  The proof — the before/after contrast with real numbers. Name both states specifically.
+  GOOD: "Before: RSS climbs 3GB/hour. After: flat. Same model, same load."
+  BAD:  "The results show significant improvement in memory usage patterns."
+
+takeaway (≤15 words):
+  The aha-moment + an open question that lingers. Punchy. Slightly uncomfortable.
+  GOOD: "The allocator was the leak. What else are you not measuring?"
+  BAD:  "This shows the importance of monitoring all system resources carefully."
+
+NEVER write "VISUAL:", "Scene:", "Animation:", "Show", "Display", or any production note.
+Language: direct, factual, punchy — like a tweet from an engineer who just shipped a fix.
+
+CAPTION: 2-3 sentences for Instagram/X. Lead with the hook, close with the question.
+HASHTAGS: exactly 5, mix of broad (#MachineLearning) and specific (#PyTorchTips, #MLOps) AI tags.
 
 Respond with ONLY valid JSON:
 {{
-  "hook": "<1 punchy on-screen sentence>",
+  "hook": "<curiosity gap — ≤12 words>",
   "concept_bullets": [
-    "<mechanism — short on-screen statement>",
-    "<contrast/proof — short on-screen statement>"
+    "<mechanism — ≤18 words with concrete component names>",
+    "<before/after proof — ≤18 words with real numbers>"
   ],
-  "takeaway": "<sharp closing question>",
+  "takeaway": "<aha-moment + open question — ≤15 words>",
   "cta": "",
   "caption": "...",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
@@ -53,6 +63,8 @@ Respond with ONLY valid JSON:
 
 
 def extract_json(raw: str) -> dict:
+    import re
+    # Strip markdown fences
     if "```" in raw:
         parts = raw.split("```")
         for part in parts:
@@ -60,13 +72,18 @@ def extract_json(raw: str) -> dict:
             if part.startswith("json"):
                 part = part[4:].strip()
             if part.startswith("{"):
-                return json.loads(part)
+                raw = part
+                break
     # Find first { ... } block
     start = raw.find("{")
     end = raw.rfind("}") + 1
     if start != -1 and end > start:
-        return json.loads(raw[start:end])
-    return json.loads(raw.strip())
+        candidate = raw[start:end]
+    else:
+        candidate = raw.strip()
+    # Repair: remove trailing commas before ] or }
+    candidate = re.sub(r',\s*([\]}])', r'\1', candidate)
+    return json.loads(candidate)
 
 
 def main():
@@ -74,8 +91,17 @@ def main():
         topic = json.load(f)
 
     prompt = build_prompt(topic)
-    raw = claude_client.call(prompt, stage="scripter", json_mode=True)
-    script = extract_json(raw)
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            raw = claude_client.call(prompt, stage="scripter", json_mode=True)
+            script = extract_json(raw)
+            break
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            last_err = e
+            print(f"[scripter] JSON parse failed (attempt {attempt}/3): {e} — retrying...")
+    else:
+        raise RuntimeError(f"Scripter failed to produce valid JSON after 3 attempts. Last error: {last_err}")
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(script, f, indent=2)

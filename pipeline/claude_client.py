@@ -89,10 +89,10 @@ _usage_log: list[dict] = []
 
 
 class _GeminiQuotaExhausted(Exception):
-    """Raised when ALL configured Gemini keys are exhausted for today."""
+    """Raised when ALL configured Gemini keys are daily-quota exhausted."""
 
 class _GeminiRPMLimited(Exception):
-    """Raised when a key exhausts all RPM retries — rotate to next key."""
+    """Raised immediately on RPM 429 — caller rotates to next key."""
 
 
 # ── Mode 1: Handoff (manual Claude session) ───────────────────────────────────
@@ -171,7 +171,10 @@ def _call_handoff(prompt: str, stage: str) -> str:
 # ── Mode 2: Gemini API (with key rotation) ────────────────────────────────────
 
 def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str, json_mode: bool = False) -> str:
-    """Single Gemini call using a specific API key. Raises _GeminiQuotaExhausted if this key is exhausted."""
+    """Single Gemini call using a specific API key.
+    Raises _GeminiQuotaExhausted on daily quota exhaustion.
+    Raises _GeminiRPMLimited immediately on RPM 429 — caller rotates, no waiting here.
+    """
     import urllib.request
     import urllib.error
     log = _logger_mod.get()
@@ -206,36 +209,26 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
         method="POST",
     )
 
-    wait_times = [30, 60, 120]
-    data = None
-    for attempt, wait in enumerate(wait_times + [None], start=1):
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                data = json.loads(resp.read())
-            break
-        except urllib.error.HTTPError as e:
-            if e.code == 429:
-                body = e.read().decode("utf-8", errors="replace")
-                if "free_tier_requests" in body:
-                    log.warning(f"[{stage}] Gemini key ...{key_id} daily quota exhausted")
-                    print(f"⚠️  Gemini key ...{key_id} exhausted — trying next key...")
-                    try:
-                        from pipeline import quota as _q
-                        _q.mark_key_exhausted(api_key, model=model)
-                    except Exception:
-                        pass
-                    raise _GeminiQuotaExhausted(body)
-                if wait is not None:
-                    log.warning(f"[{stage}] Gemini RPM limit (key ...{key_id}) — waiting {wait}s")
-                    print(f"⏳ Gemini rate limited — waiting {wait}s...")
-                    time.sleep(wait)
-                else:
-                    log.warning(f"[{stage}] Gemini key ...{key_id} RPM exhausted — rotating to next key")
-                    print(f"⚠️  Gemini key ...{key_id} RPM exhausted — trying next key...")
-                    raise _GeminiRPMLimited(body) from e
-            else:
-                body = e.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"[{stage}] Gemini HTTP {e.code}: {body[:400]}") from e
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            body = e.read().decode("utf-8", errors="replace")
+            if "free_tier_requests" in body:
+                log.warning(f"[{stage}] Gemini key ...{key_id} daily quota exhausted")
+                print(f"⚠️  Gemini key ...{key_id} exhausted — trying next key...")
+                try:
+                    from pipeline import quota as _q
+                    _q.mark_key_exhausted(api_key, model=model)
+                except Exception:
+                    pass
+                raise _GeminiQuotaExhausted(body)
+            # RPM limit — raise immediately, let _call_gemini rotate to next key
+            log.warning(f"[{stage}] Gemini key ...{key_id} RPM limited — rotating")
+            raise _GeminiRPMLimited(body) from e
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"[{stage}] Gemini HTTP {e.code}: {body[:400]}") from e
 
     # gemini-2.5-* thinking models return multiple parts:
     #   parts[0] = thought/reasoning (thought=True) — NOT the answer
@@ -266,40 +259,50 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
 
 def _call_gemini(prompt: str, stage: str, max_tokens: int, json_mode: bool = False) -> str:
     """
-    Try each configured Gemini key in order.
-    - Rotates to next key ONLY on daily quota exhaustion (_GeminiQuotaExhausted).
-    - On RPM limit (_GeminiRPMLimited): waits 2 min and retries the SAME key once
-      before rotating. This exhausts one key at a time rather than scattering load.
+    Rotate-first key strategy:
+    - On RPM 429: rotate to next key immediately (no waiting on same key).
+    - Only wait (60s) after a full pass where EVERY available key was RPM-limited.
+    - On daily quota exhaustion: skip that key permanently for today.
+    - Gives up after 6 full rotation cycles (~6 minutes max wait total).
     """
-    import time
     from pipeline import quota as _q
     log = _logger_mod.get()
-    keys = _get_all_gemini_keys()
-    if not keys:
+    all_keys = _get_all_gemini_keys()
+    if not all_keys:
         raise RuntimeError("No GEMINI_API_KEY or GEMINI_API_KEYS configured.")
 
     model = _gemini_model_for(stage)
-    for key in keys:
-        if _q.is_key_exhausted(key, model=model):
-            continue
-        try:
-            return _call_gemini_with_key(prompt, stage, max_tokens, key, json_mode=json_mode)
-        except _GeminiQuotaExhausted:
-            continue   # daily limit hit — move to next key
-        except _GeminiRPMLimited:
-            # RPM limit after full backoff — wait 2 more minutes, retry same key once
-            log.warning(f"[{stage}] RPM still exhausted on ...{key[-8:]} — waiting 2 min before one more attempt")
-            print(f"⏳ RPM limit — waiting 2 min before retrying ...{key[-8:]}...")
-            time.sleep(120)
+    max_cycles = 6
+    cycle_wait = 60   # seconds to wait between full rotation cycles
+
+    for cycle in range(max_cycles):
+        rpm_hit = []
+        for key in all_keys:
+            if _q.is_key_exhausted(key, model=model):
+                continue
             try:
                 return _call_gemini_with_key(prompt, stage, max_tokens, key, json_mode=json_mode)
-            except (_GeminiQuotaExhausted, _GeminiRPMLimited):
-                log.warning(f"[{stage}] ...{key[-8:]} still failing after extra wait — rotating to next key")
-                continue   # now rotate
+            except _GeminiQuotaExhausted:
+                continue   # daily limit — skip permanently (already marked inside)
+            except _GeminiRPMLimited:
+                rpm_hit.append(key[-8:])
+                continue   # rotate immediately — no waiting
 
-    # All keys exhausted
-    n = len(keys)
+        # Check if any non-quota-exhausted keys remain
+        available = [k for k in all_keys if not _q.is_key_exhausted(k, model=model)]
+        if not available:
+            break   # every key is daily-exhausted
+
+        if cycle < max_cycles - 1:
+            log.warning(
+                f"[{stage}] All {len(rpm_hit)} available key(s) RPM-limited "
+                f"(cycle {cycle+1}/{max_cycles}) — waiting {cycle_wait}s"
+            )
+            print(f"⏳ All {len(rpm_hit)} key(s) RPM-limited — waiting {cycle_wait}s (cycle {cycle+1}/{max_cycles})...")
+            time.sleep(cycle_wait)
+
     _q.mark_exhausted()
+    n = len(all_keys)
     print(f"⚠️  All {n} Gemini key(s) exhausted/RPM-limited — falling back to OpenRouter...")
     raise _GeminiQuotaExhausted(f"All {n} configured Gemini keys are exhausted for today.")
 
