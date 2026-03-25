@@ -83,7 +83,8 @@ def record_call(stage: str):
 def mark_exhausted():
     """Called when ALL keys are exhausted for the day."""
     data = _load()
-    data["calls"] = _effective_limit()
+    # Do NOT inflate calls to the limit — that poisons the tracker after keys
+    # reset (next day). Only set the exhausted flag; actual call count stays real.
     data["exhausted"] = True
     _save(data)
 
@@ -95,20 +96,31 @@ def _key_id(key: str) -> str:
     return key.strip()[-8:] if key else "unknown"
 
 
-def mark_key_exhausted(key: str):
-    """Mark a specific Gemini key as exhausted for today."""
+def mark_key_exhausted(key: str, model: str = ""):
+    """Mark a specific Gemini key+model as exhausted for today.
+
+    Exhaustion is tracked per (key, model) pair because Gemini quota is
+    per-model — a key exhausted on gemini-2.5-pro still has flash quota.
+    """
     data = _load()
     kid = _key_id(key)
+    # Store as "kid:model" so flash and pro are tracked independently.
+    entry = f"{kid}:{model}" if model else kid
     if "exhausted_keys" not in data:
         data["exhausted_keys"] = []
-    if kid not in data["exhausted_keys"]:
-        data["exhausted_keys"].append(kid)
+    if entry not in data["exhausted_keys"]:
+        data["exhausted_keys"].append(entry)
     _save(data)
 
 
-def is_key_exhausted(key: str) -> bool:
-    """Return True if this key is already known to be exhausted today."""
-    return _key_id(key) in _load().get("exhausted_keys", [])
+def is_key_exhausted(key: str, model: str = "") -> bool:
+    """Return True if this key+model combo is known to be exhausted today."""
+    kid = _key_id(key)
+    entry = f"{kid}:{model}" if model else kid
+    exhausted = _load().get("exhausted_keys", [])
+    # Match exact "kid:model" entry — do NOT fall back to bare kid so that
+    # exhaustion on one model doesn't block another model on the same key.
+    return entry in exhausted
 
 
 # ── Run-level auditing ────────────────────────────────────────────────────────
@@ -158,10 +170,20 @@ def get_status() -> dict:
     data = _load()
     used      = data["calls"]
     limit     = _effective_limit()
-    # exhausted only when ALL keys are marked exhausted or flag explicitly set
     exhausted_keys = data.get("exhausted_keys", [])
-    all_exhausted  = data.get("exhausted", False)
-    remaining = 0 if all_exhausted else max(0, limit - used)
+    # Re-derive all_exhausted from current key list — stored flag goes stale when
+    # new keys are added after the flag was set.
+    try:
+        from pipeline.claude_client import _get_all_gemini_keys
+        all_keys      = _get_all_gemini_keys()
+        non_exhausted = [k for k in all_keys if _key_id(k) not in exhausted_keys]
+        all_exhausted = len(all_keys) > 0 and len(non_exhausted) == 0
+    except Exception:
+        all_exhausted = data.get("exhausted", False)
+    # Base remaining on non-exhausted keys' capacity so one drained key
+    # doesn't make the whole pool look empty.
+    active_limit = len(non_exhausted) * DAILY_LIMIT_PER_KEY if not all_exhausted else 0
+    remaining = 0 if all_exhausted else max(0, active_limit - used)
     return {
         "date":             data["date"],
         "used":             used,

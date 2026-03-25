@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-STAGES = ["scraper", "ranker", "scripter", "narrator", "animator", "mixer", "notifier"]
+STAGES = ["scraper", "ranker", "scripter", "scene_planner", "narrator", "param_extractor", "animator", "mixer", "notifier"]
 
 
 def apply_provider(provider: str, model: str | None):
@@ -63,6 +63,10 @@ def run_stage(name: str):
         from pipeline.scripter import main
     elif name == "animator":
         from pipeline.animator import main
+    elif name == "scene_planner":
+        from pipeline.scene_planner import main
+    elif name == "param_extractor":
+        from pipeline.param_extractor import main
     elif name == "narrator":
         from pipeline.narrator import main
     elif name == "mixer":
@@ -109,6 +113,23 @@ def main():
         ),
     )
     parser.add_argument(
+        "--hop",
+        action="store_true",
+        help=(
+            "Run the full pipeline, pause at animator with NO timeout. "
+            "Copy the prompt to Claude chat, get the code, then: pbpaste > output/handoff_animator_output.txt"
+        ),
+    )
+    parser.add_argument(
+        "--gemini",
+        action="store_true",
+        help=(
+            "Run the full pipeline end-to-end on Gemini only. "
+            "Uses gemini-2.5-flash-lite for all stages. "
+            "No handoff, no OpenRouter, fully automated."
+        ),
+    )
+    parser.add_argument(
         "--check-quota",
         action="store_true",
         help="Show Gemini daily quota status and exit (no pipeline run).",
@@ -120,11 +141,28 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.gemini:
+        if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEYS")):
+            print("[ERROR] --gemini requires GEMINI_API_KEY or GEMINI_API_KEYS in .env", file=sys.stderr)
+            sys.exit(1)
+        os.environ["FORCE_PROVIDER"] = "gemini"
+        # Set stage-optimal models (overridable via .env)
+        os.environ.setdefault("GEMINI_MODEL_RANKER",          "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCRIPTER",        "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCENE_PLANNER",   "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_NARRATOR",        "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_PARAM_EXTRACTOR", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_ANIMATOR",        "gemini-2.5-flash-lite")
+
     if args.provider:
         apply_provider(args.provider, args.model)
 
     if args.handoff_animator:
         os.environ["FORCE_PROVIDER_ANIMATOR"] = "handoff"
+
+    if args.hop:
+        os.environ["FORCE_PROVIDER_ANIMATOR"] = "handoff"
+        os.environ["HANDOFF_HOP_MODE"] = "1"
 
     # ── Quota / RCA check ─────────────────────────────────────────────────────
     if args.check_quota:

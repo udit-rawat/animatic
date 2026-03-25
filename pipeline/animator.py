@@ -1,3 +1,18 @@
+"""
+animator.py — assembles a Manim scene from fixed templates + extracted params.
+
+No LLM code generation. Templates are deterministic Python functions that
+generate code strings. Variable data comes from:
+  params.json       — per-beat extracted params (from param_extractor.py)
+  scene_plan.json   — which template each beat uses (from scene_planner.py)
+  narration_timing.json — real TTS durations (from narrator.py)
+
+Flow:
+  1. Load scene_plan.json + params.json + narration_timing.json
+  2. Dispatch each beat to its assigned template with real duration
+  3. Assemble into a single ContentScene script
+  4. Run Manim, copy output video
+"""
 import json
 import os
 import shutil
@@ -6,22 +21,23 @@ import sys
 import threading
 import time
 
-from pipeline import claude_client
+PARAMS_INPUT     = os.path.join(os.path.dirname(__file__), "..", "output", "params.json")
+SCENE_PLAN_INPUT = os.path.join(os.path.dirname(__file__), "..", "output", "scene_plan.json")
+TIMING_INPUT     = os.path.join(os.path.dirname(__file__), "..", "output", "narration_timing.json")
+MANIM_SCRIPT     = os.path.join(os.path.dirname(__file__), "..", "manim_scripts", "scene.py")
+OUTPUT_VIDEO     = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
 
-SCRIPT_INPUT  = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
-TIMING_INPUT  = os.path.join(os.path.dirname(__file__), "..", "output", "narration_timing.json")
-MANIM_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "manim_scripts", "scene.py")
-OUTPUT_VIDEO  = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
-MAX_RETRIES   = 3
+MANIM_TIMEOUT = 480
 
+
+# ── Spinner ───────────────────────────────────────────────────────────────────
 
 class Spinner:
-    """Shows a live spinner + elapsed time while a long operation runs."""
     CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
     def __init__(self, message: str):
         self.message = message
-        self._stop = threading.Event()
+        self._stop   = threading.Event()
         self._thread = threading.Thread(target=self._spin, daemon=True)
 
     def _spin(self):
@@ -45,173 +61,119 @@ class Spinner:
         self._thread.join()
 
 
-def extract_python(raw: str) -> str:
-    """
-    Robustly extract only valid Python from Claude's response.
-    Handles: plain code, ```python fences, mixed prose+code.
-    Always returns something that starts with a Python import or config line.
-    """
-    # Strategy 1: extract from ```python ... ``` fence
-    if "```python" in raw:
-        code = raw.split("```python", 1)[1]
-        code = code.split("```")[0]
-        return code.strip()
+# ── Script assembly ───────────────────────────────────────────────────────────
 
-    # Strategy 2: extract from generic ``` ... ``` fence
-    if "```" in raw:
-        parts = raw.split("```")
-        for part in parts[1::2]:   # odd-indexed = inside fences
-            stripped = part.strip()
-            if stripped.startswith(("from ", "import ", "#", "config")):
-                return stripped
+MANIM_HEADER = """\
+from manim import config
+config.pixel_width  = 1080
+config.pixel_height = 1920
+config.frame_rate   = 30
+from manim import *
+import numpy as np
 
-    # Strategy 3: find the first line that looks like Python and take everything from there
-    lines = raw.splitlines()
-    for i, line in enumerate(lines):
-        if line.startswith(("from manim", "import manim", "from manim import config", "config.pixel")):
-            return "\n".join(lines[i:])
+# ── Palette ───────────────────────────────────────────────────────────────────
+C_WHITE  = "#FDFDFD"
+C_GREEN  = "#00FF41"
+C_CYAN   = "#00E5FF"
+C_YELLOW = "#FFD600"
+C_RED    = "#FF4444"
 
-    # Strategy 4: return raw and let Manim surface the error
-    return raw
+# ── Font sizes ────────────────────────────────────────────────────────────────
+# Portrait frame = 25.3 Manim units tall (1080x1920).
+# 1 unit ≈ 76px. At font_size=48 ≈ 0.5 units ≈ 38px (tiny on phone).
+# These sizes are tuned so text occupies 8-20% of screen height.
+FS_STAT     = 300  # hook key number — hero element, dominates screen
+FS_HOOK     = 120  # hook phrase (short, 5-8 words)
+FS_CONCEPT  = 100  # concept header (short, 5-7 words)
+FS_LABEL    = 80   # panel section titles
+FS_DETAIL   = 68   # panel content text
+FS_TAKEAWAY = 160  # closing takeaway — big, bold, impactful
 
+# ── Zone constants (portrait frame: 14.2w × 25.3h, y-safe ±11) ──────────────
+# TEXT ZONE  : y ≥ 6    (top ~35% of frame — concept headers only)
+# BUFFER     : y = 2–6  (breathing room — nothing lives here)
+# ANIM ZONE  : y ≤ 2    (bottom ~60% — all visual elements)
 
-def strip_markdown_artifacts(code: str) -> str:
-    """Remove any stray markdown fences the LLM left inside the code."""
-    lines = code.splitlines()
-    cleaned = [ln for ln in lines if ln.strip() not in ("```", "```python", "```py")]
-    return "\n".join(cleaned)
-
-
-def _load_timing() -> dict:
-    if os.path.exists(TIMING_INPUT):
-        with open(TIMING_INPUT) as f:
-            return json.load(f)
-    return {}
-
-
-def _timing_block(script: dict, timing: dict) -> str:
-    """Build the VIDEO SCRIPT section of the prompt, with timecodes if available."""
-    if not timing:
-        bullets = "\n".join(f"  - {b}" for b in script["concept_bullets"])
-        return (
-            f"VIDEO SCRIPT:\n"
-            f"  Hook    (0-5s):   {script['hook']}\n"
-            f"  Concept (5-45s):\n{bullets}\n"
-            f"  Takeaway (45-55s): {script['takeaway']}\n"
-            f"  CTA      (55-60s): {script['cta']}\n"
-        )
-
-    def tc(key: str) -> str:
-        t = timing.get(key, {})
-        if t:
-            return f"[{t['start']:.1f}s → {t['end']:.1f}s  dur={t['duration']:.1f}s]"
-        return ""
-
-    n = len(script["concept_bullets"])
-    concept_lines = "\n".join(
-        f"  - {tc(f'concept_{i+1}')} {b}"
-        for i, b in enumerate(script["concept_bullets"])
-    )
-    total = sum(t.get("duration", 0) for t in timing.values())
-
-    return (
-        f"VIDEO SCRIPT WITH NARRATION TIMECODES (narration is pre-recorded — match these exactly):\n"
-        f"  Hook    {tc('hook')}: {script['hook']}\n"
-        f"  Concept:\n{concept_lines}\n"
-        f"  Takeaway+CTA {tc('takeaway_cta')}: {script['takeaway']} / {script['cta']}\n"
-        f"\n"
-        f"CRITICAL SYNC REQUIREMENT:\n"
-        f"  Total video duration must be exactly {total:.1f} seconds.\n"
-        f"  Use self.wait() so that each section's animations START and END at the shown timecodes.\n"
-        f"  The viewer hears narration for that section while watching its animation — they must align.\n"
-    )
-
-
-def build_manim_prompt(script: dict, previous_code: str = None, error: str = None) -> str:
-    timing = _load_timing()
-    script_block = _timing_block(script, timing)
-    total_dur = int(sum(t.get("duration", 0) for t in timing.values())) if timing else 60
-
-    base = f"""\
-You are a Manim Community Edition expert. Generate a complete, runnable Manim Python script
-for a portrait-format explainer video for AI engineers.
-
-{script_block}
-TECHNICAL REQUIREMENTS:
-  - Set portrait format at the TOP of the file, before any imports take effect:
-      from manim import config
-      config.pixel_width = 1080
-      config.pixel_height = 1920
-      config.frame_rate = 30
-  - Background: BLACK
-  - Total scene duration: approximately {total_dur} seconds (match narration length)
-  - Class name: ContentScene (inherits from Scene)
-  - Use only standard Manim CE imports (manim, numpy)
-  - ONLY use Text() for all text — never use Tex(), MathTex(), or any LaTeX-based objects
-  - Clean typography: large readable text, generous spacing, no overcrowding
-  - Minimal, purposeful animations — no gratuitous effects
-  - Each section of the script gets its own visual segment
-  - All text must fit within safe margins for portrait (avoid edges)
-
-CODE QUALITY:
-  - Every line must be complete and runnable — no placeholder comments like "# add animation here"
-  - No external assets, no custom fonts, no file I/O
-  - Use self.play() and self.wait() properly to hit the {total_dur}-second target
-  - Prefer FadeIn, Write, Transform — avoid experimental or version-sensitive methods
-  - Valid edge constants: UP, DOWN, LEFT, RIGHT — NEVER use TOP or BOTTOM (they don't exist in Manim)
-  - to_edge() accepts UP/DOWN/LEFT/RIGHT only
 """
 
-    if previous_code and error:
-        base += f"""
-PREVIOUS ATTEMPT FAILED. Fix the error below and return the corrected complete script.
 
-ERROR:
-```
-{error[:2000]}
-```
-
-PREVIOUS CODE:
-```python
-{previous_code}
-```
-"""
-
-    base += (
-        "\nReturn ONLY raw Python code. "
-        "The very first character of your response must be the letter 'f' (from manim import config). "
-        "No markdown, no fences, no explanations, no comments outside the code."
+def assemble_scene(params: dict, timing: dict, scene_plan: dict) -> str:
+    from pipeline.templates import (
+        beat1_hook, beat2_pipeline, beat3_before_after, beat4_takeaway,
+        beat_stats_grid, beat_timeline,
     )
-    return base
 
+    TEMPLATE_MAP = {
+        "hook":       beat1_hook,
+        "pipeline":   beat2_pipeline,
+        "comparison": beat3_before_after,
+        "stats_grid": beat_stats_grid,
+        "timeline":   beat_timeline,
+        "takeaway":   beat4_takeaway,
+    }
+
+    # Timing key mapping: beat 1 → "hook", last → "takeaway_cta", middles → "concept_1", "concept_2", ...
+    beats = scene_plan.get("beats", [])
+    total = len(beats)
+
+    def beat_duration(beat_num: int) -> float:
+        if beat_num == 1:
+            key = "hook"
+        elif beat_num == total:
+            key = "takeaway_cta"
+        else:
+            middle_idx = beat_num - 2  # 0-indexed among middle beats
+            key = f"concept_{middle_idx + 1}"
+        return timing.get(key, {}).get("duration", 12.0)
+
+    beat_blocks = []
+    for beat in beats:
+        beat_num = beat["beat"]
+        template = beat["template"]
+        module   = TEMPLATE_MAP[template]
+        beat_params = params.get(f"beat_{beat_num}", params)  # fallback to flat for safety
+        duration    = beat_duration(beat_num)
+        beat_blocks.append(module.generate(beat_params, duration))
+
+    body = (
+        MANIM_HEADER
+        + "class ContentScene(Scene):\n"
+        + "    def construct(self):\n"
+        + "\n".join(beat_blocks) + "\n"
+    )
+    return body
+
+
+# ── Manim execution ───────────────────────────────────────────────────────────
 
 def run_manim(script_path: str) -> tuple[bool, str]:
-    """Run manim and stream its output live so the user sees frame progress."""
-    process = subprocess.Popen(
-        ["manim", "-qh", script_path, "ContentScene", "--format=mp4"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,   # merge stderr into stdout
-        text=True,
-        bufsize=1,
-    )
-    output_lines = []
-    for line in process.stdout:
-        print(line, end="", flush=True)
-        output_lines.append(line)
-    process.wait()
+    with Spinner("Manim rendering"):
+        try:
+            result = subprocess.run(
+                ["manim", "-qh", script_path, "ContentScene", "--format=mp4"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=MANIM_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            return False, f"Manim timed out after {MANIM_TIMEOUT}s"
 
-    if process.returncode != 0:
-        return False, "".join(output_lines[-60:])
+    output = result.stdout or ""
+    if result.returncode != 0:
+        return False, output[-3000:]
+    if "Played 0 animations" in output:
+        return False, "Scene played 0 animations — all beats need at least one self.play() call."
     return True, ""
 
 
 def find_rendered_mp4(script_path: str) -> str | None:
     script_name = os.path.splitext(os.path.basename(script_path))[0]
-    search_roots = [
+    roots = [
         os.path.join(os.path.dirname(script_path), "media", "videos", script_name),
         os.path.join(os.getcwd(), "media", "videos", script_name),
     ]
-    for root in search_roots:
+    for root in roots:
         for dirpath, _, files in os.walk(root):
             for f in files:
                 if f.endswith(".mp4"):
@@ -220,54 +182,54 @@ def find_rendered_mp4(script_path: str) -> str | None:
 
 
 def cleanup_manim_media(script_path: str):
-    for search_root in [os.path.dirname(script_path), os.getcwd()]:
-        media_dir = os.path.join(search_root, "media")
-        if os.path.isdir(media_dir):
-            shutil.rmtree(media_dir)
+    for root in [os.path.dirname(script_path), os.getcwd()]:
+        media = os.path.join(root, "media")
+        if os.path.isdir(media):
+            shutil.rmtree(media)
 
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    with open(SCRIPT_INPUT) as f:
-        script = json.load(f)
+    # Load inputs
+    with open(PARAMS_INPUT) as f:
+        params = json.load(f)
 
-    os.makedirs(os.path.dirname(MANIM_SCRIPT_PATH), exist_ok=True)
+    with open(SCENE_PLAN_INPUT) as f:
+        scene_plan = json.load(f)
 
-    manim_code = None
-    error = None
+    timing = {}
+    if os.path.exists(TIMING_INPUT):
+        with open(TIMING_INPUT) as f:
+            timing = json.load(f)
 
-    for attempt in range(1, MAX_RETRIES + 1):
-        # ── Step 1: Claude generates the Manim code ──────────────────────────
-        with Spinner(f"Claude generating Manim scene (attempt {attempt}/{MAX_RETRIES})"):
-            prompt = build_manim_prompt(script, previous_code=manim_code, error=error)
-            manim_code = claude_client.call(prompt, stage="animator", max_tokens=4096)
+    total_dur = sum(v.get("duration", 0) for v in timing.values())
+    beats = scene_plan.get("beats", [])
+    templates = [b["template"] for b in beats]
+    print(f"Video duration from narration: {total_dur:.1f}s")
+    print(f"Scene plan: {' → '.join(templates)}")
 
-        print(f"✓ Scene generated ({len(manim_code.splitlines())} lines)")
+    # Assemble Manim script
+    scene_code = assemble_scene(params, timing, scene_plan)
+    os.makedirs(os.path.dirname(MANIM_SCRIPT), exist_ok=True)
+    with open(MANIM_SCRIPT, "w") as f:
+        f.write(scene_code)
+    print(f"✓ Manim script written ({len(scene_code.splitlines())} lines) → {MANIM_SCRIPT}")
 
-        manim_code = extract_python(manim_code)
-        manim_code = strip_markdown_artifacts(manim_code)
+    # Render
+    success, error = run_manim(MANIM_SCRIPT)
+    if not success:
+        raise RuntimeError(f"Manim render failed:\n{error}")
 
-        with open(MANIM_SCRIPT_PATH, "w") as f:
-            f.write(manim_code)
+    mp4 = find_rendered_mp4(MANIM_SCRIPT)
+    if not mp4:
+        raise RuntimeError("Manim exited 0 but no .mp4 found.")
 
-        # ── Step 2: Manim renders the video (live output) ────────────────────
-        print(f"\nRendering attempt {attempt}/{MAX_RETRIES} — frame progress below:")
-        print("─" * 60)
-        success, error = run_manim(MANIM_SCRIPT_PATH)
-        print("─" * 60)
-
-        if success:
-            mp4 = find_rendered_mp4(MANIM_SCRIPT_PATH)
-            if mp4:
-                os.makedirs(os.path.dirname(OUTPUT_VIDEO), exist_ok=True)
-                shutil.copy2(mp4, OUTPUT_VIDEO)
-                cleanup_manim_media(MANIM_SCRIPT_PATH)
-                print(f"\n✓ Video saved → {OUTPUT_VIDEO}")
-                return OUTPUT_VIDEO
-            error = "Manim exited 0 but no .mp4 found."
-
-        print(f"\n✗ Attempt {attempt} failed. Last error:\n{error[:400]}\n")
-
-    raise RuntimeError(f"Animator failed after {MAX_RETRIES} attempts.\nLast error:\n{error}")
+    os.makedirs(os.path.dirname(OUTPUT_VIDEO), exist_ok=True)
+    shutil.copy2(mp4, OUTPUT_VIDEO)
+    cleanup_manim_media(MANIM_SCRIPT)
+    print(f"\n✓ Video saved → {OUTPUT_VIDEO}")
+    return OUTPUT_VIDEO
 
 
 if __name__ == "__main__":

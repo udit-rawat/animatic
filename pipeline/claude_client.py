@@ -1,26 +1,32 @@
 """
-LLM client — six modes, priority order:
+LLM client — five modes, priority order:
 
-  1. Handoff  (manual Claude session)
-     Set FORCE_PROVIDER=handoff. Writes prompt to a file, waits for you
-     to paste it into a Claude session and drop the output file back.
+  1. Handoff  (manual Claude chat session via file-based pause)
+     Set FORCE_PROVIDER=handoff. Writes prompt to a file, polls for output.
 
-  2. Gemini API  (preferred free local mode — up to 4 rotating keys)
+  2. Gemini API  (primary — up to 4 rotating keys)
      Set GEMINI_API_KEYS=key1,key2,key3,key4  (comma-separated)
-     OR  GEMINI_API_KEY=key  (single key, legacy)
-     Each key = 20 RPD free. All keys exhausted → falls back to OpenRouter.
+     OR  GEMINI_API_KEY=key  (single key)
+     Key rotation: exhausted keys are skipped automatically.
+     All keys exhausted → falls back to OpenRouter.
 
-  3. OpenRouter  (free models, per-stage routing)
+  3. OpenRouter  (fallback — free models, per-stage routing)
      Set OPENROUTER_API_KEY in .env.
 
-  4. Anthropic SDK  (GitHub Actions / CI)
+  4. Anthropic SDK  (CI / GitHub Actions)
      Set ANTHROPIC_API_KEY in .env or as a GitHub secret.
 
-  5. Claude CLI  (legacy — broken inside an active Claude Code session)
-     Set nothing — this is the last fallback.
+  5. Claude CLI  (last resort — broken inside an active Claude Code session)
 
 Priority when FORCE_PROVIDER is not set:
   GEMINI_API_KEYS / GEMINI_API_KEY > OPENROUTER_API_KEY > ANTHROPIC_API_KEY > claude CLI
+
+Per-stage Gemini model defaults (overridable via env):
+  ranker   → gemini-2.5-flash   (fast reasoning, 250 RPD free)
+  scripter → gemini-2.5-flash   (structured output, 250 RPD free)
+  narrator → gemini-2.5-flash   (text rewrite, 250 RPD free)
+  animator → gemini-2.5-pro     (code generation, best quality, 100 RPD free)
+  TTS      → gemini-2.5-flash-preview-tts (audio output, always Gemini)
 """
 import json
 import os
@@ -32,13 +38,14 @@ from pipeline import logger as _logger_mod
 
 # ── Model config ──────────────────────────────────────────────────────────────
 CLAUDE_MODEL       = "claude-sonnet-4-6"
-GEMINI_MODEL       = "gemini-3-flash-preview"
+GEMINI_MODEL       = "gemini-2.5-flash-lite"     # global fallback
 DEFAULT_MAX_TOKENS = 4096
 
 GEMINI_STAGE_DEFAULTS = {
-    "ranker":   "gemini-3-flash-preview",
-    "scripter": "gemini-3-flash-preview",
-    "animator": "gemini-3-flash-preview",
+    "ranker":   "gemini-2.5-flash-lite",
+    "scripter": "gemini-2.5-flash-lite",
+    "narrator": "gemini-2.5-flash-lite",
+    "animator": "gemini-2.5-flash-lite",
 }
 
 OPENROUTER_STAGE_DEFAULTS = {
@@ -82,7 +89,10 @@ _usage_log: list[dict] = []
 
 
 class _GeminiQuotaExhausted(Exception):
-    """Raised when ALL configured Gemini keys are exhausted for today."""
+    """Raised when ALL configured Gemini keys are daily-quota exhausted."""
+
+class _GeminiRPMLimited(Exception):
+    """Raised immediately on RPM 429 — caller rotates to next key."""
 
 
 # ── Mode 1: Handoff (manual Claude session) ───────────────────────────────────
@@ -117,52 +127,54 @@ def _call_handoff(prompt: str, stage: str) -> str:
 
     log.info(f"[{stage}] Handoff prompt saved — waiting for manual output")
 
+    hop_mode = os.environ.get("HANDOFF_HOP_MODE") == "1"
+    abs_output = os.path.abspath(output_path)
+    abs_prompt = os.path.abspath(prompt_path)
+
     sep = "═" * 62
     print(f"\n╔{sep}╗")
-    print(f"║  ⚡ MANUAL CLAUDE HANDOFF — {stage.upper()} stage")
+    print(f"║  ⚡ HOP — {stage.upper()} stage paused")
     print(f"╠{sep}╣")
-    print(f"║  Prompt saved to:")
-    print(f"║    {os.path.abspath(prompt_path)}")
+    print(f"║  1. Copy the prompt below into Claude chat:")
+    print(f"║     cat \"{abs_prompt}\"")
     print(f"║")
-    print(f"║  Steps:")
-    print(f"║    1. Open a NEW Claude Code session (separate terminal)")
-    print(f"║    2. Tell Claude: \"Read the prompt file and write the")
-    print(f'║       result to the output path listed at the top of the file\"')
-    print(f"║    3. This pipeline auto-resumes once the output file appears.")
+    print(f"║  2. Once Claude gives you the code, run in a new terminal:")
+    print(f"║     pbpaste > \"{abs_output}\"")
     print(f"║")
-    print(f"║  Waiting for:")
-    print(f"║    {os.path.abspath(output_path)}")
+    print(f"║  Pipeline resumes automatically. No timeout.")
     print(f"╚{sep}╝\n")
 
-    # Poll for output file — accept immediately if already newer than prompt
-    elapsed = 0
+    # Poll indefinitely in hop mode, respect timeout otherwise
     poll_interval = 5
-    while elapsed < _HANDOFF_TIMEOUT:
+    elapsed = 0
+    while True:
         if os.path.exists(output_path) and os.path.getmtime(output_path) >= os.path.getmtime(prompt_path):
             with open(output_path) as f:
                 content = f.read().strip()
             if content:
                 log.info(f"[{stage}] Handoff output received — {len(content)} chars")
                 print(f"\n✅ Handoff output received ({len(content)} chars) — resuming pipeline.\n")
-                os.remove(prompt_path)   # clean up prompt file
+                os.remove(prompt_path)
                 _usage_log.append({"stage": stage, "mode": "handoff/claude", "cost_usd": 0.0})
                 return content
         time.sleep(poll_interval)
         elapsed += poll_interval
+        if not hop_mode and elapsed >= _HANDOFF_TIMEOUT:
+            raise RuntimeError(
+                f"[{stage}] Handoff timed out after {_HANDOFF_TIMEOUT//60} minutes. "
+                f"Output not found: {output_path}"
+            )
         if elapsed % 60 == 0:
-            remaining = (_HANDOFF_TIMEOUT - elapsed) // 60
-            print(f"  Still waiting for handoff output... ({elapsed//60}m elapsed, {remaining}m remaining)")
-
-    raise RuntimeError(
-        f"[{stage}] Handoff timed out after {_HANDOFF_TIMEOUT//60} minutes. "
-        f"Output not found: {output_path}"
-    )
+            print(f"  ⏳ Still waiting... ({elapsed//60}m)  →  pbpaste > \"{abs_output}\"")
 
 
 # ── Mode 2: Gemini API (with key rotation) ────────────────────────────────────
 
-def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str) -> str:
-    """Single Gemini call using a specific API key. Raises _GeminiQuotaExhausted if this key is exhausted."""
+def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str, json_mode: bool = False) -> str:
+    """Single Gemini call using a specific API key.
+    Raises _GeminiQuotaExhausted on daily quota exhaustion.
+    Raises _GeminiRPMLimited immediately on RPM 429 — caller rotates, no waiting here.
+    """
     import urllib.request
     import urllib.error
     log = _logger_mod.get()
@@ -171,9 +183,20 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
     log.debug(f"[{stage}] Gemini call — model: {model}, key: ...{key_id}, prompt: {len(prompt)} chars")
     t0 = time.time()
 
+    gen_config: dict = {"maxOutputTokens": max_tokens}
+    if json_mode:
+        gen_config["responseMimeType"] = "application/json"
+        # Disable thinking for simple JSON stages — thinking tokens count against
+        # maxOutputTokens, leaving too little budget for the actual response.
+        gen_config["thinkingConfig"] = {"thinkingBudget": 0}
+    else:
+        # For code-generation stages (animator): cap thinking at 2k tokens.
+        # Higher budgets cause Gemini to take 5-10+ min per call (hangs urllib).
+        gen_config["thinkingConfig"] = {"thinkingBudget": 2048}
+
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": max_tokens},
+        "generationConfig": gen_config,
     }).encode()
 
     url = (
@@ -186,36 +209,34 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
         method="POST",
     )
 
-    wait_times = [30, 60, 120]
-    data = None
-    for attempt, wait in enumerate(wait_times + [None], start=1):
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                data = json.loads(resp.read())
-            break
-        except urllib.error.HTTPError as e:
-            if e.code == 429:
-                body = e.read().decode("utf-8", errors="replace")
-                if "free_tier_requests" in body:
-                    log.warning(f"[{stage}] Gemini key ...{key_id} daily quota exhausted")
-                    print(f"⚠️  Gemini key ...{key_id} exhausted — trying next key...")
-                    try:
-                        from pipeline import quota as _q
-                        _q.mark_key_exhausted(api_key)
-                    except Exception:
-                        pass
-                    raise _GeminiQuotaExhausted(body)
-                if wait is not None:
-                    log.warning(f"[{stage}] Gemini RPM limit (key ...{key_id}) — waiting {wait}s")
-                    print(f"⏳ Gemini rate limited — waiting {wait}s...")
-                    time.sleep(wait)
-                else:
-                    raise RuntimeError(f"[{stage}] Gemini HTTP 429 after all retries: {body[:400]}") from e
-            else:
-                body = e.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"[{stage}] Gemini HTTP {e.code}: {body[:400]}") from e
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            body = e.read().decode("utf-8", errors="replace")
+            if "free_tier_requests" in body:
+                log.warning(f"[{stage}] Gemini key ...{key_id} daily quota exhausted")
+                print(f"⚠️  Gemini key ...{key_id} exhausted — trying next key...")
+                try:
+                    from pipeline import quota as _q
+                    _q.mark_key_exhausted(api_key, model=model)
+                except Exception:
+                    pass
+                raise _GeminiQuotaExhausted(body)
+            # RPM limit — raise immediately, let _call_gemini rotate to next key
+            log.warning(f"[{stage}] Gemini key ...{key_id} RPM limited — rotating")
+            raise _GeminiRPMLimited(body) from e
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"[{stage}] Gemini HTTP {e.code}: {body[:400]}") from e
 
-    text = data["candidates"][0]["content"]["parts"][0]["text"]
+    # gemini-2.5-* thinking models return multiple parts:
+    #   parts[0] = thought/reasoning (thought=True) — NOT the answer
+    #   parts[1] = actual response text
+    # Always pick the first non-thought part to get the real output.
+    _parts = data["candidates"][0]["content"]["parts"]
+    _output_parts = [p["text"] for p in _parts if not p.get("thought", False) and "text" in p]
+    text = _output_parts[0] if _output_parts else _parts[0]["text"]
     usage = data.get("usageMetadata", {})
     input_tok  = usage.get("promptTokenCount", 0)
     output_tok = usage.get("candidatesTokenCount", 0)
@@ -236,28 +257,53 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
     return text
 
 
-def _call_gemini(prompt: str, stage: str, max_tokens: int) -> str:
+def _call_gemini(prompt: str, stage: str, max_tokens: int, json_mode: bool = False) -> str:
     """
-    Try each configured Gemini key in order. Rotates to the next key when one
-    is exhausted. Raises _GeminiQuotaExhausted only when ALL keys are exhausted.
+    Rotate-first key strategy:
+    - On RPM 429: rotate to next key immediately (no waiting on same key).
+    - Only wait (60s) after a full pass where EVERY available key was RPM-limited.
+    - On daily quota exhaustion: skip that key permanently for today.
+    - Gives up after 6 full rotation cycles (~6 minutes max wait total).
     """
     from pipeline import quota as _q
-    keys = _get_all_gemini_keys()
-    if not keys:
+    log = _logger_mod.get()
+    all_keys = _get_all_gemini_keys()
+    if not all_keys:
         raise RuntimeError("No GEMINI_API_KEY or GEMINI_API_KEYS configured.")
 
-    for key in keys:
-        if _q.is_key_exhausted(key):
-            continue
-        try:
-            return _call_gemini_with_key(prompt, stage, max_tokens, key)
-        except _GeminiQuotaExhausted:
-            continue   # try next key
+    model = _gemini_model_for(stage)
+    max_cycles = 6
+    cycle_wait = 60   # seconds to wait between full rotation cycles
 
-    # All keys exhausted
-    n = len(keys)
+    for cycle in range(max_cycles):
+        rpm_hit = []
+        for key in all_keys:
+            if _q.is_key_exhausted(key, model=model):
+                continue
+            try:
+                return _call_gemini_with_key(prompt, stage, max_tokens, key, json_mode=json_mode)
+            except _GeminiQuotaExhausted:
+                continue   # daily limit — skip permanently (already marked inside)
+            except _GeminiRPMLimited:
+                rpm_hit.append(key[-8:])
+                continue   # rotate immediately — no waiting
+
+        # Check if any non-quota-exhausted keys remain
+        available = [k for k in all_keys if not _q.is_key_exhausted(k, model=model)]
+        if not available:
+            break   # every key is daily-exhausted
+
+        if cycle < max_cycles - 1:
+            log.warning(
+                f"[{stage}] All {len(rpm_hit)} available key(s) RPM-limited "
+                f"(cycle {cycle+1}/{max_cycles}) — waiting {cycle_wait}s"
+            )
+            print(f"⏳ All {len(rpm_hit)} key(s) RPM-limited — waiting {cycle_wait}s (cycle {cycle+1}/{max_cycles})...")
+            time.sleep(cycle_wait)
+
     _q.mark_exhausted()
-    print(f"⚠️  All {n} Gemini key(s) exhausted for today — falling back to OpenRouter...")
+    n = len(all_keys)
+    print(f"⚠️  All {n} Gemini key(s) exhausted/RPM-limited — falling back to OpenRouter...")
     raise _GeminiQuotaExhausted(f"All {n} configured Gemini keys are exhausted for today.")
 
 
@@ -420,13 +466,14 @@ def get_mode() -> str:
     keys = _get_all_gemini_keys()
     if force == "gemini" or keys:
         n = len(keys)
-        key_info = f"{n} key(s)" if n > 1 else "1 key"
+        key_info = f"{n} key(s)"
         if os.environ.get("GEMINI_MODEL"):
             return f"gemini/all={os.environ['GEMINI_MODEL']} [{key_info}]"
         return (
             f"gemini/per-stage [{key_info}] ("
             f"ranker={_gemini_model_for('ranker')}, "
             f"scripter={_gemini_model_for('scripter')}, "
+            f"narrator={_gemini_model_for('narrator')}, "
             f"animator={_gemini_model_for('animator')})"
         )
     if os.environ.get("OPENROUTER_API_KEY"):
@@ -443,7 +490,7 @@ def get_mode() -> str:
     return f"claude_cli ({CLAUDE_MODEL})"
 
 
-def call(prompt: str, stage: str, max_tokens: int = DEFAULT_MAX_TOKENS) -> str:
+def call(prompt: str, stage: str, max_tokens: int = DEFAULT_MAX_TOKENS, json_mode: bool = False) -> str:
     # Per-stage override takes priority over global provider
     # e.g. FORCE_PROVIDER_ANIMATOR=handoff lets you handoff just the animator
     force = os.environ.get(f"FORCE_PROVIDER_{stage.upper()}") or os.environ.get("FORCE_PROVIDER")
@@ -461,7 +508,7 @@ def call(prompt: str, stage: str, max_tokens: int = DEFAULT_MAX_TOKENS) -> str:
     keys = _get_all_gemini_keys()
     if force == "gemini" or keys:
         try:
-            return _call_gemini(prompt, stage, max_tokens)
+            return _call_gemini(prompt, stage, max_tokens, json_mode=json_mode)
         except _GeminiQuotaExhausted:
             if os.environ.get("OPENROUTER_API_KEY"):
                 return _call_openrouter(prompt, stage, max_tokens)

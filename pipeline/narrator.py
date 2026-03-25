@@ -23,7 +23,17 @@ AUDIO_PATH  = os.path.join(os.path.dirname(__file__), "..", "output", "narration
 TIMING_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "narration_timing.json")
 
 TTS_MODEL  = "gemini-2.5-flash-preview-tts"
-VOICE_NAME = "Kore"   # firm, clear — good for technical explainers
+VOICE_NAME = os.environ.get("TTS_VOICE", "Puck")   # Puck = fast-paced, energetic — good for Shorts/TikTok
+
+# Directorial prompt prepended to every TTS segment.
+# Gemini 2.5 TTS reads this and physically alters pacing/delivery.
+# Change the style here to reshape the whole video's voice character.
+VOICE_DIRECTIVE = (
+    "Say this in a fast-paced, curious tech explainer style — "
+    "punchy and energetic, like you're revealing something most people don't know. "
+    "Build tension in the hook, deliver facts with conviction, "
+    "use natural breath pauses for emphasis, and land the ending with a sharp edge: "
+)
 
 
 # ── Step 1: LLM rewrites visual script → segmented narration ─────────────────
@@ -35,52 +45,90 @@ def build_narration_prompt(topic: dict, script: dict) -> str:
     )
     concept_keys = ", ".join(f'"concept_{i+1}"' for i in range(n))
     return f"""\
-You are writing a segmented 60-second voiceover for an AI engineering explainer video.
-The narration is split into sections that will be time-synced to animation segments.
+You are writing a segmented voiceover for a short-form AI explainer (TikTok/Shorts style).
+The goal is curiosity — make the viewer lean in, not tune out.
 
 TOPIC: {topic['title']}
-SUMMARY: {topic['summary']}
 
-VIDEO SCRIPT:
-  hook: {script['hook']}
-  concept bullets:
+SOURCE MATERIAL:
+  hook:          {script['hook']}
+  concepts:
 {bullets}
-  takeaway: {script['takeaway']}
-  cta: {script['cta']}
+  takeaway:      {script['takeaway']}
 
-Return a JSON object with EXACTLY these keys:
-  "hook"          — 1-2 sentences for the opening hook (~5 seconds spoken)
-  {concept_keys}  — one narration section per concept bullet (~8-12 seconds each)
-  "takeaway_cta"  — closing takeaway + call to action, ending with "Follow for daily AI breakdowns." (~10 seconds)
+Write spoken narration in this structure:
 
-Rules for every section:
-- Explains the ACTUAL CONCEPT to the listener — what it is, why it matters, how it works
-- Sounds like a knowledgeable engineer speaking directly
-- NEVER mentions "video", "animation", "visual", "screen", "scene", "show", or "transition"
-- Direct technical language — no filler, no hype
-- Flows naturally when read aloud in isolation
+  "hook" (8-12 seconds):
+    Open with the unexpected fact or contradiction — something that creates a "wait, what?" moment.
+    Pose the question implicitly before you answer it. Use "you" to make it personal.
+    GOOD: "Your GPU had plenty of memory. Your RAM had plenty of memory. So why did the process die?"
+    BAD:  "Today we examine memory allocation patterns in PyTorch training pipelines."
 
-Return ONLY valid JSON. No markdown fences, no extra text.
+  {concept_keys} (12-18 seconds each):
+    Start mid-thought — no "so", no "now", no preamble.
+    Name the mechanism directly, then give the concrete number or fact.
+    Mix short punchy sentences (4-6 words) with one medium sentence for rhythm.
+    End with the implication — "which means", "so now", "and that changes everything."
+    GOOD: "Two environment variables. That's it. MALLOC_ARENA_MAX caps how many memory arenas glibc spins up. Set it to 2, and your RSS drops — without touching a single line of model code."
+    BAD:  "The mechanism involves setting environment variables that control memory allocation behavior."
+
+  "takeaway_cta" (10-16 seconds):
+    Deliver the aha-moment — reframe what they just learned in one sharp sentence.
+    Then end on a provocation or open question that makes them think beyond this topic.
+    GOOD: "The allocator was eating your memory the whole time. The question isn't how to fix it — it's what else you're not measuring."
+    BAD:  "In conclusion, these optimizations can significantly improve your training pipeline performance."
+
+RULES — non-negotiable:
+- Write for speaking, not reading. Use natural rhythm and breath pauses.
+- No hedging: "basically", "kind of", "essentially", "in a sense" — cut them all.
+- NEVER say "video", "animation", "screen", "visual", "watch", "see", "subscribe", "follow".
+- No news-anchor phrasing: "Today we look at...", "In this segment...", "As we can see..."
+- Use contractions naturally: "it's", "that's", "you're", "doesn't"
+- Each section must stand alone — it will be spliced independently
+
+Return ONLY valid JSON with EXACTLY these keys:
+  "hook", {concept_keys}, "takeaway_cta"
+No markdown, no extra text.
 """
 
 
 def generate_segmented_script(topic: dict, script: dict) -> dict:
+    import re as _re
     prompt = build_narration_prompt(topic, script)
-    raw = claude_client.call(prompt, stage="narrator").strip()
-    # Strip any accidental markdown fences
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-    return json.loads(raw)
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            raw = claude_client.call(prompt, stage="narrator", json_mode=True).strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+            # Find first { ... } block and repair trailing commas
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start != -1 and end > start:
+                raw = raw[start:end]
+            raw = _re.sub(r',\s*([\]}])', r'\1', raw)
+            return json.loads(raw)
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            last_err = e
+            print(f"[narrator] JSON parse failed (attempt {attempt}/3): {e} — retrying...")
+    raise RuntimeError(f"Narrator failed to produce valid JSON after 3 attempts. Last error: {last_err}")
 
 
 # ── Step 2: Gemini TTS ────────────────────────────────────────────────────────
 
+class _TTSRateLimited(Exception):
+    pass
+
+
 def call_tts(text: str, api_key: str) -> bytes:
+    """Single TTS call — raises _TTSRateLimited on 429 so caller can rotate keys."""
+    # Prepend directorial cue so the model shapes delivery, not just reads words.
+    directed_text = VOICE_DIRECTIVE + text
     payload = json.dumps({
-        "contents": [{"parts": [{"text": text}]}],
+        "contents": [{"parts": [{"text": directed_text}]}],
         "generationConfig": {
             "responseModalities": ["AUDIO"],
             "speechConfig": {
@@ -102,18 +150,16 @@ def call_tts(text: str, api_key: str) -> bytes:
         method="POST",
     )
 
-    for attempt, wait in enumerate([30, 60, 120, None], start=1):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                data = json.loads(resp.read())
-            break
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and wait is not None:
-                print(f"  ⏳ TTS rate limited — waiting {wait}s (attempt {attempt})...")
-                time.sleep(wait)
-            else:
-                body = e.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"Gemini TTS HTTP {e.code}: {body[:400]}") from e
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            raise _TTSRateLimited() from e
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Gemini TTS HTTP {e.code}: {body[:400]}") from e
+    except (TimeoutError, OSError) as e:
+        raise _TTSRateLimited() from e   # treat timeout as RPM — rotate to next key
 
     audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
     return base64.b64decode(audio_b64)
@@ -133,10 +179,36 @@ def save_wav(pcm_data: bytes, path: str, sample_rate: int = 24000):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _get_tts_keys() -> list[str]:
+    """Return all available Gemini API keys for TTS rotation."""
+    multi = os.environ.get("GEMINI_API_KEYS", "")
+    if multi:
+        return [k.strip() for k in multi.split(",") if k.strip()]
+    single = os.environ.get("GEMINI_API_KEY", "")
+    return [single] if single else []
+
+
+def call_tts_with_rotation(text: str, keys: list[str]) -> bytes:
+    """Rotate through all keys on 429 or timeout. Wait 60s only after all keys fail a full cycle."""
+    max_full_cycles = 5
+    cycle_wait = 60
+    for cycle in range(max_full_cycles):
+        for i, key in enumerate(keys):
+            try:
+                return call_tts(text, key)
+            except _TTSRateLimited:
+                if i < len(keys) - 1:
+                    print(f" [key {i+1} → key {i+2}]", end="", flush=True)
+                # last key handled by outer cycle wait below
+        print(f" [all {len(keys)} keys failed — waiting {cycle_wait}s (cycle {cycle+1}/{max_full_cycles})]", flush=True)
+        time.sleep(cycle_wait)
+    raise RuntimeError(f"TTS failed after {max_full_cycles} full key rotation cycles.")
+
+
 def main():
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not set — narrator requires Gemini TTS.")
+    keys = _get_tts_keys()
+    if not keys:
+        raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS not set — narrator requires Gemini TTS.")
 
     with open(SCRIPT_PATH) as f:
         script = json.load(f)
@@ -150,8 +222,8 @@ def main():
     n_bullets = len(script["concept_bullets"])
     segment_keys = ["hook"] + [f"concept_{i+1}" for i in range(n_bullets)] + ["takeaway_cta"]
 
-    # Step 2 — TTS each segment, measure duration, stitch PCM
-    print(f"Calling Gemini TTS  model={TTS_MODEL}  voice={VOICE_NAME}...")
+    # Step 2 — TTS each segment with key rotation, measure duration, stitch PCM
+    print(f"Calling Gemini TTS  model={TTS_MODEL}  voice={VOICE_NAME}  keys={len(keys)}...")
     timing = {}
     all_pcm = b""
     cursor = 0.0
@@ -163,7 +235,7 @@ def main():
             continue
         word_count = len(text.split())
         print(f"  {key} ({word_count} words)...", end="", flush=True)
-        pcm = call_tts(text, api_key)
+        pcm = call_tts_with_rotation(text, keys)
         dur = pcm_duration(pcm)
         timing[key] = {
             "start":    round(cursor, 3),
