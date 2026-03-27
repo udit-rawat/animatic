@@ -1,85 +1,13 @@
 /**
- * types.ts — TypeScript interfaces mirroring the Python param_extractor.py output.
+ * types.ts — TypeScript interfaces for Motion Design v2.
  *
- * Source of truth for the data contract between the Python pipeline and Remotion.
- * Any field added to TEMPLATE_SPECS in param_extractor.py must be reflected here.
+ * The old per-template discriminated union (HookParams, StatsGridParams, …)
+ * and BeatRouter are removed in Phase 2. Layout is now fully self-describing
+ * via LayoutNode trees — see MOTION_DESIGN_V2_TDD.md §PILLAR 1.
  *
- * params.json structure: { "beat_1": {...}, "beat_2": {...}, ... }
- * narration_timing.json keys: "hook", "concept_1", "concept_2", ..., "takeaway_cta"
+ * Python contract (param_extractor.py output):
+ *   params.json: { "beat_1": BeatLayout, "beat_2": BeatLayout, ... }
  */
-
-// ── Beat template discriminated union ────────────────────────────────────────
-
-export type BeatTemplate =
-  | "hook"
-  | "pipeline"
-  | "comparison"
-  | "stats_grid"
-  | "timeline"
-  | "takeaway";
-
-// ── Per-template param interfaces ─────────────────────────────────────────────
-
-/** Beat 1 — hook_stat: ≤8 chars (e.g. "40%", "3B"), hook_text: ≤8 words */
-export interface HookParams {
-  template: "hook";
-  hook_stat: string;
-  hook_text: string;
-}
-
-/** Beat type: pipeline — concept_text ≤7 words, pipeline_steps 3-5 items ≤6 chars each */
-export interface PipelineParams {
-  template: "pipeline";
-  concept_text: string;
-  pipeline_steps: string[];
-}
-
-/** Beat type: comparison — before/after labels ≤6 chars, details ≤5 words */
-export interface ComparisonParams {
-  template: "comparison";
-  concept_text: string;
-  before_label: string;
-  after_label: string;
-  before_detail: string;
-  after_detail: string;
-}
-
-/** Beat type: stats_grid — 2-6 stat cards with label ≤5 chars, value ≤8 chars */
-export interface GridItem {
-  label: string;
-  value: string;
-}
-export interface StatsGridParams {
-  template: "stats_grid";
-  concept_text: string;
-  grid_items: GridItem[];
-}
-
-/** Beat type: timeline — 3-6 dated events with year ≤6 chars, label ≤5 words */
-export interface TimelineEvent {
-  year: string;
-  label: string;
-}
-export interface TimelineParams {
-  template: "timeline";
-  concept_text: string;
-  timeline_events: TimelineEvent[];
-}
-
-/** Last beat — takeaway_text ≤12 words */
-export interface TakeawayParams {
-  template: "takeaway";
-  takeaway_text: string;
-}
-
-/** Discriminated union of all beat param types */
-export type BeatParams =
-  | HookParams
-  | PipelineParams
-  | ComparisonParams
-  | StatsGridParams
-  | TimelineParams
-  | TakeawayParams;
 
 // ── Timing ────────────────────────────────────────────────────────────────────
 
@@ -91,24 +19,67 @@ export interface TimingEntry {
   text?: string;    // narration text (informational only)
 }
 
-// ── Scene plan ────────────────────────────────────────────────────────────────
-
-export interface BeatInfo {
-  beat: number;         // 1-indexed
-  template: BeatTemplate;
-}
-
 // ── Root props passed from animator.py via --props ────────────────────────────
 
 export interface RemotionProps {
-  /** Ordered beat list from scene_plan.json */
-  beats: BeatInfo[];
+  /** Ordered beat list — template field stripped; layout is self-describing */
+  beats: Array<{ beat: number }>;
   /** Per-beat visual params: key = "beat_1", "beat_2", ... */
-  params: Record<string, BeatParams>;
+  params: Record<string, BeatLayout>;
   /** Narration timing: keys = "hook", "concept_1", ..., "takeaway_cta" */
   timing: Record<string, TimingEntry>;
   /** Filename of audio in remotion/public/ (e.g. "narration.wav") */
   audioSrc: string;
   /** Total frames = round(totalDuration * 30) */
   totalFrames: number;
+}
+
+// ── Motion Design v2 — LayoutNode types ──────────────────────────────────────
+
+export type NodeType =
+  | "column" | "row" | "grid"
+  | "TerminalPrompt" | "TerminalText"
+  | "StatBox" | "LabelValueCard"
+  | "CodeBlock" | "Chip"
+  | "Divider" | "Spacer";
+
+export type NodeColor = "green" | "cyan" | "yellow" | "red" | "white";
+export type NodeSize  = "xs" | "sm" | "md" | "lg" | "xl";
+export type AnimateIn = "spring_in" | "spring_scale" | "typewriter" | "fade" | "slide_up" | "none";
+
+export interface LayoutNode {
+  type: NodeType;
+
+  // Container props (column / row / grid only)
+  gap?: number;
+  justify?: "flex-start" | "center" | "flex-end" | "space-between";
+  align?: "flex-start" | "center" | "flex-end";
+  padding?: number;
+  columns?: 2 | 3;
+  children?: LayoutNode[];
+
+  // Primitive content props
+  text?: string;
+  value?: string;
+  label?: string;
+  lines?: string[];
+  highlight_line?: number;
+
+  // Style props
+  color?: NodeColor;
+  border_color?: NodeColor;
+  size?: NodeSize | number;  // NodeSize for TerminalText font-size; number (px) for Spacer height
+  glow?: boolean;
+  opacity?: number;
+
+  // Animation props
+  animate?: AnimateIn;
+  delay?: number;       // frame offset for stagger
+  typewriter?: boolean;
+  cursor?: boolean;
+}
+
+export interface BeatLayout {
+  animate_in: AnimateIn;
+  layout: LayoutNode;
 }
