@@ -1,100 +1,126 @@
+/**
+ * VideoComposition.tsx — Motion Design v2 (Tier 1 refactor: devtool aesthetic)
+ *
+ * Full component tree:
+ *   <VideoComposition>
+ *     ├── <Audio />
+ *     └── <CameraViewport cameraY>
+ *         └── <VirtualCanvas totalBeats>
+ *             └── <BeatZone index beatStartFrame> × n
+ *                 └── <LayoutRenderer node />
+ *
+ * CRTWrapper and MatrixBackground removed — replaced by clean #0A0A0A canvas.
+ * Audio metrics no longer injected as CSS custom properties on visible elements.
+ */
+
 import React from "react";
-import { Audio, Sequence, staticFile } from "remotion";
-import type { BeatInfo, BeatParams, RemotionProps, TimingEntry } from "./types";
-import { Beat1Hook }        from "./beats/Beat1Hook";
-import { Beat2Pipeline }    from "./beats/Beat2Pipeline";
-import { Beat3BeforeAfter } from "./beats/Beat3BeforeAfter";
-import { Beat4Takeaway }    from "./beats/Beat4Takeaway";
-import { BeatStatsGrid }    from "./beats/BeatStatsGrid";
-import { BeatTimeline }     from "./beats/BeatTimeline";
+import { Audio, interpolate, staticFile, useVideoConfig } from "remotion";
+import type { AnimateIn, RemotionProps, TimingEntry } from "./types";
+import { LayoutRenderer }  from "./LayoutRenderer";
+import { CameraViewport, VirtualCanvas, BeatZone } from "./CameraViewport";
+import { useCameraY }      from "./hooks/useCameraY";
+import { useBeatFrame }    from "./hooks/useBeatFrame";
+import { SceneContext }    from "./context/SceneContext";
+import { slideUp, scaleIn } from "./utils/springIn";
 
 const FPS = 30;
 
 /**
- * Maps beat number to the narration_timing.json key.
- * Beat 1 → "hook", last beat → "takeaway_cta", middle beats → "concept_1", "concept_2", ...
+ * BeatAnimateIn — applies beat-level entrance animation based on animate_in.
+ *
+ * Must be rendered INSIDE BeatZone so useBeatFrame() sees beat-local frames.
+ * Beat-local frame 0 = camera arrives at this beat (beatStartFrame).
+ *
+ * animate_in mapping:
+ *   spring_in / slide_up → slideUp (HERO preset — slower, more gravitas)
+ *   spring_scale         → scaleIn (HERO preset)
+ *   fade                 → linear opacity 0→1 over 20 frames
+ *   typewriter / none    → no wrapper transform; primitives own their animation
  */
+const BeatAnimateIn: React.FC<{
+  animateIn: AnimateIn;
+  fps: number;
+  children: React.ReactNode;
+}> = ({ animateIn, fps, children }) => {
+  const frame = useBeatFrame();
+
+  let wrapStyle: React.CSSProperties = { width: "100%", height: "100%" };
+
+  if (animateIn === "spring_in" || animateIn === "slide_up") {
+    const { opacity, translateY } = slideUp(frame, fps, 0, "hero");
+    wrapStyle = { ...wrapStyle, opacity, transform: `translateY(${translateY}px)` };
+  } else if (animateIn === "spring_scale") {
+    const { opacity, scale } = scaleIn(frame, fps, 0, "hero");
+    wrapStyle = { ...wrapStyle, opacity, transform: `scale(${scale})` };
+  } else if (animateIn === "fade") {
+    const opacity = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
+    wrapStyle = { ...wrapStyle, opacity };
+  }
+
+  return <div style={wrapStyle}>{children}</div>;
+};
+
+/** Maps 1-based beat number to narration_timing.json key */
 function beatToTimingKey(beatNum: number, totalBeats: number): string {
   if (beatNum === 1) return "hook";
   if (beatNum === totalBeats) return "takeaway_cta";
-  return `concept_${beatNum - 1}`;  // beat 2 → concept_1, beat 3 → concept_2, ...
+  return `concept_${beatNum - 1}`;
 }
-
-function toFrames(seconds: number): number {
-  return Math.round(seconds * FPS);
-}
-
-interface BeatRouterProps {
-  beat: BeatInfo;
-  params: BeatParams;
-}
-
-const BeatRouter: React.FC<BeatRouterProps> = ({ beat, params }) => {
-  switch (beat.template) {
-    case "hook":
-      return <Beat1Hook params={params as import("./types").HookParams} />;
-    case "pipeline":
-      return <Beat2Pipeline params={params as import("./types").PipelineParams} />;
-    case "comparison":
-      return <Beat3BeforeAfter params={params as import("./types").ComparisonParams} />;
-    case "stats_grid":
-      return <BeatStatsGrid params={params as import("./types").StatsGridParams} />;
-    case "timeline":
-      return <BeatTimeline params={params as import("./types").TimelineParams} />;
-    case "takeaway":
-      return <Beat4Takeaway params={params as import("./types").TakeawayParams} />;
-    default:
-      return null;
-  }
-};
 
 export const VideoComposition: React.FC<RemotionProps> = ({
   beats,
   params,
   timing,
   audioSrc,
+  cues = {},
 }) => {
-  const totalBeats = beats.length;
+  const totalBeats      = beats.length;
+  const { fps }         = useVideoConfig();
+  const { cameraY }     = useCameraY(timing, totalBeats);
 
   return (
+    <SceneContext.Provider value={{ cues, fps }}>
     <div
       style={{
-        width: "100%",
-        height: "100%",
-        background: "#0B0E14",
-        position: "relative",
-        overflow: "hidden",
-        fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+        width:      "100%",
+        height:     "100%",
+        background: "#0A0A0A",
+        position:   "relative",
+        overflow:   "hidden",
+        fontFamily: "'Inter', 'system-ui', sans-serif",
       }}
     >
-      {/* TTS narration audio — baked into the render by Remotion's FFmpeg */}
       <Audio src={staticFile(audioSrc)} />
 
-      {/* Beat sequences — each renders at the exact TTS-derived timestamp */}
-      {beats.map((beat) => {
-        const timingKey = beatToTimingKey(beat.beat, totalBeats);
-        const entry: TimingEntry | undefined = timing[timingKey];
+      <CameraViewport cameraY={cameraY}>
+        <VirtualCanvas totalBeats={totalBeats}>
+          {beats.map((beatInfo, index) => {
+            const timingKey                      = beatToTimingKey(beatInfo.beat, totalBeats);
+            const entry: TimingEntry | undefined = timing[timingKey];
+            const beatLayout                     = params[`beat_${beatInfo.beat}`];
 
-        if (!entry) {
-          console.warn(`[VideoComposition] No timing entry for key "${timingKey}" (beat ${beat.beat})`);
-          return null;
-        }
+            if (!beatLayout) {
+              console.warn(`[VideoComposition] No params for beat_${beatInfo.beat}`);
+              return null;
+            }
 
-        const from             = toFrames(entry.start);
-        const durationInFrames = toFrames(entry.duration);
-        const beatParams       = params[`beat_${beat.beat}`];
+            const beatStartFrame = entry ? Math.round(entry.start * FPS) : 0;
 
-        if (!beatParams) {
-          console.warn(`[VideoComposition] No params for beat_${beat.beat}`);
-          return null;
-        }
-
-        return (
-          <Sequence key={beat.beat} from={from} durationInFrames={durationInFrames}>
-            <BeatRouter beat={beat} params={beatParams} />
-          </Sequence>
-        );
-      })}
+            return (
+              <BeatZone
+                key={beatInfo.beat}
+                index={index}
+                beatStartFrame={beatStartFrame}
+              >
+                <BeatAnimateIn animateIn={beatLayout.animate_in} fps={fps}>
+                  <LayoutRenderer node={beatLayout.layout} />
+                </BeatAnimateIn>
+              </BeatZone>
+            );
+          })}
+        </VirtualCanvas>
+      </CameraViewport>
     </div>
+    </SceneContext.Provider>
   );
 };

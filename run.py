@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-STAGES = ["scraper", "ranker", "scripter", "verifier", "scene_planner", "narrator", "param_extractor", "animator", "notifier"]
+STAGES = ["scraper", "ranker", "scripter", "verifier", "scene_planner", "narrator", "word_aligner", "param_extractor", "animator", "notifier"]
 
 
 def apply_provider(provider: str, model: str | None):
@@ -71,6 +71,8 @@ def run_stage(name: str):
         from pipeline.param_extractor import main
     elif name == "narrator":
         from pipeline.narrator import main
+    elif name == "word_aligner":
+        from pipeline.word_aligner import main
     elif name == "notifier":
         from pipeline.notifier import main
     else:

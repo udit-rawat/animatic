@@ -18,7 +18,7 @@ Do NOT repeat any of the hallucinated or contradicted claims above.
 
 """
     return f"""\
-You are writing on-screen text for a short Manim animation targeting AI engineers on TikTok/Shorts.
+You are writing on-screen text for a 55–65 second AI explainer video targeting ML engineers on TikTok/Shorts.
 These strings render as LARGE TEXT on a dark screen — they must be immediately readable and
 create curiosity, not describe what's happening.
 NOT stage directions. NOT narration. NOT descriptions of visuals. Just the words on screen.
@@ -38,13 +38,23 @@ concept_bullets[0] (≤18 words total):
   Name the exact variable, architecture block, or technique. No vague descriptions.
 
 concept_bullets[1] (≤18 words total):
-  The hard proof. State the benchmark delta explicitly: Before X → After Y.
-  Real numbers only. No hedging. No "up to" or "approximately".
+  The quantified result. ONLY cite numbers explicitly stated in the SUMMARY above.
+  If no specific number exists, describe the qualitative improvement concretely instead.
+  Never invent numbers. No "up to", no "approximately", no made-up benchmarks.
+
+concept_bullets[2] (≤18 words total):
+  The implication. Why does this change how engineers should think or build?
+  One concrete sentence about what this unlocks, breaks, or makes obsolete.
 
 takeaway (≤15 words):
   End with a statement that proves their intuition might be wrong, directly challenging the reader.
   GOOD: "The allocator was the leak. Could you have spotted this?"
   GOOD: "Two vars fixed it. What else in your stack are you not measuring?"
+
+HALLUCINATION RULES (critical):
+- ONLY use specific numbers (latency ms, throughput t/s, GB, etc.) if they appear in the SUMMARY.
+- If the SUMMARY has no benchmark numbers, DO NOT invent them. Use qualitative language instead.
+- Never write "0ms", "100x", "500ms" unless those exact numbers are in the SUMMARY.
 
 NEVER write "VISUAL:", "Scene:", "Animation:", "Show", "Display", or any production note.
 Language: direct, factual, punchy — like a tweet from an engineer who just shipped a fix.
@@ -57,7 +67,8 @@ Respond with ONLY valid JSON:
   "hook": "<curiosity gap — ≤12 words>",
   "concept_bullets": [
     "<mechanism — ≤18 words with concrete component names>",
-    "<before/after proof — ≤18 words with real numbers>"
+    "<result — ≤18 words, ONLY real numbers from SUMMARY or qualitative>",
+    "<implication — ≤18 words about what this unlocks or changes>"
   ],
   "takeaway": "<aha-moment + open question — ≤15 words>",
   "cta": "",
