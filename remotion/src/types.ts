@@ -19,6 +19,17 @@ export interface TimingEntry {
   text?: string;    // narration text (informational only)
 }
 
+// ── Cue map — semantic animation triggers from audio word-alignment ───────────
+
+/**
+ * Maps intent label → global frame number.
+ * Built by build_cue_map() in animator.py from word_timings.json (T5).
+ * Optional: components degrade gracefully when cues are absent.
+ *
+ * Example: { "gpu_split": 312, "metric_reveal": 489, "tp_dim": 213 }
+ */
+export type CueMap = Record<string, number>;
+
 // ── Root props passed from animator.py via --props ────────────────────────────
 
 export interface RemotionProps {
@@ -32,6 +43,12 @@ export interface RemotionProps {
   audioSrc: string;
   /** Total frames = round(totalDuration * 30) */
   totalFrames: number;
+  /**
+   * Semantic cue map from word-level audio alignment (T5 pipeline stage).
+   * Optional — absent until word_aligner.py is wired. Components degrade
+   * gracefully: useCue() returns active=false when label is not found.
+   */
+  cues?: CueMap;
 }
 
 // ── Motion Design v2 — LayoutNode types ──────────────────────────────────────

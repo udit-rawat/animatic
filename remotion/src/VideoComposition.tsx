@@ -14,11 +14,12 @@
  */
 
 import React from "react";
-import { Audio, staticFile } from "remotion";
+import { Audio, staticFile, useVideoConfig } from "remotion";
 import type { RemotionProps, TimingEntry } from "./types";
 import { LayoutRenderer }  from "./LayoutRenderer";
 import { CameraViewport, VirtualCanvas, BeatZone } from "./CameraViewport";
 import { useCameraY }      from "./hooks/useCameraY";
+import { SceneContext }    from "./context/SceneContext";
 
 const FPS = 30;
 
@@ -34,11 +35,14 @@ export const VideoComposition: React.FC<RemotionProps> = ({
   params,
   timing,
   audioSrc,
+  cues = {},
 }) => {
-  const totalBeats = beats.length;
-  const { cameraY } = useCameraY(timing, totalBeats);
+  const totalBeats      = beats.length;
+  const { fps }         = useVideoConfig();
+  const { cameraY }     = useCameraY(timing, totalBeats);
 
   return (
+    <SceneContext.Provider value={{ cues, fps }}>
     <div
       style={{
         width:      "100%",
@@ -78,5 +82,6 @@ export const VideoComposition: React.FC<RemotionProps> = ({
         </VirtualCanvas>
       </CameraViewport>
     </div>
+    </SceneContext.Provider>
   );
 };
