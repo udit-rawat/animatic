@@ -1,8 +1,34 @@
 import React from "react";
-import { Composition } from "remotion";
+import { Composition, staticFile } from "remotion";
+import { getAudioDurationInSeconds } from "@remotion/media-utils";
 import { VideoComposition } from "./VideoComposition";
 import { LayoutRenderer } from "./LayoutRenderer";
 import type { RemotionProps, BeatLayout, LayoutNode } from "./types";
+
+const FPS     = 30;
+const PADDING = FPS; // 1 second breathing room after narration ends
+
+/**
+ * dynamicDuration — async calculateMetadata for VideoComposition.
+ *
+ * Reads the actual audio file duration every render, so the video length
+ * auto-adjusts to TTS output without manual totalFrames bookkeeping.
+ * Falls back to props.totalFrames if audio file is unavailable (preview mode).
+ */
+async function dynamicDuration({
+  props,
+}: {
+  props: Record<string, unknown>;
+}): Promise<{ durationInFrames: number }> {
+  const p = props as unknown as RemotionProps;
+  try {
+    const duration = await getAudioDurationInSeconds(staticFile(p.audioSrc));
+    return { durationInFrames: Math.ceil(duration * FPS) + PADDING };
+  } catch {
+    // Audio not in public/ yet (e.g. studio preview) — fall back to prop value
+    return { durationInFrames: p.totalFrames ?? 1440 };
+  }
+}
 
 // ── Default props (new BeatLayout format) ─────────────────────────────────────
 // All params are now BeatLayout objects: { animate_in, layout: LayoutNode }
@@ -123,8 +149,8 @@ const GATE_TREE: LayoutNode = {
 const GateTestComposition: React.FC = () => (
   <div style={{
     width: "100%", height: "100%",
-    background: "#0B0E14", position: "relative", overflow: "hidden",
-    fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+    background: "#0A0A0A", position: "relative", overflow: "hidden",
+    fontFamily: "'Inter', 'system-ui', sans-serif",
   }}>
     <LayoutRenderer node={GATE_TREE} />
   </div>
@@ -161,9 +187,7 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         defaultProps={defaultProps as unknown as Record<string, unknown>}
-        calculateMetadata={({ props }) => ({
-          durationInFrames: (props as unknown as RemotionProps).totalFrames || defaultProps.totalFrames,
-        })}
+        calculateMetadata={dynamicDuration}
       />
 
       {/* Phase 1 gate — LayoutRenderer with hardcoded Beat1Hook tree */}
@@ -185,9 +209,7 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         defaultProps={phase2Props as unknown as Record<string, unknown>}
-        calculateMetadata={({ props }) => ({
-          durationInFrames: (props as unknown as RemotionProps).totalFrames || phase2Props.totalFrames,
-        })}
+        calculateMetadata={dynamicDuration}
       />
     </>
   );
