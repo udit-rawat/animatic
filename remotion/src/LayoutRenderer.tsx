@@ -14,7 +14,27 @@ import React from "react";
 import { interpolate, spring, useVideoConfig } from "remotion";
 import type { LayoutNode, NodeColor, NodeSize } from "./types";
 import { useBeatFrame } from "./hooks/useBeatFrame";
+import { useCue } from "./hooks/useCue";
 import { slideUp, scaleIn, popIn, staggerDelay as calcStagger } from "./utils/springIn";
+
+/**
+ * useNodeFrame — resolves the effective animation frame + delay for a LayoutNode.
+ *
+ * Priority:
+ *   1. node.cue is set AND cue has fired  → use useCue(label).elapsed, delay=0
+ *   2. node.cue is set but not yet fired  → return frame=0, delay=0 (hold pre-animation)
+ *   3. no cue                             → use beat-local useBeatFrame(), delay=node.delay
+ *
+ * Rules of Hooks: useCue is always called (unconditional), result is conditionally used.
+ */
+function useNodeFrame(node: LayoutNode): { frame: number; delay: number } {
+  const beatFrame = useBeatFrame();
+  const { elapsed, active } = useCue(node.cue ?? "");
+  if (node.cue) {
+    return { frame: active ? elapsed : 0, delay: 0 };
+  }
+  return { frame: beatFrame, delay: node.delay ?? 0 };
+}
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 
@@ -181,9 +201,8 @@ const TerminalPromptNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
  *   cursor: true      → show blinking "_" after typewriter completes
  */
 const TerminalTextNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
-  const frame = useBeatFrame();
+  const { frame, delay } = useNodeFrame(node);
   const text      = node.text ?? "";
-  const delay     = node.delay ?? 0;
   const fontSize  = typeof node.size === "number" ? node.size : SIZE_MAP[node.size ?? "md"];
   const textColor = color(node.color, "white");
 
@@ -232,10 +251,10 @@ const TerminalTextNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
  * Overdamped spring scale 0.5→1.0 starting at `delay` frame.
  */
 const StatBoxNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
-  const frame = useBeatFrame();
+  const { frame, delay } = useNodeFrame(node);
   const { fps } = useVideoConfig();
   const statColor         = color(node.color, "green");
-  const { opacity, scale } = scaleIn(frame, fps, node.delay ?? 0);
+  const { opacity, scale } = scaleIn(frame, fps, delay);
 
   return (
     <div style={{ opacity, transform: `scale(${scale})`, transformOrigin: "left center" }}>
@@ -271,11 +290,11 @@ const StatBoxNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
  * Stagger via `delay` prop (frame offset).
  */
 const LabelValueCardNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
-  const frame = useBeatFrame();
+  const { frame, delay } = useNodeFrame(node);
   const { fps } = useVideoConfig();
   const borderColor               = color(node.border_color, "cyan");
   const valueColor                = color(node.color, "cyan");
-  const { opacity, translateY }   = slideUp(frame, fps, node.delay ?? 0);
+  const { opacity, translateY }   = slideUp(frame, fps, delay);
 
   // Glassmorphism card: semi-transparent fill + low-opacity border tinted by accent color
   const accentHex = borderColor; // e.g. "#6366F1"
@@ -357,10 +376,10 @@ const CodeBlockNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
  * Props: label, value, color (accent), border_color (alias), glow, delay
  */
 const MetricCardNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
-  const frame = useBeatFrame();
+  const { frame, delay } = useNodeFrame(node);
   const { fps } = useVideoConfig();
   const accentColor           = color(node.color ?? node.border_color, "cyan");
-  const { opacity, translateY } = slideUp(frame, fps, node.delay ?? 0);
+  const { opacity, translateY } = slideUp(frame, fps, delay);
 
   return (
     <div style={{
@@ -416,13 +435,12 @@ const GPU_STYLES = {
 } as const;
 
 const GPUNodeComponent: React.FC<{ node: LayoutNode }> = ({ node }) => {
-  const frame = useBeatFrame();
+  const { frame, delay } = useNodeFrame(node);
   const { fps } = useVideoConfig();
-  const delay   = node.delay ?? 0;
   const state   = (node.state ?? "idle") as keyof typeof GPU_STYLES;
   const s       = GPU_STYLES[state] ?? GPU_STYLES.idle;
 
-  const { opacity, scale } = popIn(frame, fps, node.delay ?? 0);
+  const { opacity, scale } = popIn(frame, fps, delay);
 
   return (
     <div style={{
@@ -473,12 +491,11 @@ const GPUNodeComponent: React.FC<{ node: LayoutNode }> = ({ node }) => {
  * Props: value, label, color, delay
  */
 const NumberCounterNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
-  const frame = useBeatFrame();
+  const { frame, delay } = useNodeFrame(node);
   const { fps } = useVideoConfig();
-  const delay       = node.delay ?? 0;
   const accentColor = color(node.color, "cyan");
 
-  const { opacity, scale } = scaleIn(frame, fps, node.delay ?? 0);
+  const { opacity, scale } = scaleIn(frame, fps, delay);
 
   return (
     <div style={{ opacity, transform: `scale(${scale})`, transformOrigin: "left center" }}>

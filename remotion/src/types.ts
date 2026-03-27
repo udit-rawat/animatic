@@ -97,7 +97,9 @@ export interface LayoutNode {
 
   // Animation props
   animate?: AnimateIn;
-  delay?: number;       // frame offset for stagger
+  delay?: number;       // frame offset for stagger (ignored when cue is set)
+  cue?: string;         // T5: named cue label from cue_definitions.json; when set, animation
+                        // starts when the cue fires (useCue(cue).elapsed), overriding delay
   typewriter?: boolean;
   cursor?: boolean;
 

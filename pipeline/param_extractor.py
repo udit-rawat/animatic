@@ -91,6 +91,10 @@ def _validate_layout_node(node: dict, depth: int = 0) -> list[str]:
     if delay is not None and (not isinstance(delay, (int, float)) or delay < 0):
         errors.append(f"delay must be non-negative number, got {delay!r}")
 
+    cue = node.get("cue")
+    if cue is not None and not isinstance(cue, str):
+        errors.append(f"cue must be a string label, got {type(cue).__name__}")
+
     text = node.get("text", "")
     if text and len(text) > 120:
         errors.append(f"text too long ({len(text)} chars) in node '{node_type}'")
@@ -275,6 +279,9 @@ ALLOWED VALUES:
   size (TerminalText): "xs" | "sm" | "md" | "lg" | "xl"
   animate_in: "spring_in" | "spring_scale" | "typewriter" | "fade" | "slide_up" | "none"
   delay: integer ≥ 0 (frames — 30 frames = 1 second)
+  cue: string (optional) — named cue from cue_definitions.json; when set, animation starts
+       when the cue fires instead of at the fixed delay. Standard labels: "metric_reveal",
+       "before_after_split", "insight_drop", "key_number", "bottleneck_reveal", "takeaway_flash"
 
 STRUCTURAL RULES (validator enforced — violations cause retry):
   - Root "column" MUST have padding ≥ 40 (use 60) and gap: 32.
