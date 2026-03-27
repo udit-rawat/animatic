@@ -1,82 +1,61 @@
 /**
- * CameraViewport.tsx — Infinite canvas + spring camera system (Phase 2)
+ * CameraViewport.tsx — Infinite canvas + spring camera system (Phase 2 / Phase 4)
+ *
+ * Phase 4 refactor: useCameraY() lifted to VideoComposition so cameraVelocity
+ * can be passed to CRTWrapper (which wraps CameraViewport from the outside).
+ * CameraViewport now accepts a pre-computed cameraY prop — pure presentation.
  *
  * Component tree:
- *   <CameraViewport timing={timing} totalBeats={n}>   ← clips to 1080×1920, drives camera
- *     <VirtualCanvas totalBeats={n}>                  ← 1080 × (n × 1920) absolute canvas
- *       <BeatZone index={0} beatStartFrame={0}>        ← positioned at y=0, frame ctx
- *       <BeatZone index={1} beatStartFrame={330}>      ← positioned at y=1920, frame ctx
- *       ...
- *     </VirtualCanvas>
- *   </CameraViewport>
- *
- * CameraVelocityContext is exposed for Phase 4's <CRTWrapper> to gate
- * chromatic aberration on |cameraVelocity| > 15px/frame.
+ *   <CRTWrapper cameraVelocity highEnergy>          ← Phase 4 — CRT effects
+ *     <CameraViewport cameraY={y}>                  ← clips to 1080×1920, applies translation
+ *       <VirtualCanvas totalBeats={n}>              ← 1080 × (n × 1920) absolute canvas
+ *         <BeatZone index={0} beatStartFrame={0}>   ← positioned at y=0, frame ctx
+ *         ...
+ *       </VirtualCanvas>
+ *     </CameraViewport>
+ *   </CRTWrapper>
  */
 
-import React, { createContext, useContext } from "react";
-import type { TimingEntry } from "./types";
-import { useCameraY } from "./hooks/useCameraY";
+import React from "react";
 import { BeatFrameContext } from "./hooks/useBeatFrame";
-
-// ── Camera velocity context (consumed by CRTWrapper in Phase 4) ───────────────
-
-interface CameraVelocityContextValue {
-  cameraVelocity: number;
-}
-
-export const CameraVelocityContext = createContext<CameraVelocityContextValue>({
-  cameraVelocity: 0,
-});
-
-export function useCameraVelocity(): number {
-  return useContext(CameraVelocityContext).cameraVelocity;
-}
 
 // ── CameraViewport ────────────────────────────────────────────────────────────
 
 interface CameraViewportProps {
-  totalBeats: number;
-  timing: Record<string, TimingEntry>;
+  /** Pre-computed camera Y offset in pixels (from useCameraY in VideoComposition) */
+  cameraY: number;
   children: React.ReactNode;
 }
 
 /**
  * Overflow-hidden viewport that translates its VirtualCanvas child by -cameraY.
- * Exposes cameraVelocity via context for CRT aberration gating (Phase 4).
+ * cameraY is computed by VideoComposition via useCameraY() and passed down.
  */
 export const CameraViewport: React.FC<CameraViewportProps> = ({
-  totalBeats,
-  timing,
+  cameraY,
   children,
-}) => {
-  const { cameraY, cameraVelocity } = useCameraY(timing, totalBeats);
-
-  return (
-    <CameraVelocityContext.Provider value={{ cameraVelocity }}>
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            transform: `translateY(-${cameraY}px)`,
-          }}
-        >
-          {children}
-        </div>
-      </div>
-    </CameraVelocityContext.Provider>
-  );
-};
+}) => (
+  <div
+    style={{
+      width:    "100%",
+      height:   "100%",
+      overflow: "hidden",
+      position: "relative",
+    }}
+  >
+    <div
+      style={{
+        position:  "absolute",
+        top:       0,
+        left:      0,
+        width:     "100%",
+        transform: `translateY(-${cameraY}px)`,
+      }}
+    >
+      {children}
+    </div>
+  </div>
+);
 
 // ── VirtualCanvas ─────────────────────────────────────────────────────────────
 
