@@ -14,6 +14,7 @@ import React from "react";
 import { interpolate, spring, useVideoConfig } from "remotion";
 import type { LayoutNode, NodeColor, NodeSize } from "./types";
 import { useBeatFrame } from "./hooks/useBeatFrame";
+import { slideUp, scaleIn, popIn, staggerDelay as calcStagger } from "./utils/springIn";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 
@@ -233,17 +234,8 @@ const TerminalTextNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
 const StatBoxNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
   const frame = useBeatFrame();
   const { fps } = useVideoConfig();
-  const delay     = node.delay ?? 0;
-  const statColor = color(node.color, "green");
-
-  const progress = spring({
-    frame: Math.max(0, frame - delay),
-    fps,
-    config: { damping: 200, stiffness: 380, overshootClamping: true },
-  });
-
-  const scale   = interpolate(progress, [0, 1], [0.5, 1.0]);
-  const opacity = interpolate(progress, [0, 0.1], [0, 1], { extrapolateRight: "clamp" });
+  const statColor         = color(node.color, "green");
+  const { opacity, scale } = scaleIn(frame, fps, node.delay ?? 0);
 
   return (
     <div style={{ opacity, transform: `scale(${scale})`, transformOrigin: "left center" }}>
@@ -281,18 +273,9 @@ const StatBoxNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
 const LabelValueCardNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
   const frame = useBeatFrame();
   const { fps } = useVideoConfig();
-  const delay       = node.delay ?? 0;
-  const borderColor = color(node.border_color, "cyan");
-  const valueColor  = color(node.color, "cyan");
-
-  const progress = spring({
-    frame: Math.max(0, frame - delay),
-    fps,
-    config: { damping: 200, stiffness: 380, overshootClamping: true },
-  });
-
-  const opacity    = interpolate(progress, [0, 0.1], [0, 1], { extrapolateRight: "clamp" });
-  const translateY = interpolate(progress, [0, 1], [20, 0]);
+  const borderColor               = color(node.border_color, "cyan");
+  const valueColor                = color(node.color, "cyan");
+  const { opacity, translateY }   = slideUp(frame, fps, node.delay ?? 0);
 
   // Glassmorphism card: semi-transparent fill + low-opacity border tinted by accent color
   const accentHex = borderColor; // e.g. "#6366F1"
@@ -376,17 +359,8 @@ const CodeBlockNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
 const MetricCardNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
   const frame = useBeatFrame();
   const { fps } = useVideoConfig();
-  const delay       = node.delay ?? 0;
-  const accentColor = color(node.color ?? node.border_color, "cyan");
-
-  const progress = spring({
-    frame: Math.max(0, frame - delay),
-    fps,
-    config: { damping: 28, stiffness: 220, overshootClamping: true },
-  });
-
-  const opacity    = interpolate(progress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
-  const translateY = interpolate(progress, [0, 1], [16, 0]);
+  const accentColor           = color(node.color ?? node.border_color, "cyan");
+  const { opacity, translateY } = slideUp(frame, fps, node.delay ?? 0);
 
   return (
     <div style={{
@@ -448,14 +422,7 @@ const GPUNodeComponent: React.FC<{ node: LayoutNode }> = ({ node }) => {
   const state   = (node.state ?? "idle") as keyof typeof GPU_STYLES;
   const s       = GPU_STYLES[state] ?? GPU_STYLES.idle;
 
-  const progress = spring({
-    frame: Math.max(0, frame - delay),
-    fps,
-    config: { damping: 28, stiffness: 220, overshootClamping: true },
-  });
-
-  const opacity = interpolate(progress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
-  const scale   = interpolate(progress, [0, 1], [0.85, 1.0]);
+  const { opacity, scale } = popIn(frame, fps, node.delay ?? 0);
 
   return (
     <div style={{
@@ -511,14 +478,7 @@ const NumberCounterNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
   const delay       = node.delay ?? 0;
   const accentColor = color(node.color, "cyan");
 
-  const progress = spring({
-    frame: Math.max(0, frame - delay),
-    fps,
-    config: { damping: 28, stiffness: 180, overshootClamping: true },
-  });
-
-  const scale   = interpolate(progress, [0, 1], [0.75, 1.0]);
-  const opacity = interpolate(progress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+  const { opacity, scale } = scaleIn(frame, fps, node.delay ?? 0);
 
   return (
     <div style={{ opacity, transform: `scale(${scale})`, transformOrigin: "left center" }}>
