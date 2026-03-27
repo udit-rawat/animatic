@@ -6,3 +6,5 @@ __pycache__/
 .DS_Store
 media/
 SESSION_NOTES.md
+remotion/node_modules/
+remotion/.cache/
