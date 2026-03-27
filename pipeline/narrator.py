@@ -29,10 +29,10 @@ VOICE_NAME = os.environ.get("TTS_VOICE", "Puck")   # Puck = fast-paced, energeti
 # Gemini 2.5 TTS reads this and physically alters pacing/delivery.
 # Change the style here to reshape the whole video's voice character.
 VOICE_DIRECTIVE = (
-    "Say this in a fast-paced, curious tech explainer style — "
-    "punchy and energetic, like you're revealing something most people don't know. "
-    "Build tension in the hook, deliver facts with conviction, "
-    "use natural breath pauses for emphasis, and land the ending with a sharp edge: "
+    "Say this in the tone of a Senior ML Engineer talking to a colleague. "
+    "Dry, highly technical, slightly cynical, and matter-of-fact. "
+    "Do NOT overact. Speak at a steady, flat pace. "
+    "Do not sound like an announcer or a YouTuber. "
 )
 
 
@@ -154,7 +154,8 @@ def call_tts(text: str, api_key: str) -> bytes:
         with urllib.request.urlopen(req, timeout=180) as resp:
             data = json.loads(resp.read())
     except urllib.error.HTTPError as e:
-        if e.code == 429:
+        if e.code in (429, 500, 503):
+            # 429 = rate limit, 500/503 = transient server error — rotate to next key
             raise _TTSRateLimited() from e
         body = e.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Gemini TTS HTTP {e.code}: {body[:400]}") from e
@@ -189,7 +190,7 @@ def _get_tts_keys() -> list[str]:
 
 
 def call_tts_with_rotation(text: str, keys: list[str]) -> bytes:
-    """Rotate through all keys on 429 or timeout. Wait 60s only after all keys fail a full cycle."""
+    """Rotate through all keys on 429/500/503/timeout. Wait 60s only after all keys fail a full cycle."""
     max_full_cycles = 5
     cycle_wait = 60
     for cycle in range(max_full_cycles):
