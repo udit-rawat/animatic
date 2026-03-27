@@ -7,7 +7,16 @@ INPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
 
 
-def build_prompt(topic: dict) -> str:
+def build_prompt(topic: dict, correction: str | None = None) -> str:
+    correction_block = ""
+    if correction:
+        correction_block = f"""
+CORRECTION DIRECTIVE — a previous draft was rejected by the fact-checker.
+You MUST fix the following before writing the new script:
+{correction}
+Do NOT repeat any of the hallucinated or contradicted claims above.
+
+"""
     return f"""\
 You are writing on-screen text for a short Manim animation targeting AI engineers on TikTok/Shorts.
 These strings render as LARGE TEXT on a dark screen — they must be immediately readable and
@@ -16,30 +25,26 @@ NOT stage directions. NOT narration. NOT descriptions of visuals. Just the words
 
 TOPIC: {topic['title']}
 SUMMARY: {topic['summary']}
-
-OUTPUT RULES:
+{correction_block}OUTPUT RULES:
 
 hook (≤12 words):
-  The curiosity gap opener. State the unexpected fact or contradiction that makes someone stop scrolling.
-  Short words. High contrast. Should create a "wait, how?" reaction.
+  Open with FRICTION. State the unexpected pain point, contradiction, or broken assumption.
+  DO NOT state what the tool or solution is yet. Just the problem or metric.
   GOOD: "52GB RSS. VRAM untouched. Server OOM-killed itself."
-  GOOD: "Two env vars. No code changes. 40% less memory."
-  BAD:  "Today we explore memory allocation issues in PyTorch."
+  GOOD: "Your GPU is idle, but your latency is 400ms. Why?"
 
 concept_bullets[0] (≤18 words total):
-  The mechanism — how it works. Dense facts. Must name 3-5 concrete stages or components.
-  GOOD: "MALLOC_ARENA_MAX=2. Caps glibc arenas. RSS drops immediately."
-  BAD:  "Setting this variable controls how memory is allocated by the system."
+  The mechanism. Drop the corporate tone. Sound like a hacker explaining it in a Slack channel.
+  Name the exact variable, architecture block, or technique. No vague descriptions.
 
 concept_bullets[1] (≤18 words total):
-  The proof — the before/after contrast with real numbers. Name both states specifically.
-  GOOD: "Before: RSS climbs 3GB/hour. After: flat. Same model, same load."
-  BAD:  "The results show significant improvement in memory usage patterns."
+  The hard proof. State the benchmark delta explicitly: Before X → After Y.
+  Real numbers only. No hedging. No "up to" or "approximately".
 
 takeaway (≤15 words):
-  The aha-moment + an open question that lingers. Punchy. Slightly uncomfortable.
-  GOOD: "The allocator was the leak. What else are you not measuring?"
-  BAD:  "This shows the importance of monitoring all system resources carefully."
+  End with a statement that proves their intuition might be wrong, directly challenging the reader.
+  GOOD: "The allocator was the leak. Could you have spotted this?"
+  GOOD: "Two vars fixed it. What else in your stack are you not measuring?"
 
 NEVER write "VISUAL:", "Scene:", "Animation:", "Show", "Display", or any production note.
 Language: direct, factual, punchy — like a tweet from an engineer who just shipped a fix.
@@ -86,22 +91,26 @@ def extract_json(raw: str) -> dict:
     return json.loads(candidate)
 
 
+def generate_script(topic: dict, correction: str | None = None) -> dict:
+    """Generate script JSON. Pass correction= to inject fact-checker feedback."""
+    prompt   = build_prompt(topic, correction=correction)
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            raw    = claude_client.call(prompt, stage="scripter", json_mode=True)
+            script = extract_json(raw)
+            return script
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            last_err = e
+            print(f"[scripter] JSON parse failed (attempt {attempt}/3): {e} — retrying...")
+    raise RuntimeError(f"Scripter failed after 3 attempts. Last error: {last_err}")
+
+
 def main():
     with open(INPUT_PATH) as f:
         topic = json.load(f)
 
-    prompt = build_prompt(topic)
-    last_err = None
-    for attempt in range(1, 4):
-        try:
-            raw = claude_client.call(prompt, stage="scripter", json_mode=True)
-            script = extract_json(raw)
-            break
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
-            last_err = e
-            print(f"[scripter] JSON parse failed (attempt {attempt}/3): {e} — retrying...")
-    else:
-        raise RuntimeError(f"Scripter failed to produce valid JSON after 3 attempts. Last error: {last_err}")
+    script = generate_script(topic)
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(script, f, indent=2)

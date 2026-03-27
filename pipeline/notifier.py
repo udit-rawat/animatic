@@ -11,15 +11,7 @@ SCRIPT_PATH      = os.path.join(os.path.dirname(__file__), "..", "output", "scri
 TOPIC_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
 AUDIT_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "audit.json")
 RETRIES_PATH     = os.path.join(os.path.dirname(__file__), "..", "output", "animator_retries.json")
-VIDEO_FINAL_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "video_final.mp4")
 VIDEO_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
-
-
-def get_video_path() -> str:
-    """Use the narrated final video if available, else the raw Manim video."""
-    if os.path.exists(VIDEO_FINAL_PATH):
-        return VIDEO_FINAL_PATH
-    return VIDEO_PATH
 
 
 def build_audit_block() -> str:
@@ -118,7 +110,7 @@ async def send_notification():
     print("Sending Telegram message...")
     await bot.send_message(chat_id=chat_id, text=message)
 
-    video_path = get_video_path()
+    video_path = VIDEO_PATH
     print(f"Sending video ({os.path.basename(video_path)})...")
     with open(video_path, "rb") as video_file:
         await bot.send_video(chat_id=chat_id, video=video_file)
