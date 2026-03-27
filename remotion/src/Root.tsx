@@ -1,37 +1,94 @@
 import React from "react";
 import { Composition } from "remotion";
 import { VideoComposition } from "./VideoComposition";
-import type { RemotionProps } from "./types";
+import { LayoutRenderer } from "./LayoutRenderer";
+import type { RemotionProps, BeatLayout, LayoutNode } from "./types";
 
-// Default props for Remotion Studio preview (overridden by --props at render time)
+// ── Default props (new BeatLayout format) ─────────────────────────────────────
+// All params are now BeatLayout objects: { animate_in, layout: LayoutNode }
+
 const defaultProps: RemotionProps = {
   beats: [
-    { beat: 1, template: "hook" },
-    { beat: 2, template: "stats_grid" },
-    { beat: 3, template: "comparison" },
-    { beat: 4, template: "takeaway" },
+    { beat: 1 },
+    { beat: 2 },
+    { beat: 3 },
+    { beat: 4 },
   ],
   params: {
-    beat_1: { template: "hook", hook_stat: "3B", hook_text: "ElevenLabs beaten." },
+    beat_1: {
+      animate_in: "spring_scale",
+      layout: {
+        type: "column",
+        gap: 0,
+        justify: "flex-start",
+        padding: 50,
+        children: [
+          { type: "TerminalPrompt", text: "user@adamax:~$" },
+          { type: "Spacer", size: 620 },
+          { type: "StatBox", value: "3B", label: "parameters", color: "green",
+            animate: "spring_in", delay: 0 },
+          { type: "Spacer", size: 240 },
+          { type: "TerminalText", text: "ElevenLabs beaten.", size: "lg",
+            color: "white", typewriter: true, cursor: true, delay: 36 },
+        ],
+      },
+    },
     beat_2: {
-      template: "stats_grid",
-      concept_text: "Voxtral TTS: open-weight model",
-      grid_items: [
-        { label: "Params", value: "> 3B" },
-        { label: "RAM",    value: "> 3GB" },
-      ],
+      animate_in: "spring_in",
+      layout: {
+        type: "column",
+        gap: 48,
+        padding: 50,
+        children: [
+          { type: "TerminalText", text: "Voxtral TTS: open-weight model",
+            size: "md", color: "yellow" },
+          { type: "grid", columns: 2, gap: 24, children: [
+            { type: "LabelValueCard", label: "Params", value: "> 3B",
+              border_color: "cyan", glow: true, delay: 8 },
+            { type: "LabelValueCard", label: "RAM",    value: "> 3GB",
+              border_color: "cyan", glow: true, delay: 16 },
+          ]},
+        ],
+      },
     },
     beat_3: {
-      template: "comparison",
-      concept_text: "Faster, better speech synthesis",
-      before_label: "Flash v2.5",
-      after_label: "Voxtral",
-      before_detail: "Slower TTFA",
-      after_detail: "90ms TTFA",
+      animate_in: "fade",
+      layout: {
+        type: "column",
+        gap: 48,
+        padding: 50,
+        children: [
+          { type: "TerminalText", text: "Faster, better speech synthesis",
+            size: "sm", color: "yellow" },
+          { type: "row", gap: 32, children: [
+            { type: "column", gap: 16, children: [
+              { type: "TerminalText", text: "Flash v2.5", size: "sm", color: "red" },
+              { type: "LabelValueCard", label: "TTFA", value: "Slower",
+                border_color: "red", delay: 12 },
+            ]},
+            { type: "column", gap: 16, children: [
+              { type: "TerminalText", text: "Voxtral", size: "sm", color: "green" },
+              { type: "LabelValueCard", label: "TTFA", value: "90ms",
+                border_color: "green", glow: true, delay: 20 },
+            ]},
+          ]},
+        ],
+      },
     },
     beat_4: {
-      template: "takeaway",
-      takeaway_text: "Open weights now outperform closed ones. What's your bias?",
+      animate_in: "typewriter",
+      layout: {
+        type: "column",
+        gap: 0,
+        padding: 50,
+        children: [
+          { type: "TerminalPrompt", text: "user@adamax:~$" },
+          { type: "Spacer", size: 700 },
+          { type: "TerminalText",
+            text: "Open weights now outperform closed ones. What's your bias?",
+            size: "lg", color: "white", typewriter: true, cursor: true, delay: 0 },
+        ],
+      },
     },
   },
   timing: {
@@ -44,19 +101,94 @@ const defaultProps: RemotionProps = {
   totalFrames: Math.round(47.964 * 30),
 };
 
+// ── Phase 1 gate — kept for reference ────────────────────────────────────────
+// Run: cd remotion && npx remotion render src/index.ts LayoutTest /tmp/gate_test.mp4
+
+const GATE_TREE: LayoutNode = {
+  type: "column",
+  gap: 0,
+  justify: "flex-start",
+  padding: 50,
+  children: [
+    { type: "TerminalPrompt", text: "user@adamax:~$" },
+    { type: "Spacer", size: 620 },
+    { type: "StatBox", value: "3B", label: "parameters", color: "green",
+      animate: "spring_in", delay: 0 },
+    { type: "Spacer", size: 240 },
+    { type: "TerminalText", text: "ElevenLabs beaten.", size: "lg",
+      color: "white", typewriter: true, cursor: true, delay: 36 },
+  ],
+};
+
+const GateTestComposition: React.FC = () => (
+  <div style={{
+    width: "100%", height: "100%",
+    background: "#0B0E14", position: "relative", overflow: "hidden",
+    fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+  }}>
+    <LayoutRenderer node={GATE_TREE} />
+  </div>
+);
+
+// ── Phase 2 gate — 4-beat test with camera pans ───────────────────────────────
+// Run: cd remotion && npx remotion render src/index.ts Phase2Test /tmp/phase2_test.mp4
+// Inspect: camera should spring-pan between the 4 beats at ~11s intervals.
+
+const phase2Props: RemotionProps = {
+  ...defaultProps,
+  // Use compact timing so the 4-beat pan test renders quickly (~30s video)
+  timing: {
+    hook:         { start: 0.0,  duration: 7.5, end: 7.5  },
+    concept_1:    { start: 7.5,  duration: 7.5, end: 15.0 },
+    concept_2:    { start: 15.0, duration: 7.5, end: 22.5 },
+    takeaway_cta: { start: 22.5, duration: 7.5, end: 30.0 },
+  },
+  audioSrc:    "narration.wav",
+  totalFrames: Math.round(30.0 * 30),
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyComponent = React.ComponentType<any>;
+
 export const RemotionRoot: React.FC = () => {
   return (
-    <Composition
-      id="VideoComposition"
-      component={VideoComposition}
-      durationInFrames={defaultProps.totalFrames}
-      fps={30}
-      width={1080}
-      height={1920}
-      defaultProps={defaultProps}
-      calculateMetadata={({ props }) => ({
-        durationInFrames: (props as RemotionProps).totalFrames || defaultProps.totalFrames,
-      })}
-    />
+    <>
+      <Composition
+        id="VideoComposition"
+        component={VideoComposition as AnyComponent}
+        durationInFrames={defaultProps.totalFrames}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={defaultProps as unknown as Record<string, unknown>}
+        calculateMetadata={({ props }) => ({
+          durationInFrames: (props as unknown as RemotionProps).totalFrames || defaultProps.totalFrames,
+        })}
+      />
+
+      {/* Phase 1 gate — LayoutRenderer with hardcoded Beat1Hook tree */}
+      <Composition
+        id="LayoutTest"
+        component={GateTestComposition}
+        durationInFrames={150}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+
+      {/* Phase 2 gate — 4-beat video, inspect spring camera pans between beats */}
+      <Composition
+        id="Phase2Test"
+        component={VideoComposition as AnyComponent}
+        durationInFrames={phase2Props.totalFrames}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={phase2Props as unknown as Record<string, unknown>}
+        calculateMetadata={({ props }) => ({
+          durationInFrames: (props as unknown as RemotionProps).totalFrames || phase2Props.totalFrames,
+        })}
+      />
+    </>
   );
 };
