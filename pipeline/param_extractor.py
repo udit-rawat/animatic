@@ -95,7 +95,7 @@ def _validate_layout_node(node: dict, depth: int = 0) -> list[str]:
     return errors
 
 
-def _validate_beat_layout(beat_layout: dict) -> list[str]:
+def _validate_beat_layout(beat_layout: dict, template: str = "") -> list[str]:
     """Validate a BeatLayout dict: { animate_in, layout }."""
     errors: list[str] = []
     animate_in = beat_layout.get("animate_in")
@@ -104,7 +104,21 @@ def _validate_beat_layout(beat_layout: dict) -> list[str]:
     if "layout" not in beat_layout:
         errors.append("Missing 'layout' field")
         return errors
-    errors += _validate_layout_node(beat_layout["layout"])
+    layout = beat_layout["layout"]
+
+    # Enforce root column padding ≥ 40
+    if layout.get("type") == "column":
+        padding = layout.get("padding", 0)
+        if not isinstance(padding, (int, float)) or padding < 40:
+            errors.append(f"Root column padding must be ≥ 40, got {padding!r}")
+
+    # Enforce TerminalPrompt as first child on hook/takeaway beats
+    if template in ("hook", "takeaway"):
+        children = layout.get("children", [])
+        if not children or children[0].get("type") != "TerminalPrompt":
+            errors.append(f"Beat '{template}' must start with TerminalPrompt as first child")
+
+    errors += _validate_layout_node(layout)
     return errors
 
 
@@ -114,13 +128,13 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
     "hook": {
         "animate_in": "spring_scale",
         "layout": {
-            "type": "column", "gap": 0, "justify": "flex-start", "padding": 50,
+            "type": "column", "gap": 32, "justify": "flex-start", "padding": 60,
             "children": [
                 {"type": "TerminalPrompt", "text": "user@adamax:~$"},
                 {"type": "Spacer", "size": 620},
                 {"type": "StatBox", "value": "N/A", "label": "stat", "color": "green",
                  "animate": "spring_in", "delay": 0},
-                {"type": "Spacer", "size": 240},
+                {"type": "Spacer", "size": 40},
                 {"type": "TerminalText", "text": "Data unavailable.", "size": "lg",
                  "color": "white", "typewriter": True, "cursor": True, "delay": 36},
             ],
@@ -129,14 +143,15 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
     "stats_grid": {
         "animate_in": "spring_in",
         "layout": {
-            "type": "column", "gap": 48, "padding": 50,
+            "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalText", "text": "Key stats", "size": "md", "color": "yellow"},
+                {"type": "TerminalText", "text": "Key stats", "size": "sm", "color": "yellow"},
+                {"type": "Divider", "color": "cyan", "opacity": 0.2},
                 {"type": "grid", "columns": 2, "gap": 24, "children": [
                     {"type": "LabelValueCard", "label": "N/A", "value": "N/A",
-                     "border_color": "cyan", "delay": 15},
+                     "border_color": "cyan", "delay": 8},
                     {"type": "LabelValueCard", "label": "N/A", "value": "N/A",
-                     "border_color": "cyan", "delay": 21},
+                     "border_color": "cyan", "delay": 16},
                 ]},
             ],
         },
@@ -144,9 +159,10 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
     "pipeline": {
         "animate_in": "slide_up",
         "layout": {
-            "type": "column", "gap": 32, "padding": 50,
+            "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalText", "text": "Pipeline", "size": "md", "color": "cyan"},
+                {"type": "TerminalText", "text": "How it works", "size": "sm", "color": "yellow"},
+                {"type": "Divider", "color": "cyan", "opacity": 0.2},
                 {"type": "LabelValueCard", "label": "Step 1", "value": "N/A",
                  "border_color": "cyan", "delay": 8},
                 {"type": "LabelValueCard", "label": "Step 2", "value": "N/A",
@@ -159,10 +175,11 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
     "comparison": {
         "animate_in": "fade",
         "layout": {
-            "type": "column", "gap": 48, "padding": 50,
+            "type": "column", "gap": 32, "padding": 60,
             "children": [
                 {"type": "TerminalText", "text": "Before vs After", "size": "sm",
                  "color": "yellow"},
+                {"type": "Divider", "color": "cyan", "opacity": 0.2},
                 {"type": "row", "gap": 32, "children": [
                     {"type": "column", "gap": 16, "children": [
                         {"type": "TerminalText", "text": "BEFORE", "size": "sm", "color": "red"},
@@ -179,9 +196,10 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
     "timeline": {
         "animate_in": "slide_up",
         "layout": {
-            "type": "column", "gap": 32, "padding": 50,
+            "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalText", "text": "Timeline", "size": "md", "color": "yellow"},
+                {"type": "TerminalText", "text": "Timeline", "size": "sm", "color": "yellow"},
+                {"type": "Divider", "color": "yellow", "opacity": 0.2},
                 {"type": "LabelValueCard", "label": "N/A", "value": "Event",
                  "border_color": "yellow", "delay": 8},
                 {"type": "LabelValueCard", "label": "N/A", "value": "Event",
@@ -192,7 +210,7 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
     "takeaway": {
         "animate_in": "typewriter",
         "layout": {
-            "type": "column", "gap": 0, "padding": 50,
+            "type": "column", "gap": 32, "padding": 60,
             "children": [
                 {"type": "TerminalPrompt", "text": "user@adamax:~$"},
                 {"type": "Spacer", "size": 700},
@@ -239,14 +257,55 @@ ALLOWED VALUES:
   animate_in: "spring_in" | "spring_scale" | "typewriter" | "fade" | "slide_up" | "none"
   delay: integer ≥ 0 (frame offset for stagger — 30 frames = 1 second)
 
-RULES:
+STRUCTURAL RULES (strictly enforced):
+  - Every beat root "column" MUST have padding: 60 and gap: 32.
+  - hook and takeaway beats: first child MUST be {"type": "TerminalPrompt", "text": "user@adamax:~$"}
+    followed by a Spacer of 600–800 to push content to vertical center.
+  - Middle beats (stats_grid, pipeline, comparison, timeline): first child should be a
+    TerminalText header in "sm" size, yellow color, giving context for the data below.
   - Containers must have children. Primitives must NOT have children.
   - grid.columns must be 2 or 3.
   - text fields: ≤ 120 chars total, but keep SHORT — renders large on phone screen.
   - StatBox.value: ≤ 8 chars (e.g. "40%", "3B", "32GB").
   - LabelValueCard.label: ≤ 6 chars. LabelValueCard.value: ≤ 8 chars.
   - Use delay stagger (8, 16, 24 …) for cards that appear sequentially.
-  - Every beat MUST start with a top-level "column" container."""
+
+REFERENCE TREES (copy the structure, replace values):
+
+hook beat example:
+  {"type":"column","padding":60,"gap":32,"children":[
+    {"type":"TerminalPrompt","text":"user@adamax:~$"},
+    {"type":"Spacer","size":650},
+    {"type":"StatBox","value":"40%","label":"VRAM used","color":"green","delay":0},
+    {"type":"Spacer","size":40},
+    {"type":"TerminalText","text":"Your GPU has 60% to spare.","size":"lg","color":"white","typewriter":true,"cursor":true,"delay":30}
+  ]}
+
+stats_grid beat example:
+  {"type":"column","padding":60,"gap":32,"children":[
+    {"type":"TerminalText","text":"Benchmark","size":"sm","color":"yellow"},
+    {"type":"Divider","color":"cyan","opacity":0.2},
+    {"type":"grid","columns":2,"gap":20,"children":[
+      {"type":"LabelValueCard","label":"Before","value":"500ms","border_color":"red","delay":8},
+      {"type":"LabelValueCard","label":"After","value":"12ms","border_color":"green","glow":true,"delay":16}
+    ]}
+  ]}
+
+pipeline beat example:
+  {"type":"column","padding":60,"gap":32,"children":[
+    {"type":"TerminalText","text":"How it works","size":"sm","color":"yellow"},
+    {"type":"Divider","color":"cyan","opacity":0.2},
+    {"type":"LabelValueCard","label":"Step 1","value":"Tokenize","border_color":"cyan","delay":8},
+    {"type":"LabelValueCard","label":"Step 2","value":"Encode","border_color":"cyan","delay":16},
+    {"type":"LabelValueCard","label":"Step 3","value":"Decode","border_color":"green","delay":24}
+  ]}
+
+takeaway beat example:
+  {"type":"column","padding":60,"gap":32,"children":[
+    {"type":"TerminalPrompt","text":"user@adamax:~$"},
+    {"type":"Spacer","size":700},
+    {"type":"TerminalText","text":"Could you have caught this before prod?","size":"lg","color":"white","typewriter":true,"cursor":true,"delay":0}
+  ]}"""
 
 
 def build_prompt(topic: dict, script: dict, scene_plan: dict) -> str:
@@ -301,13 +360,14 @@ PER-BEAT CONTENT:
 
 {_SCHEMA_REFERENCE}
 
-DESIGN RULES:
-- Terminal/hacker aesthetic: dark background (#0B0E14), monospace font.
-- Start beats with TerminalPrompt for hook/takeaway beats.
-- Use Spacer (size 600–800) to push content to vertical center on hook/takeaway beats.
+DESIGN RULES (non-negotiable):
+- Root column MUST have padding: 60 and gap: 32. This is mandatory — validator will reject anything < 40.
+- hook/takeaway beats: MUST have TerminalPrompt as FIRST child, then Spacer 650–800, then content.
+- Middle beats: MUST start with TerminalText (size "sm", color "yellow") as section header, then Divider.
 - Colors: green = positive/metric, cyan = neutral info, yellow = label/header, red = negative.
 - Keep text SHORT — it renders at 60–90px on a phone screen.
 - Use stagger delays on LabelValueCard grids (delay: 8, 16, 24 …).
+- Follow the REFERENCE TREES above exactly — copy structure, replace values.
 
 OUTPUT (exact JSON shape, no markdown fences, no extra fields):
 {json_shape}
@@ -359,11 +419,12 @@ def main():
             # Validate each beat; collect errors
             all_errors: list[str] = []
             for beat in beats:
-                key = f"beat_{beat['beat']}"
+                key      = f"beat_{beat['beat']}"
+                template = beat.get("template", "")
                 if key not in data:
                     all_errors.append(f"Missing {key}")
                 else:
-                    errs = _validate_beat_layout(data[key])
+                    errs = _validate_beat_layout(data[key], template=template)
                     all_errors += [f"{key}: {e}" for e in errs]
 
             if all_errors:
