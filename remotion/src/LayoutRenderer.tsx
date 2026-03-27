@@ -199,6 +199,11 @@ const TerminalTextNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
       whiteSpace: "pre-wrap",
       wordBreak: "break-word",
       fontFamily: "inherit",
+      // Audio-reactive neon glow — driven by --audio-rms CSS custom property
+      textShadow: [
+        "0 0 calc(var(--audio-rms, 0) * 40px + 8px) #00FF41",
+        "0 0 calc(var(--audio-rms, 0) * 80px + 16px) #00FF4160",
+      ].join(", "),
     }}>
       {text.slice(0, charsVisible)}
       {node.cursor && (
@@ -289,7 +294,10 @@ const LabelValueCardNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
       borderRadius: 8,
       opacity,
       transform: `translateY(${translateY}px)`,
-      boxShadow: node.glow ? `0 0 24px ${borderColor}40` : undefined,
+      // Audio-reactive border glow — driven by --audio-bass CSS custom property
+      boxShadow: node.glow
+        ? `0 0 calc(var(--audio-bass, 0) * 30px + 12px) ${borderColor}40`
+        : undefined,
       boxSizing: "border-box",
       flex: 1,
     }}>
