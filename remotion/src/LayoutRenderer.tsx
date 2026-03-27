@@ -18,11 +18,11 @@ import { useBeatFrame } from "./hooks/useBeatFrame";
 // ── Design tokens ──────────────────────────────────────────────────────────────
 
 const COLOR_MAP: Record<NodeColor, string> = {
-  green:  "#00FF41",
-  cyan:   "#00E5FF",
-  yellow: "#FFE600",
-  red:    "#FF4444",
-  white:  "#FDFDFD",
+  green:  "#10B981",   // emerald  — positive metrics
+  cyan:   "#6366F1",   // indigo   — primary accent / neutral info
+  yellow: "#8B5CF6",   // violet   — section labels / headers
+  red:    "#EF4444",   // red      — negative / bottleneck
+  white:  "#F9FAFB",   // off-white — main body text
 };
 
 const SIZE_MAP: Record<NodeSize, number> = {
@@ -131,34 +131,41 @@ const DividerNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
   }} />
 );
 
-const ChipNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
-  <span style={{
-    display: "inline-block",
-    border: `1px solid ${color(node.color, "cyan")}`,
-    color: color(node.color, "cyan"),
-    padding: "6px 18px",
-    borderRadius: 4,
-    fontSize: 36,
-    fontFamily: "inherit",
-    letterSpacing: "0.08em",
-  }}>
-    {node.text}
-  </span>
-);
+const ChipNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
+  const chipColor = color(node.color, "cyan");
+  return (
+    <span style={{
+      display: "inline-block",
+      background: `${chipColor}14`,
+      border: `1px solid ${chipColor}40`,
+      color: chipColor,
+      padding: "8px 20px",
+      borderRadius: 100,
+      fontSize: 30,
+      fontWeight: 500,
+      fontFamily: "'Inter', 'system-ui', sans-serif",
+      letterSpacing: "0.06em",
+    }}>
+      {node.text}
+    </span>
+  );
+};
 
 // ── Content primitives ─────────────────────────────────────────────────────────
 
-/** `user@adamax:~$ ` style header line — instant, no animation */
+/** Section identifier — uppercase micro-label in indigo, no animation */
 const TerminalPromptNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
   <div style={{
-    fontSize: 48,
-    color: COLOR_MAP.green,
-    fontFamily: "inherit",
-    letterSpacing: "0.02em",
-    opacity: 0.85,
+    fontSize: 22,
+    fontWeight: 500,
+    color: COLOR_MAP.cyan,
+    fontFamily: "'Inter', 'system-ui', sans-serif",
+    letterSpacing: "0.15em",
+    textTransform: "uppercase",
+    opacity: 0.7,
     flexShrink: 0,
   }}>
-    {node.text ?? "user@adamax:~$"}
+    {node.text ?? "adamax.ai"}
   </div>
 );
 
@@ -194,25 +201,20 @@ const TerminalTextNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
     <div style={{
       fontSize,
       color: textColor,
-      lineHeight: 1.25,
+      lineHeight: 1.3,
       maxWidth: "100%",
       whiteSpace: "pre-wrap",
       wordBreak: "break-word",
-      fontFamily: "inherit",
-      // Audio-reactive neon glow — driven by --audio-rms CSS custom property
-      textShadow: [
-        "0 0 calc(var(--audio-rms, 0) * 40px + 8px) #00FF41",
-        "0 0 calc(var(--audio-rms, 0) * 80px + 16px) #00FF4160",
-      ].join(", "),
+      fontFamily: "'Inter', 'system-ui', sans-serif",
+      fontWeight: 400,
     }}>
       {text.slice(0, charsVisible)}
       {node.cursor && (
         <span style={{
-          color: COLOR_MAP.green,
+          color: COLOR_MAP.cyan,
           opacity: cursorOn ? 1 : 0,
-          textShadow: `0 0 10px ${COLOR_MAP.green}`,
         }}>
-          _
+          |
         </span>
       )}
     </div>
@@ -245,8 +247,8 @@ const StatBoxNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
         fontWeight: "bold",
         color: statColor,
         lineHeight: 1,
-        fontFamily: "inherit",
-        textShadow: `0 0 40px ${statColor}80, 0 0 80px ${statColor}40`,
+        fontFamily: "'Inter', 'system-ui', sans-serif",
+        textShadow: `0 0 60px ${statColor}30`,
       }}>
         {node.value}
       </div>
@@ -256,7 +258,7 @@ const StatBoxNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
           color: COLOR_MAP.white,
           opacity: 0.55,
           marginTop: 8,
-          fontFamily: "inherit",
+          fontFamily: "'Inter', 'system-ui', sans-serif",
           letterSpacing: "0.06em",
           textTransform: "uppercase",
         }}>
@@ -287,36 +289,39 @@ const LabelValueCardNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
   const opacity    = interpolate(progress, [0, 0.1], [0, 1], { extrapolateRight: "clamp" });
   const translateY = interpolate(progress, [0, 1], [20, 0]);
 
+  // Glassmorphism card: semi-transparent fill + low-opacity border tinted by accent color
+  const accentHex = borderColor; // e.g. "#6366F1"
   return (
     <div style={{
-      border: `2px solid ${borderColor}`,
+      background: "rgba(255,255,255,0.04)",
+      border: `1px solid ${accentHex}40`,
       padding: "28px 36px",
-      borderRadius: 8,
+      borderRadius: 12,
       opacity,
       transform: `translateY(${translateY}px)`,
-      // Audio-reactive border glow — driven by --audio-bass CSS custom property
-      boxShadow: node.glow
-        ? `0 0 calc(var(--audio-bass, 0) * 30px + 12px) ${borderColor}40`
-        : undefined,
+      boxShadow: node.glow ? `0 0 24px ${accentHex}18` : undefined,
       boxSizing: "border-box",
       flex: 1,
     }}>
       <div style={{
-        fontSize: 36,
+        fontSize: 28,
+        fontWeight: 500,
         color: COLOR_MAP.white,
-        opacity: 0.6,
+        opacity: 0.45,
         textTransform: "uppercase",
-        letterSpacing: "0.1em",
-        fontFamily: "inherit",
+        letterSpacing: "0.12em",
+        fontFamily: "'Inter', 'system-ui', sans-serif",
+        marginBottom: 8,
       }}>
         {node.label}
       </div>
       <div style={{
-        fontSize: 72,
+        fontSize: 68,
         color: valueColor,
-        fontWeight: "bold",
-        lineHeight: 1.2,
-        fontFamily: "inherit",
+        fontWeight: 700,
+        lineHeight: 1.1,
+        fontFamily: "'Inter', 'system-ui', sans-serif",
+        letterSpacing: "-0.02em",
       }}>
         {node.value}
       </div>
@@ -324,18 +329,18 @@ const LabelValueCardNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
   );
 };
 
-/** CodeBlock — monospace pre-formatted block with optional line highlight */
+/** CodeBlock — code display block with optional line highlight */
 const CodeBlockNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
   <pre style={{
-    fontFamily: "inherit",
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
     fontSize: SIZE_MAP.sm,
-    color: COLOR_MAP.green,
-    background: "rgba(0,255,65,0.04)",
+    color: COLOR_MAP.white,
+    background: "rgba(255,255,255,0.03)",
     padding: 28,
-    borderRadius: 8,
+    borderRadius: 12,
     margin: 0,
     overflowX: "hidden",
-    border: `1px solid ${COLOR_MAP.green}30`,
+    border: "1px solid rgba(255,255,255,0.06)",
     width: "100%",
     boxSizing: "border-box",
   }}>
@@ -343,9 +348,11 @@ const CodeBlockNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
       <div
         key={i}
         style={{
-          color: i === node.highlight_line ? COLOR_MAP.yellow : COLOR_MAP.green,
-          background: i === node.highlight_line ? "rgba(255,230,0,0.08)" : undefined,
-          padding: i === node.highlight_line ? "2px 0" : undefined,
+          color: i === node.highlight_line ? COLOR_MAP.yellow : COLOR_MAP.white,
+          background: i === node.highlight_line ? `${COLOR_MAP.yellow}12` : undefined,
+          padding: i === node.highlight_line ? "2px 8px" : "2px 0",
+          borderRadius: i === node.highlight_line ? 4 : undefined,
+          opacity: i === node.highlight_line ? 1 : 0.65,
         }}
       >
         {line}

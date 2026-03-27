@@ -110,9 +110,9 @@ export const BeatZone: React.FC<BeatZoneProps> = ({
         left: 0,
         width: "100%",
         height: 1920,
-        background: "#0B0E14",
+        background: "#0A0A0A",
         overflow: "hidden",
-        fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+        fontFamily: "'Inter', 'system-ui', sans-serif",
       }}
     >
       {children}
