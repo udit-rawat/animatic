@@ -69,7 +69,7 @@ def build_cue_map(timing: dict, word_timings: list[dict], cue_defs: dict) -> dic
         entry = timing.get(segment)
         if not entry:
             continue
-        frame = math.round(entry["start"] * FPS) + offset
+        frame = round(entry["start"] * FPS) + offset
         cue_map[label] = max(0, frame)
 
     # ── Word cues (optional — skip if no word_timings) ───────────────────────
@@ -92,7 +92,7 @@ def build_cue_map(timing: dict, word_timings: list[dict], cue_defs: dict) -> dic
         if not match:
             continue
 
-        frame = math.round(match["start"] * FPS) + offset
+        frame = round(match["start"] * FPS) + offset
         cue_map[label] = max(0, frame)
 
     return cue_map
