@@ -14,14 +14,51 @@
  */
 
 import React from "react";
-import { Audio, staticFile, useVideoConfig } from "remotion";
-import type { RemotionProps, TimingEntry } from "./types";
+import { Audio, interpolate, staticFile, useVideoConfig } from "remotion";
+import type { AnimateIn, RemotionProps, TimingEntry } from "./types";
 import { LayoutRenderer }  from "./LayoutRenderer";
 import { CameraViewport, VirtualCanvas, BeatZone } from "./CameraViewport";
 import { useCameraY }      from "./hooks/useCameraY";
+import { useBeatFrame }    from "./hooks/useBeatFrame";
 import { SceneContext }    from "./context/SceneContext";
+import { slideUp, scaleIn } from "./utils/springIn";
 
 const FPS = 30;
+
+/**
+ * BeatAnimateIn — applies beat-level entrance animation based on animate_in.
+ *
+ * Must be rendered INSIDE BeatZone so useBeatFrame() sees beat-local frames.
+ * Beat-local frame 0 = camera arrives at this beat (beatStartFrame).
+ *
+ * animate_in mapping:
+ *   spring_in / slide_up → slideUp (HERO preset — slower, more gravitas)
+ *   spring_scale         → scaleIn (HERO preset)
+ *   fade                 → linear opacity 0→1 over 20 frames
+ *   typewriter / none    → no wrapper transform; primitives own their animation
+ */
+const BeatAnimateIn: React.FC<{
+  animateIn: AnimateIn;
+  fps: number;
+  children: React.ReactNode;
+}> = ({ animateIn, fps, children }) => {
+  const frame = useBeatFrame();
+
+  let wrapStyle: React.CSSProperties = { width: "100%", height: "100%" };
+
+  if (animateIn === "spring_in" || animateIn === "slide_up") {
+    const { opacity, translateY } = slideUp(frame, fps, 0, "hero");
+    wrapStyle = { ...wrapStyle, opacity, transform: `translateY(${translateY}px)` };
+  } else if (animateIn === "spring_scale") {
+    const { opacity, scale } = scaleIn(frame, fps, 0, "hero");
+    wrapStyle = { ...wrapStyle, opacity, transform: `scale(${scale})` };
+  } else if (animateIn === "fade") {
+    const opacity = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
+    wrapStyle = { ...wrapStyle, opacity };
+  }
+
+  return <div style={wrapStyle}>{children}</div>;
+};
 
 /** Maps 1-based beat number to narration_timing.json key */
 function beatToTimingKey(beatNum: number, totalBeats: number): string {
@@ -75,7 +112,9 @@ export const VideoComposition: React.FC<RemotionProps> = ({
                 index={index}
                 beatStartFrame={beatStartFrame}
               >
-                <LayoutRenderer node={beatLayout.layout} />
+                <BeatAnimateIn animateIn={beatLayout.animate_in} fps={fps}>
+                  <LayoutRenderer node={beatLayout.layout} />
+                </BeatAnimateIn>
               </BeatZone>
             );
           })}
