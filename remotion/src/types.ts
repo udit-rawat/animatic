@@ -38,6 +38,12 @@ export interface RemotionProps {
 
 export type NodeType =
   | "column" | "row" | "grid"
+  // Tier 2 primitives — devtool design system
+  | "MetricCard"      // glassmorphism card: label + value + spring-in
+  | "GPUNode"         // GPU tile: idle / active / bottleneck states
+  | "NumberCounter"   // hero metric: huge number + scale spring
+  | "SectionLabel"    // section header: accent bar + uppercase label
+  // Legacy primitives — kept for fallback compatibility
   | "TerminalPrompt" | "TerminalText"
   | "StatBox" | "LabelValueCard"
   | "CodeBlock" | "Chip"
@@ -77,6 +83,9 @@ export interface LayoutNode {
   delay?: number;       // frame offset for stagger
   typewriter?: boolean;
   cursor?: boolean;
+
+  // GPUNode state (drives border/glow/opacity variant)
+  state?: "idle" | "active" | "bottleneck";
 }
 
 export interface BeatLayout {

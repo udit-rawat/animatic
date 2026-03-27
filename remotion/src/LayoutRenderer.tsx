@@ -42,19 +42,24 @@ function color(c: NodeColor | undefined, fallback: NodeColor = "white"): string 
 export const LayoutRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
   switch (node.type) {
     // Containers
-    case "column":        return <ColumnNode node={node} />;
-    case "row":           return <RowNode node={node} />;
-    case "grid":          return <GridNode node={node} />;
+    case "column":         return <ColumnNode node={node} />;
+    case "row":            return <RowNode node={node} />;
+    case "grid":           return <GridNode node={node} />;
+    // Tier 2 — devtool design system primitives
+    case "MetricCard":     return <MetricCardNode node={node} />;
+    case "GPUNode":        return <GPUNodeComponent node={node} />;
+    case "NumberCounter":  return <NumberCounterNode node={node} />;
+    case "SectionLabel":   return <SectionLabelNode node={node} />;
     // Structural primitives
-    case "Spacer":        return <SpacerNode node={node} />;
-    case "Divider":       return <DividerNode node={node} />;
-    case "Chip":          return <ChipNode node={node} />;
-    // Content primitives (animated)
+    case "Spacer":         return <SpacerNode node={node} />;
+    case "Divider":        return <DividerNode node={node} />;
+    case "Chip":           return <ChipNode node={node} />;
+    // Legacy primitives (kept for fallback compatibility)
     case "TerminalPrompt": return <TerminalPromptNode node={node} />;
-    case "TerminalText":  return <TerminalTextNode node={node} />;
-    case "StatBox":       return <StatBoxNode node={node} />;
+    case "TerminalText":   return <TerminalTextNode node={node} />;
+    case "StatBox":        return <StatBoxNode node={node} />;
     case "LabelValueCard": return <LabelValueCardNode node={node} />;
-    case "CodeBlock":     return <CodeBlockNode node={node} />;
+    case "CodeBlock":      return <CodeBlockNode node={node} />;
     default:
       return null;
   }
@@ -360,3 +365,225 @@ const CodeBlockNode: React.FC<{ node: LayoutNode }> = ({ node }) => (
     ))}
   </pre>
 );
+
+// ── Tier 2 primitives — devtool design system ──────────────────────────────────
+
+/**
+ * MetricCard — glassmorphism card with spring-in slide-up animation.
+ * Replaces LabelValueCard as the primary data display primitive.
+ * Props: label, value, color (accent), border_color (alias), glow, delay
+ */
+const MetricCardNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
+  const frame = useBeatFrame();
+  const { fps } = useVideoConfig();
+  const delay       = node.delay ?? 0;
+  const accentColor = color(node.color ?? node.border_color, "cyan");
+
+  const progress = spring({
+    frame: Math.max(0, frame - delay),
+    fps,
+    config: { damping: 28, stiffness: 220, overshootClamping: true },
+  });
+
+  const opacity    = interpolate(progress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+  const translateY = interpolate(progress, [0, 1], [16, 0]);
+
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.04)",
+      border: `1px solid ${accentColor}35`,
+      borderRadius: 12,
+      padding: "28px 32px",
+      opacity,
+      transform: `translateY(${translateY}px)`,
+      boxShadow: node.glow
+        ? `0 0 32px ${accentColor}12, inset 0 1px 0 rgba(255,255,255,0.06)`
+        : `inset 0 1px 0 rgba(255,255,255,0.06)`,
+      boxSizing: "border-box",
+      flex: 1,
+    }}>
+      {node.label && (
+        <div style={{
+          fontSize: 24,
+          fontWeight: 500,
+          color: "#F9FAFB",
+          opacity: 0.4,
+          textTransform: "uppercase",
+          letterSpacing: "0.12em",
+          fontFamily: "'Inter', 'system-ui', sans-serif",
+          marginBottom: 10,
+        }}>
+          {node.label}
+        </div>
+      )}
+      <div style={{
+        fontSize: 64,
+        color: accentColor,
+        fontWeight: 700,
+        lineHeight: 1.05,
+        fontFamily: "'Inter', 'system-ui', sans-serif",
+        letterSpacing: "-0.03em",
+      }}>
+        {node.value}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * GPUNode — compact GPU tile for parallelism / cluster visualizations.
+ * state: "idle" (dim) | "active" (indigo glow) | "bottleneck" (red glow)
+ * Props: label, value (sublabel), state, delay
+ */
+const GPU_STYLES = {
+  idle:       { border: "rgba(255,255,255,0.10)", glow: "transparent",  text: "rgba(255,255,255,0.30)", bg: "rgba(255,255,255,0.02)" },
+  active:     { border: "#6366F178",              glow: "#6366F114",    text: "#6366F1",                bg: "rgba(99,102,241,0.08)"  },
+  bottleneck: { border: "#EF444478",              glow: "#EF444414",    text: "#EF4444",                bg: "rgba(239,68,68,0.08)"   },
+} as const;
+
+const GPUNodeComponent: React.FC<{ node: LayoutNode }> = ({ node }) => {
+  const frame = useBeatFrame();
+  const { fps } = useVideoConfig();
+  const delay   = node.delay ?? 0;
+  const state   = (node.state ?? "idle") as keyof typeof GPU_STYLES;
+  const s       = GPU_STYLES[state] ?? GPU_STYLES.idle;
+
+  const progress = spring({
+    frame: Math.max(0, frame - delay),
+    fps,
+    config: { damping: 28, stiffness: 220, overshootClamping: true },
+  });
+
+  const opacity = interpolate(progress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
+  const scale   = interpolate(progress, [0, 1], [0.85, 1.0]);
+
+  return (
+    <div style={{
+      background: s.bg,
+      border: `1px solid ${s.border}`,
+      borderRadius: 10,
+      padding: "20px 16px",
+      opacity,
+      transform: `scale(${scale})`,
+      boxShadow: state !== "idle" ? `0 0 24px ${s.glow}` : undefined,
+      boxSizing: "border-box",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      minHeight: 110,
+    }}>
+      <div style={{
+        fontSize: 22,
+        fontWeight: 600,
+        color: s.text,
+        fontFamily: "'Inter', 'system-ui', sans-serif",
+        letterSpacing: "0.04em",
+        textAlign: "center",
+      }}>
+        {node.label ?? "GPU"}
+      </div>
+      {node.value && (
+        <div style={{
+          fontSize: 18,
+          fontWeight: 400,
+          color: s.text,
+          opacity: 0.65,
+          fontFamily: "'Inter', 'system-ui', sans-serif",
+          textAlign: "center",
+        }}>
+          {node.value}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * NumberCounter — hero metric with scale spring animation.
+ * Replaces StatBox as the primary large-number display.
+ * Props: value, label, color, delay
+ */
+const NumberCounterNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
+  const frame = useBeatFrame();
+  const { fps } = useVideoConfig();
+  const delay       = node.delay ?? 0;
+  const accentColor = color(node.color, "cyan");
+
+  const progress = spring({
+    frame: Math.max(0, frame - delay),
+    fps,
+    config: { damping: 28, stiffness: 180, overshootClamping: true },
+  });
+
+  const scale   = interpolate(progress, [0, 1], [0.75, 1.0]);
+  const opacity = interpolate(progress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+
+  return (
+    <div style={{ opacity, transform: `scale(${scale})`, transformOrigin: "left center" }}>
+      <div style={{
+        fontSize: 200,
+        fontWeight: 800,
+        color: accentColor,
+        lineHeight: 0.95,
+        letterSpacing: "-0.04em",
+        fontFamily: "'Inter', 'system-ui', sans-serif",
+        textShadow: `0 0 80px ${accentColor}20`,
+      }}>
+        {node.value}
+      </div>
+      {node.label && (
+        <div style={{
+          fontSize: 32,
+          fontWeight: 500,
+          color: "#F9FAFB",
+          opacity: 0.45,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          fontFamily: "'Inter', 'system-ui', sans-serif",
+          marginTop: 16,
+        }}>
+          {node.label}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * SectionLabel — section header with accent bar.
+ * Replaces TerminalPrompt as the primary section identifier.
+ * Props: text, color (accent bar + text color)
+ */
+const SectionLabelNode: React.FC<{ node: LayoutNode }> = ({ node }) => {
+  const accentColor = color(node.color, "yellow"); // violet by default
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      flexShrink: 0,
+    }}>
+      <div style={{
+        width: 3,
+        height: 22,
+        background: accentColor,
+        borderRadius: 2,
+        opacity: 0.9,
+        flexShrink: 0,
+      }} />
+      <div style={{
+        fontSize: 22,
+        fontWeight: 600,
+        color: accentColor,
+        fontFamily: "'Inter', 'system-ui', sans-serif",
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        opacity: 0.85,
+      }}>
+        {node.text}
+      </div>
+    </div>
+  );
+};

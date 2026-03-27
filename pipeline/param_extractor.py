@@ -36,11 +36,15 @@ OUTPUT_PATH     = os.path.join(os.path.dirname(__file__), "..", "output", "param
 
 _ALLOWED_NODE_TYPES = {
     "column", "row", "grid",
+    # Tier 2 — devtool design system (preferred)
+    "MetricCard", "GPUNode", "NumberCounter", "SectionLabel",
+    # Legacy — kept for fallback compatibility
     "TerminalPrompt", "TerminalText",
     "StatBox", "LabelValueCard",
     "CodeBlock", "Chip",
     "Divider", "Spacer",
 }
+_ALLOWED_GPU_STATES = {"idle", "active", "bottleneck"}
 _CONTAINER_TYPES = {"column", "row", "grid"}
 _ALLOWED_COLORS  = {"green", "cyan", "yellow", "red", "white"}
 _ALLOWED_ANIMATE_IN = {
@@ -78,6 +82,11 @@ def _validate_layout_node(node: dict, depth: int = 0) -> list[str]:
         if val and val not in allowed:
             errors.append(f"Invalid {field} {val!r} in node '{node_type}'")
 
+    if node_type == "GPUNode":
+        state = node.get("state")
+        if state and state not in _ALLOWED_GPU_STATES:
+            errors.append(f"GPUNode.state must be idle|active|bottleneck, got {state!r}")
+
     delay = node.get("delay")
     if delay is not None and (not isinstance(delay, (int, float)) or delay < 0):
         errors.append(f"delay must be non-negative number, got {delay!r}")
@@ -112,11 +121,14 @@ def _validate_beat_layout(beat_layout: dict, template: str = "") -> list[str]:
         if not isinstance(padding, (int, float)) or padding < 40:
             errors.append(f"Root column padding must be ≥ 40, got {padding!r}")
 
-    # Enforce TerminalPrompt as first child on hook/takeaway beats
+    # Enforce SectionLabel (or legacy TerminalPrompt) as first child on hook/takeaway beats
     if template in ("hook", "takeaway"):
         children = layout.get("children", [])
-        if not children or children[0].get("type") != "TerminalPrompt":
-            errors.append(f"Beat '{template}' must start with TerminalPrompt as first child")
+        first_type = children[0].get("type") if children else None
+        if first_type not in ("SectionLabel", "TerminalPrompt"):
+            errors.append(
+                f"Beat '{template}' must start with SectionLabel as first child, got {first_type!r}"
+            )
 
     errors += _validate_layout_node(layout)
     return errors
@@ -128,15 +140,15 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
     "hook": {
         "animate_in": "spring_scale",
         "layout": {
-            "type": "column", "gap": 32, "justify": "flex-start", "padding": 60,
+            "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalPrompt", "text": "user@adamax:~$"},
-                {"type": "Spacer", "size": 620},
-                {"type": "StatBox", "value": "N/A", "label": "stat", "color": "green",
-                 "animate": "spring_in", "delay": 0},
-                {"type": "Spacer", "size": 40},
+                {"type": "SectionLabel", "text": "adamax.ai", "color": "cyan"},
+                {"type": "Spacer", "size": 650},
+                {"type": "NumberCounter", "value": "N/A", "label": "metric",
+                 "color": "cyan", "delay": 0},
+                {"type": "Spacer", "size": 32},
                 {"type": "TerminalText", "text": "Data unavailable.", "size": "lg",
-                 "color": "white", "typewriter": True, "cursor": True, "delay": 36},
+                 "color": "white", "typewriter": True, "cursor": True, "delay": 20},
             ],
         },
     },
@@ -145,13 +157,13 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
         "layout": {
             "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalText", "text": "Key stats", "size": "sm", "color": "yellow"},
-                {"type": "Divider", "color": "cyan", "opacity": 0.2},
-                {"type": "grid", "columns": 2, "gap": 24, "children": [
-                    {"type": "LabelValueCard", "label": "N/A", "value": "N/A",
-                     "border_color": "cyan", "delay": 8},
-                    {"type": "LabelValueCard", "label": "N/A", "value": "N/A",
-                     "border_color": "cyan", "delay": 16},
+                {"type": "SectionLabel", "text": "Key Stats", "color": "yellow"},
+                {"type": "Divider", "color": "cyan", "opacity": 0.15},
+                {"type": "grid", "columns": 2, "gap": 20, "children": [
+                    {"type": "MetricCard", "label": "N/A", "value": "N/A",
+                     "color": "cyan", "delay": 0},
+                    {"type": "MetricCard", "label": "N/A", "value": "N/A",
+                     "color": "cyan", "delay": 8},
                 ]},
             ],
         },
@@ -161,14 +173,14 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
         "layout": {
             "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalText", "text": "How it works", "size": "sm", "color": "yellow"},
-                {"type": "Divider", "color": "cyan", "opacity": 0.2},
-                {"type": "LabelValueCard", "label": "Step 1", "value": "N/A",
-                 "border_color": "cyan", "delay": 8},
-                {"type": "LabelValueCard", "label": "Step 2", "value": "N/A",
-                 "border_color": "cyan", "delay": 16},
-                {"type": "LabelValueCard", "label": "Step 3", "value": "N/A",
-                 "border_color": "cyan", "delay": 24},
+                {"type": "SectionLabel", "text": "How It Works", "color": "yellow"},
+                {"type": "Divider", "color": "cyan", "opacity": 0.15},
+                {"type": "MetricCard", "label": "Step 1", "value": "N/A",
+                 "color": "cyan", "delay": 0},
+                {"type": "MetricCard", "label": "Step 2", "value": "N/A",
+                 "color": "cyan", "delay": 8},
+                {"type": "MetricCard", "label": "Step 3", "value": "N/A",
+                 "color": "green", "delay": 16},
             ],
         },
     },
@@ -177,17 +189,18 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
         "layout": {
             "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalText", "text": "Before vs After", "size": "sm",
-                 "color": "yellow"},
-                {"type": "Divider", "color": "cyan", "opacity": 0.2},
-                {"type": "row", "gap": 32, "children": [
+                {"type": "SectionLabel", "text": "Before vs After", "color": "yellow"},
+                {"type": "Divider", "color": "cyan", "opacity": 0.15},
+                {"type": "row", "gap": 24, "children": [
                     {"type": "column", "gap": 16, "children": [
-                        {"type": "TerminalText", "text": "BEFORE", "size": "sm", "color": "red"},
-                        {"type": "TerminalText", "text": "N/A", "size": "md", "color": "white"},
+                        {"type": "SectionLabel", "text": "Before", "color": "red"},
+                        {"type": "MetricCard", "label": "N/A", "value": "N/A",
+                         "color": "red", "delay": 0},
                     ]},
                     {"type": "column", "gap": 16, "children": [
-                        {"type": "TerminalText", "text": "AFTER", "size": "sm", "color": "green"},
-                        {"type": "TerminalText", "text": "N/A", "size": "md", "color": "white"},
+                        {"type": "SectionLabel", "text": "After", "color": "cyan"},
+                        {"type": "MetricCard", "label": "N/A", "value": "N/A",
+                         "color": "cyan", "glow": True, "delay": 8},
                     ]},
                 ]},
             ],
@@ -198,12 +211,12 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
         "layout": {
             "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalText", "text": "Timeline", "size": "sm", "color": "yellow"},
-                {"type": "Divider", "color": "yellow", "opacity": 0.2},
-                {"type": "LabelValueCard", "label": "N/A", "value": "Event",
-                 "border_color": "yellow", "delay": 8},
-                {"type": "LabelValueCard", "label": "N/A", "value": "Event",
-                 "border_color": "yellow", "delay": 16},
+                {"type": "SectionLabel", "text": "Timeline", "color": "yellow"},
+                {"type": "Divider", "color": "yellow", "opacity": 0.15},
+                {"type": "MetricCard", "label": "N/A", "value": "Event",
+                 "color": "yellow", "delay": 0},
+                {"type": "MetricCard", "label": "N/A", "value": "Event",
+                 "color": "yellow", "delay": 8},
             ],
         },
     },
@@ -212,7 +225,7 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
         "layout": {
             "type": "column", "gap": 32, "padding": 60,
             "children": [
-                {"type": "TerminalPrompt", "text": "user@adamax:~$"},
+                {"type": "SectionLabel", "text": "adamax.ai", "color": "cyan"},
                 {"type": "Spacer", "size": 700},
                 {"type": "TerminalText", "text": "Run your own experiments.",
                  "size": "lg", "color": "white", "typewriter": True, "cursor": True, "delay": 0},
@@ -226,85 +239,105 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
 
 # Template hints tell the LLM what kind of visual story each beat should tell.
 _TEMPLATE_HINTS = {
-    "hook":       "Hero stat + short punchy phrase. Use StatBox for the number, TerminalText for the hook phrase.",
-    "stats_grid": "Show 2–4 key metrics. Use a grid of LabelValueCard nodes. Short labels (≤5 chars), numeric values (≤8 chars).",
-    "pipeline":   "Show a process as 3–5 sequential steps. Use LabelValueCard nodes stacked vertically.",
-    "comparison": "Side-by-side before/after. Use a row container with two column children, each with a label and metric.",
-    "timeline":   "Chronological events. Use staggered LabelValueCard nodes, label=year/version, value=event name.",
-    "takeaway":   "Closing statement. Full-width TerminalText with typewriter effect. Bold, memorable, ≤12 words.",
+    "hook":       "Hero metric + punchy phrase. Use NumberCounter for the big number (delay:0), TerminalText for the hook phrase (delay:20). SectionLabel at top.",
+    "stats_grid": "2–4 key metrics in a grid. Use MetricCard nodes (NOT LabelValueCard). label ≤6 chars, value ≤8 chars. Stagger delay 0,8,16,24.",
+    "pipeline":   "3–5 sequential steps. Use MetricCard nodes stacked vertically, label=step name, value=output or result.",
+    "comparison": "Side-by-side. Use a row of two columns: each column has SectionLabel (BEFORE/AFTER) + MetricCard.",
+    "timeline":   "Chronological. Use MetricCard nodes, label=year/version, value=event keyword.",
+    "takeaway":   "Closing statement. SectionLabel at top, large Spacer, then TerminalText with typewriter:true, cursor:true.",
 }
 
 _SCHEMA_REFERENCE = """\
-NODE TYPES (all available):
+NODE TYPES — use Tier 2 primitives by default:
+
   Containers (must have children):
     column  — vertical flex    props: gap, justify, align, padding, children
     row     — horizontal flex  props: gap, justify, align, children
     grid    — CSS grid         props: columns (2 or 3), gap, children
 
-  Primitives (no children):
-    TerminalPrompt  — "user@adamax:~$" style header  props: text
-    TerminalText    — main text, optional typewriter  props: text, size, color, typewriter, cursor, delay
-    StatBox         — hero metric (huge number)        props: value, label, color, animate, delay
-    LabelValueCard  — bordered card                    props: label, value, border_color, color, glow, delay
-    CodeBlock       — monospace block                  props: lines[], highlight_line
-    Chip            — small inline badge               props: text, color
-    Divider         — horizontal rule                  props: color, opacity
-    Spacer          — whitespace                       props: size (px, integer)
+  Tier 2 primitives — PREFERRED (devtool aesthetic):
+    SectionLabel   — section header with accent bar   props: text, color
+    NumberCounter  — huge hero metric, scale spring   props: value, label, color, delay
+    MetricCard     — glassmorphism data card          props: label, value, color, glow, delay
+    GPUNode        — GPU tile for cluster visuals     props: label, value, state, delay
+                     state: "idle" | "active" | "bottleneck"
+
+  Supporting primitives:
+    TerminalText   — body text, typewriter option     props: text, size, color, typewriter, cursor, delay
+    Divider        — 1px separator line               props: color, opacity
+    Spacer         — vertical whitespace              props: size (px integer)
+    Chip           — pill badge                       props: text, color
+    CodeBlock      — code block with highlight        props: lines[], highlight_line
 
 ALLOWED VALUES:
-  color / border_color: "green" | "cyan" | "yellow" | "red" | "white"
+  color: "green"(emerald) | "cyan"(indigo) | "yellow"(violet) | "red" | "white"
+  state (GPUNode only): "idle" | "active" | "bottleneck"
   size (TerminalText): "xs" | "sm" | "md" | "lg" | "xl"
   animate_in: "spring_in" | "spring_scale" | "typewriter" | "fade" | "slide_up" | "none"
-  delay: integer ≥ 0 (frame offset for stagger — 30 frames = 1 second)
+  delay: integer ≥ 0 (frames — 30 frames = 1 second)
 
-STRUCTURAL RULES (strictly enforced):
-  - Every beat root "column" MUST have padding: 60 and gap: 32.
-  - hook and takeaway beats: first child MUST be {"type": "TerminalPrompt", "text": "user@adamax:~$"}
-    followed by a Spacer of 600–800 to push content to vertical center.
-  - Middle beats (stats_grid, pipeline, comparison, timeline): first child should be a
-    TerminalText header in "sm" size, yellow color, giving context for the data below.
+STRUCTURAL RULES (validator enforced — violations cause retry):
+  - Root "column" MUST have padding ≥ 40 (use 60) and gap: 32.
+  - hook beats: first child MUST be SectionLabel, then Spacer 600–750, then NumberCounter or TerminalText.
+  - takeaway beats: first child MUST be SectionLabel, then Spacer 650–800, then TerminalText typewriter.
+  - Middle beats: first child MUST be SectionLabel (section header), then Divider, then data nodes.
   - Containers must have children. Primitives must NOT have children.
   - grid.columns must be 2 or 3.
-  - text fields: ≤ 120 chars total, but keep SHORT — renders large on phone screen.
-  - StatBox.value: ≤ 8 chars (e.g. "40%", "3B", "32GB").
-  - LabelValueCard.label: ≤ 6 chars. LabelValueCard.value: ≤ 8 chars.
-  - Use delay stagger (8, 16, 24 …) for cards that appear sequentially.
+  - text/label/value: keep SHORT — renders at 50–200px on phone screen.
+  - NumberCounter.value ≤ 8 chars. MetricCard.label ≤ 8 chars. MetricCard.value ≤ 8 chars.
+  - Stagger MetricCard/GPUNode delays: 0, 8, 16, 24 …
 
-REFERENCE TREES (copy the structure, replace values):
+REFERENCE TREES (copy structure exactly, replace values):
 
-hook beat example:
+hook beat:
   {"type":"column","padding":60,"gap":32,"children":[
-    {"type":"TerminalPrompt","text":"user@adamax:~$"},
+    {"type":"SectionLabel","text":"adamax.ai","color":"cyan"},
     {"type":"Spacer","size":650},
-    {"type":"StatBox","value":"40%","label":"VRAM used","color":"green","delay":0},
-    {"type":"Spacer","size":40},
-    {"type":"TerminalText","text":"Your GPU has 60% to spare.","size":"lg","color":"white","typewriter":true,"cursor":true,"delay":30}
+    {"type":"NumberCounter","value":"3.8×","label":"throughput gain","color":"cyan","delay":0},
+    {"type":"Spacer","size":32},
+    {"type":"TerminalText","text":"One config change. Same 96 GPUs.","size":"lg","color":"white","delay":20}
   ]}
 
-stats_grid beat example:
+stats_grid beat:
   {"type":"column","padding":60,"gap":32,"children":[
-    {"type":"TerminalText","text":"Benchmark","size":"sm","color":"yellow"},
-    {"type":"Divider","color":"cyan","opacity":0.2},
+    {"type":"SectionLabel","text":"Benchmark","color":"yellow"},
+    {"type":"Divider","color":"cyan","opacity":0.15},
     {"type":"grid","columns":2,"gap":20,"children":[
-      {"type":"LabelValueCard","label":"Before","value":"500ms","border_color":"red","delay":8},
-      {"type":"LabelValueCard","label":"After","value":"12ms","border_color":"green","glow":true,"delay":16}
+      {"type":"MetricCard","label":"TP=8","value":"290K t/s","color":"red","delay":0},
+      {"type":"MetricCard","label":"DP=8","value":"1.1M t/s","color":"cyan","glow":true,"delay":8}
     ]}
   ]}
 
-pipeline beat example:
+pipeline beat:
   {"type":"column","padding":60,"gap":32,"children":[
-    {"type":"TerminalText","text":"How it works","size":"sm","color":"yellow"},
-    {"type":"Divider","color":"cyan","opacity":0.2},
-    {"type":"LabelValueCard","label":"Step 1","value":"Tokenize","border_color":"cyan","delay":8},
-    {"type":"LabelValueCard","label":"Step 2","value":"Encode","border_color":"cyan","delay":16},
-    {"type":"LabelValueCard","label":"Step 3","value":"Decode","border_color":"green","delay":24}
+    {"type":"SectionLabel","text":"How it works","color":"yellow"},
+    {"type":"Divider","color":"cyan","opacity":0.15},
+    {"type":"MetricCard","label":"Step 1","value":"Tokenize","color":"cyan","delay":0},
+    {"type":"MetricCard","label":"Step 2","value":"Encode","color":"cyan","delay":8},
+    {"type":"MetricCard","label":"Step 3","value":"Decode","color":"green","delay":16}
   ]}
 
-takeaway beat example:
+comparison beat:
   {"type":"column","padding":60,"gap":32,"children":[
-    {"type":"TerminalPrompt","text":"user@adamax:~$"},
+    {"type":"SectionLabel","text":"Before vs After","color":"yellow"},
+    {"type":"Divider","color":"cyan","opacity":0.15},
+    {"type":"row","gap":24,"children":[
+      {"type":"column","gap":16,"children":[
+        {"type":"SectionLabel","text":"Before","color":"red"},
+        {"type":"MetricCard","label":"TP=8","value":"290K t/s","color":"red","delay":0}
+      ]},
+      {"type":"column","gap":16,"children":[
+        {"type":"SectionLabel","text":"After","color":"cyan"},
+        {"type":"MetricCard","label":"DP=8","value":"1.1M t/s","color":"cyan","glow":true,"delay":8}
+      ]}
+    ]}
+  ]}
+
+takeaway beat:
+  {"type":"column","padding":60,"gap":32,"children":[
+    {"type":"SectionLabel","text":"adamax.ai","color":"cyan"},
     {"type":"Spacer","size":700},
-    {"type":"TerminalText","text":"Could you have caught this before prod?","size":"lg","color":"white","typewriter":true,"cursor":true,"delay":0}
+    {"type":"TerminalText","text":"The bottleneck was coordination. Not compute.","size":"lg","color":"white","typewriter":true,"cursor":true,"delay":0}
   ]}"""
 
 
@@ -361,13 +394,14 @@ PER-BEAT CONTENT:
 {_SCHEMA_REFERENCE}
 
 DESIGN RULES (non-negotiable):
-- Root column MUST have padding: 60 and gap: 32. This is mandatory — validator will reject anything < 40.
-- hook/takeaway beats: MUST have TerminalPrompt as FIRST child, then Spacer 650–800, then content.
-- Middle beats: MUST start with TerminalText (size "sm", color "yellow") as section header, then Divider.
-- Colors: green = positive/metric, cyan = neutral info, yellow = label/header, red = negative.
-- Keep text SHORT — it renders at 60–90px on a phone screen.
-- Use stagger delays on LabelValueCard grids (delay: 8, 16, 24 …).
-- Follow the REFERENCE TREES above exactly — copy structure, replace values.
+- Root column MUST have padding: 60 and gap: 32. Validator rejects padding < 40.
+- hook/takeaway beats: MUST have SectionLabel as FIRST child, then Spacer 650–800, then content.
+- Middle beats: MUST start with SectionLabel as section header, then Divider, then data nodes.
+- Use MetricCard instead of LabelValueCard. Use NumberCounter instead of StatBox. Use SectionLabel instead of TerminalPrompt.
+- Colors: green(emerald)=positive, cyan(indigo)=primary/neutral, yellow(violet)=headers, red=negative.
+- Keep text SHORT — renders at 50–200px on phone. MetricCard.value ≤ 8 chars.
+- Stagger MetricCard/GPUNode: delay 0, 8, 16, 24 …
+- Follow the REFERENCE TREES above exactly — copy structure, replace values with real content.
 
 OUTPUT (exact JSON shape, no markdown fences, no extra fields):
 {json_shape}
