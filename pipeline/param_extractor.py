@@ -59,8 +59,8 @@ def _check_metric(m, prefix, errors):
         errors.append(f"{prefix}: missing label")
     if not m.get("value"):
         errors.append(f"{prefix}: missing value")
-    if len(str(m.get("label", ""))) > 8:
-        errors.append(f"{prefix}.label too long (≤ 8 chars)")
+    if len(str(m.get("label", ""))) > 16:
+        errors.append(f"{prefix}.label too long (≤ 16 chars)")
     if len(str(m.get("value", ""))) > 8:
         errors.append(f"{prefix}.value too long (≤ 8 chars)")
     _check_color(m.get("color"), f"{prefix}.color", errors)
@@ -295,7 +295,7 @@ ALLOWED VALUES:
   state:      "idle" | "active" | "bottleneck"
 
 CONSTRAINTS (validator enforced — violations cause retry):
-  - hero.value ≤ 8 chars. MetricItem.label ≤ 8 chars. MetricItem.value ≤ 8 chars.
+  - hero.value ≤ 8 chars. MetricItem.value ≤ 8 chars. MetricItem.label ≤ 16 chars.
   - DataGrid.metrics: 2–4 items only.
   - PipelineFlow.steps: 2–5 steps. At least one step must be "active" or "bottleneck".
   - TakeawayScene.headline ≤ 16 words.
@@ -396,8 +396,10 @@ DESIGN RULES (non-negotiable):
 - On PipelineFlow: mark the bottleneck step with state "bottleneck".
 - PipelineFlow with ≥ 5 steps MUST use flow_direction "vertical" — horizontal overflows.
 - PipelineFlow step labels: ≤ 12 chars, single word or short abbreviation, no spaces.
-- MetricItem label and value: ≤ 8 chars each. Use compact tokens, not full words.
-  BAD: "Improvement", "Claude Code"  GOOD: "improve", "δ+3.2%", "Code+"
+- MetricItem value: ≤ 8 chars (renders at 60–220px). Use numbers/symbols, not words.
+  BAD: "Improvement", "Optimizing"  GOOD: "+3.2%", "3.8×", "128K", "40ms"
+- MetricItem label: ≤ 16 chars (renders at 22px). Full short words are fine.
+  GOOD: "throughput", "optimizing", "dequant gain"
 - section_label: ALL CAPS, 2–4 words describing the visual frame.
   GOOD: "THE BOTTLENECK", "BEFORE vs AFTER", "THE FIX", "TAKEAWAY"
   BAD:  "adamax.ai", "takeaway", "Experiment Setup"
@@ -422,29 +424,31 @@ def _sanitize_payload(data: dict) -> dict:
       - If the string is one long token (no spaces), cut with an ellipsis so the
         result looks intentional rather than misspelled.
     """
-    MAX_METRIC   = 8   # MetricItem label + value: ≤ 8 chars (renders at 60-220px)
+    # Values render at 60–220px — must be compact numbers/symbols (e.g. "3.8×", "40%").
+    # Labels render at 22–24px — can be full short words (e.g. "optimizing", "throughput").
+    MAX_VALUE    = 8
+    MAX_LABEL    = 16
     MAX_CHIP     = 16
     MAX_STEP_LBL = 12  # PipelineFlow step labels (renders at 26px)
 
     def _trunc(s: str, n: int) -> str:
+        """Truncate at word boundary if possible; hard-cut otherwise (no ellipsis)."""
         s = str(s).strip()
         if len(s) <= n:
             return s
-        short     = s[:n]
+        short      = s[:n]
         last_space = short.rfind(" ")
         if last_space > n // 2:
-            # Word boundary is in the second half of the limit — use it.
             return short[:last_space]
-        # No good word boundary — truncate with ellipsis so it doesn't look like a typo.
-        return s[:n - 1] + "…"
+        return short  # single long token — hard cut, no ellipsis
 
     def _sanitize_metric(m: dict) -> dict:
         if not isinstance(m, dict):
             return m
         if "label" in m:
-            m["label"] = _trunc(m["label"], MAX_METRIC)
+            m["label"] = _trunc(m["label"], MAX_LABEL)
         if "value" in m:
-            m["value"] = _trunc(m["value"], MAX_METRIC)
+            m["value"] = _trunc(m["value"], MAX_VALUE)
         return m
 
     for beat_key, payload in data.items():
@@ -459,9 +463,9 @@ def _sanitize_payload(data: dict) -> dict:
             hero = d.get("hero")
             if isinstance(hero, dict):
                 if "value" in hero:
-                    hero["value"] = _trunc(hero["value"], MAX_METRIC)
+                    hero["value"] = _trunc(hero["value"], MAX_VALUE)
                 if "label" in hero:
-                    hero["label"] = _trunc(hero["label"], MAX_METRIC)
+                    hero["label"] = _trunc(hero["label"], MAX_LABEL)
             d["chips"] = [_trunc(c, MAX_CHIP) for c in (d.get("chips") or [])]
 
         elif kind == "DataGrid":
