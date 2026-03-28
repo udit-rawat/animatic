@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from pipeline import claude_client
 
@@ -7,6 +8,13 @@ INPUT_PATH   = os.path.join(os.path.dirname(__file__), "..", "output", "candidat
 OUTPUT_PATH  = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
 HISTORY_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "picked_history.json")
 MAX_HISTORY  = 30   # titles to remember
+
+# Short words that shouldn't trigger topic overlap detection
+_STOP_WORDS = {
+    "a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for",
+    "with", "how", "why", "what", "this", "that", "from", "via", "vs",
+    "using", "new", "ai", "ml", "llm", "gpu",
+}
 
 
 PROMPT_TEMPLATE = """\
@@ -74,6 +82,45 @@ def save_history(history: list[str], new_title: str):
         json.dump(history, f, indent=2)
 
 
+def _keywords(title: str) -> set[str]:
+    """Extract significant lowercase words (≥5 chars, not stop words) from a title."""
+    words = re.findall(r"[a-zA-Z0-9]+", title.lower())
+    return {w for w in words if len(w) >= 5 and w not in _STOP_WORDS}
+
+
+def filter_candidates(candidates: list[dict], history: list[str]) -> list[dict]:
+    """
+    Remove candidates that share ≥2 significant keywords with any single history
+    title. Per-title matching (not aggregate) prevents generic ML words pooled
+    across 30 history titles from causing false positives.
+
+    ≥2 threshold catches:
+      - exact/near-exact duplicates (many shared words)
+      - thematic siblings ('Google TurboQuant running Qwen' shares 'turboquant'
+        + 'google' with 'Google TurboQuant: 6x Memory Reduction')
+    Single-word overlap (e.g. 'speed', 'memory') is not enough to filter.
+    """
+    if not history:
+        return candidates
+
+    history_kw_sets = [_keywords(t) for t in history]
+
+    kept = []
+    for c in candidates:
+        candidate_kw = _keywords(c["title"])
+        blocked_by = None
+        for hist_title, hist_kw in zip(history, history_kw_sets):
+            overlap = candidate_kw & hist_kw
+            if len(overlap) >= 2:
+                blocked_by = (hist_title, overlap)
+                break
+        if blocked_by:
+            print(f"  [ranker] filtered (overlap={blocked_by[1]} with '{blocked_by[0][:60]}'): {c['title']}")
+        else:
+            kept.append(c)
+    return kept
+
+
 def build_prompt(candidates: list[dict], history: list[str]) -> str:
     lines = []
     for i, c in enumerate(candidates, 1):
@@ -120,9 +167,18 @@ def main():
 
     history = load_history()
     if history:
-        print(f"Excluding {len(history)} previously covered topics...")
+        print(f"History contains {len(history)} covered topics — filtering candidates...")
 
-    prompt = build_prompt(candidates, history)
+    # Pre-filter before Claude even sees the list: removes thematic duplicates
+    # (e.g. all TurboQuant variants) that share keywords with history titles.
+    filtered = filter_candidates(candidates, history)
+    if len(filtered) < len(candidates):
+        print(f"  {len(candidates) - len(filtered)} candidate(s) removed by keyword filter, {len(filtered)} remain.")
+    if not filtered:
+        print("[ranker] All candidates filtered — falling back to full list.")
+        filtered = candidates
+
+    prompt = build_prompt(filtered, history)
     last_err = None
     for attempt in range(1, 4):
         try:
@@ -135,8 +191,11 @@ def main():
     else:
         raise RuntimeError(f"Ranker failed to produce valid JSON after 3 attempts. Last error: {last_err}")
 
-    # History is saved by the notifier after successful video delivery,
-    # not here — so failed pipeline runs don't consume a history slot.
+    # Save to history immediately so repeated pipeline runs (e.g. during dev / test
+    # without Telegram delivery) don't re-pick the same topic. Notifier also calls
+    # save_history() after delivery — that's a no-op since the title is already there.
+    save_history(history, topic["title"])
+    print(f"Topic committed to history: {topic['title']}")
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(topic, f, indent=2)
