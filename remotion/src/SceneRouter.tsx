@@ -14,6 +14,7 @@ import { ComparisonSplit } from "./layouts/ComparisonSplit";
 import { MetricFocus }     from "./layouts/MetricFocus";
 import { PipelineFlow }    from "./layouts/PipelineFlow";
 import { DataGrid }        from "./layouts/DataGrid";
+import { KineticBridge }   from "./layouts/KineticBridge";
 
 export const SceneRouter: React.FC<{ data: SceneData }> = ({ data }) => {
   switch (data.layout) {
@@ -21,7 +22,8 @@ export const SceneRouter: React.FC<{ data: SceneData }> = ({ data }) => {
     case "MetricFocus":     return <MetricFocus data={data} />;
     case "PipelineFlow":    return <PipelineFlow data={data} />;
     case "DataGrid":        return <DataGrid data={data} />;
-    case "TakeawayScene":   return null; // handled by VideoComposition directly
+    case "KineticBridge":   return <KineticBridge data={data} />;
+    case "TakeawayScene":   return null; // handled by VideoComposition with durationFrames
     default:                return null;
   }
 };

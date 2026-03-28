@@ -133,7 +133,8 @@ export type LayoutKind =
   | "MetricFocus"
   | "PipelineFlow"
   | "DataGrid"
-  | "TakeawayScene";
+  | "TakeawayScene"
+  | "KineticBridge";
 
 export interface MetricItem {
   label:  string;         // ≤ 8 chars — renders at 60px on phone
@@ -188,12 +189,24 @@ export interface TakeawaySceneData {
   accent_color?: "cyan" | "green" | "yellow";
 }
 
+/**
+ * KineticBridgeData — for conversational / narrative beats with no structured data.
+ * 2–5 keywords pulse sequentially so the screen is never a black hole.
+ */
+export interface KineticBridgeData {
+  layout:        "KineticBridge";
+  section_label: string;
+  keywords:      string[];                      // 2–5 short phrases, ≤ 20 chars each
+  accent_color?: "cyan" | "green" | "yellow";
+}
+
 export type SceneData =
   | ComparisonSplitData
   | MetricFocusData
   | PipelineFlowData
   | DataGridData
-  | TakeawaySceneData;
+  | TakeawaySceneData
+  | KineticBridgeData;
 
 export interface ScenePayload {
   animate_in: AnimateIn;

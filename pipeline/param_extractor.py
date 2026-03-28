@@ -35,7 +35,7 @@ OUTPUT_PATH     = os.path.join(os.path.dirname(__file__), "..", "output", "param
 # ── ScenePayload validation ───────────────────────────────────────────────────
 
 _ALLOWED_LAYOUT_KINDS = {
-    "ComparisonSplit", "MetricFocus", "PipelineFlow", "DataGrid", "TakeawayScene",
+    "ComparisonSplit", "MetricFocus", "PipelineFlow", "DataGrid", "TakeawayScene", "KineticBridge",
 }
 _ALLOWED_COLORS = {"green", "cyan", "yellow", "red", "white"}
 _ALLOWED_ANIMATE_IN = {
@@ -139,6 +139,16 @@ def _validate_scene_payload(payload: dict, template: str = "") -> list[str]:
         for i, m in enumerate(metrics):
             _check_metric(m, f"metrics[{i}]", errors)
 
+    elif kind == "KineticBridge":
+        keywords = data.get("keywords", [])
+        if not isinstance(keywords, list) or not (2 <= len(keywords) <= 5):
+            errors.append("KineticBridge.data.keywords must have 2–5 items")
+        for i, kw in enumerate(keywords):
+            if not isinstance(kw, str):
+                errors.append(f"keywords[{i}] must be a string")
+            elif len(kw) > 24:
+                errors.append(f"keywords[{i}] too long (≤ 20 chars): {kw!r}")
+
     elif kind == "TakeawayScene":
         headline = data.get("headline", "")
         if not headline:
@@ -211,6 +221,15 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
             ],
         },
     },
+    "bridge": {
+        "animate_in": "fade",
+        "data": {
+            "layout":        "KineticBridge",
+            "section_label": "context",
+            "keywords":      ["Key insight", "Think about it", "Here's why"],
+            "accent_color":  "cyan",
+        },
+    },
     "takeaway": {
         "animate_in": "none",
         "data": {
@@ -259,6 +278,11 @@ LAYOUT KINDS (pick the best one per beat):
 
   TakeawayScene — kinetic outro (MUST be the last beat only)
     data: { layout, section_label, headline, cta?, accent_color?: "cyan"|"green"|"yellow" }
+
+  KineticBridge — conversational/narrative gap filler (NO structured data available)
+    Use when the narration is a bridge, analogy, or context-setting sentence with no
+    quantitative data to display. 2–5 short keyword phrases pulse sequentially.
+    data: { layout, section_label, keywords: string[], accent_color? }
 
 ALLOWED VALUES:
   animate_in: "spring_in" | "spring_scale" | "fade" | "slide_up" | "none"

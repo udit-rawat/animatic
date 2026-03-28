@@ -13,9 +13,9 @@
  * Audio metrics no longer injected as CSS custom properties on visible elements.
  */
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Audio, interpolate, staticFile, useVideoConfig } from "remotion";
-import type { AnimateIn, RemotionProps, TakeawaySceneData, TimingEntry } from "./types";
+import type { AnimateIn, BeatLayout, RemotionProps, ScenePayload, TakeawaySceneData, TimingEntry } from "./types";
 import { LayoutRenderer }  from "./LayoutRenderer";
 import { SceneRouter }     from "./SceneRouter";
 import { TakeawayScene }   from "./layouts/TakeawayScene";
@@ -69,6 +69,26 @@ function beatToTimingKey(beatNum: number, totalBeats: number): string {
   return `concept_${beatNum - 1}`;
 }
 
+/**
+ * ghostContent — walk backward from beatIndex to find the nearest previous beat
+ * that has valid scene/layout content. Used for sequence persistence when a beat
+ * renders null (e.g. "bridge" beats with no structured data).
+ */
+function ghostContent(
+  beatIndex: number,
+  beatIds: number[],
+  scenes?: Record<string, ScenePayload>,
+  params?: Record<string, BeatLayout>,
+): { scene?: ScenePayload; layout?: BeatLayout } | null {
+  for (let i = beatIndex - 1; i >= 0; i--) {
+    const key = `beat_${beatIds[i]}`;
+    if (scenes?.[key] || params?.[key]) {
+      return { scene: scenes?.[key], layout: params?.[key] };
+    }
+  }
+  return null;
+}
+
 export const VideoComposition: React.FC<RemotionProps> = ({
   beats,
   scenes,
@@ -80,6 +100,7 @@ export const VideoComposition: React.FC<RemotionProps> = ({
   const totalBeats      = beats.length;
   const { fps }         = useVideoConfig();
   const { cameraY }     = useCameraY(timing, totalBeats);
+  const beatIds         = useMemo(() => beats.map(b => b.beat), [beats]);
 
   return (
     <SceneContext.Provider value={{ cues, fps }}>
@@ -108,9 +129,29 @@ export const VideoComposition: React.FC<RemotionProps> = ({
             // v2 fallback: BeatLayout → LayoutRenderer
             const beatLayout   = params?.[`beat_${beatInfo.beat}`];
 
-            if (!scenePayload && !beatLayout) {
-              console.warn(`[VideoComposition] No scene or params for beat_${beatInfo.beat}`);
-              return null;
+            const hasContent = !!(scenePayload || beatLayout);
+
+            // ── Sequence persistence ─────────────────────────────────────────
+            // If this beat has no content (e.g. bridge/gap beat from pipeline),
+            // render the nearest previous beat's content at 25% opacity + blur
+            // rather than leaving a black hole. No viewer ever sees dead air.
+            if (!hasContent) {
+              const ghost = ghostContent(index, beatIds, scenes, params);
+              if (!ghost) return null; // first beat with no content — nothing to persist
+
+              return (
+                <BeatZone key={beatInfo.beat} index={index} beatStartFrame={beatStartFrame}>
+                  <div style={{ width: "100%", height: "100%", opacity: 0.22, filter: "blur(3px)" }}>
+                    {ghost.scene ? (
+                      ghost.scene.data.layout === "TakeawayScene"
+                        ? null  // don't ghost a TakeawayScene (it has its own motion)
+                        : <SceneRouter data={ghost.scene.data} />
+                    ) : ghost.layout ? (
+                      <LayoutRenderer node={ghost.layout.layout} />
+                    ) : null}
+                  </div>
+                </BeatZone>
+              );
             }
 
             const animateIn = scenePayload?.animate_in ?? beatLayout?.animate_in ?? "none";

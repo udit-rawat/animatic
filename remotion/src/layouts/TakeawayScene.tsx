@@ -60,26 +60,43 @@ const WordReveal: React.FC<{
   fontSize:  number;
   color:     string;
 }> = ({ text, frame, fps, baseDelay, fontSize, color }) => {
-  const words = text.split(" ");
+  // trim() + split(/\s+/) guards against leading/trailing spaces and multi-space
+  // runs that would produce empty "" tokens and invisible gap-eating spans.
+  const words = text.trim().split(/\s+/);
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.28em", lineHeight: 1.25 }}>
+    // BUG FIX: do NOT use gap/columnGap with "em" units on the container — em
+    // resolves against the container's own font-size (typically 16px default),
+    // NOT the span's font-size (68px here). At 16px, 0.28em ≈ 4.5px: invisible.
+    // Fix: paddingRight on each span, where em resolves against the span's own
+    // fontSize — so 0.3em at fontSize:68 = ~20px, correct word spacing.
+    <div style={{ display: "flex", flexWrap: "wrap", lineHeight: 1.3 }}>
       {words.map((word, i) => {
         const delay    = baseDelay + i * 5;
         const progress = spring({
           frame: Math.max(0, frame - delay),
           fps,
-          config: { damping: 24, stiffness: 160, overshootClamping: false },
+          // BUG FIX: bounce-up spring.
+          // Old: damping:24, stiffness:160, translateY from 28px — barely perceptible.
+          // New: damping:18 (less resistance → real oscillation past rest),
+          //      stiffness:220 (snappier initial velocity),
+          //      translateY from 120px (comes from further below).
+          // overshootClamping:false lets it spring past 0 → genuine bounce.
+          config: { damping: 18, stiffness: 220, overshootClamping: false },
         });
+        const isLast = i === words.length - 1;
         return (
           <span key={i} style={{
-            display:   "inline-block",
-            opacity:   interpolate(progress, [0, 0.25], [0, 1], { extrapolateRight: "clamp" }),
-            transform: `translateY(${interpolate(progress, [0, 1], [28, 0])}px)`,
+            display:     "inline-block",
+            opacity:     interpolate(progress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" }),
+            transform:   `translateY(${interpolate(progress, [0, 1], [120, 0])}px)`,
             fontSize,
-            fontWeight: 700,
+            fontWeight:  700,
             color,
-            fontFamily:    FONT,
+            fontFamily:  FONT,
             letterSpacing: "-0.02em",
+            // Correct word spacing: em resolves against THIS span's fontSize.
+            paddingRight: isLast ? 0 : "0.3em",
           }}>
             {word}
           </span>
