@@ -121,7 +121,14 @@ export const VideoComposition: React.FC<RemotionProps> = ({
           {beats.map((beatInfo, index) => {
             const timingKey                      = beatToTimingKey(beatInfo.beat, totalBeats);
             const entry: TimingEntry | undefined = timing[timingKey];
-            const beatStartFrame = entry ? Math.round(entry.start * FPS) : 0;
+            // Camera spring starts 18 frames before beat.end and takes ~24 frames
+            // to arrive — so it lands at roughly beat.start + 6. Subtract
+            // CAMERA_LEAD so beat-local animations start in sync with camera
+            // arrival rather than 0.6s after the camera is already showing the beat.
+            const CAMERA_LEAD    = 18; // frames — must match useCameraY panStartFrame offset
+            const beatStartFrame = entry
+              ? Math.max(0, Math.round(entry.start * FPS) - CAMERA_LEAD)
+              : 0;
             const beatDurFrames  = entry ? Math.round(entry.duration * FPS) : 300;
 
             // v3 path: ScenePayload → SceneRouter / TakeawayScene

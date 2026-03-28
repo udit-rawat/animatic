@@ -33,11 +33,27 @@ MIDDLE_TEMPLATES = {
 
 def build_prompt(topic: dict, script: dict) -> str:
     bullets = script.get("concept_bullets", [])
-    b1 = bullets[0] if bullets else ""
-    b2 = bullets[1] if len(bullets) > 1 else ""
-    b3 = bullets[2] if len(bullets) > 2 else ""
+    # Only pass non-empty bullets to the prompt
+    non_empty = [b for b in bullets if b and b.strip()]
+    b1 = non_empty[0] if len(non_empty) > 0 else ""
+    b2 = non_empty[1] if len(non_empty) > 1 else ""
+    b3 = non_empty[2] if len(non_empty) > 2 else ""
 
     tpl_desc = "\n".join(f'  "{k}": {v}' for k, v in MIDDLE_TEMPLATES.items())
+
+    # Build an example that matches the actual bullet count so the LLM
+    # doesn't anchor to a fixed 4-beat template and drop concept bullets.
+    n_middle = len(non_empty)
+    example_middle = "\n".join(
+        f'    {{{{"beat": {i+2}, "template": "<pick one template>"}}}},'
+        for i in range(n_middle)
+    )
+    example_takeaway_beat = n_middle + 2
+    example_json = (
+        f'{{\n  "beats": [\n    {{"beat": 1, "template": "hook"}},\n'
+        f'{example_middle}\n'
+        f'    {{"beat": {example_takeaway_beat}, "template": "takeaway"}}\n  ]\n}}'
+    )
 
     return f"""\
 You are a visual template classifier for short-form tech explainer videos.
@@ -45,7 +61,7 @@ You are a visual template classifier for short-form tech explainer videos.
 TOPIC: {topic.get('title', '')}
 SUMMARY: {topic.get('summary', '')}
 
-SCRIPT CONCEPT BULLETS:
+SCRIPT CONCEPT BULLETS ({n_middle} bullets with real content):
   concept_1: {b1}
   concept_2: {b2}
   concept_3: {b3}
@@ -53,10 +69,10 @@ SCRIPT CONCEPT BULLETS:
 AVAILABLE MIDDLE BEAT TEMPLATES:
 {tpl_desc}
 
-TASK: Assign one template to each concept bullet that has real content.
-- Beat 1 = hook (always fixed)
-- Beat N = takeaway (always fixed, renumber to last)
-- Middle beats = 1–3 beats depending on how many concept_bullets have real content
+BEAT COUNT RULE (CRITICAL — do not deviate):
+  total beats = {n_middle} middle beats + 1 hook + 1 takeaway = {n_middle + 2} beats total.
+  You MUST produce EXACTLY {n_middle + 2} beats.
+  Every concept bullet above that is non-empty gets its own beat. Do NOT collapse or skip any.
 
 CLASSIFICATION RULES (strict priority order):
 1. If a concept bullet contains named specs, benchmarks, or 2+ statistics → "stats_grid"
@@ -64,21 +80,13 @@ CLASSIFICATION RULES (strict priority order):
 3. If a concept bullet contrasts two named things with measurable difference → "comparison"
 4. If a concept bullet lists events with dates/versions → "timeline"
 5. Never use "pipeline" for a list of specs — specs are "stats_grid"
-6. Skip concept bullets that are empty or duplicate the hook
 
-OUTPUT JSON:
-{{
-  "beats": [
-    {{"beat": 1, "template": "hook"}},
-    {{"beat": 2, "template": "<one of the 4 templates>"}},
-    {{"beat": 3, "template": "<one of the 4 templates or omit if no content>"}},
-    {{"beat": 4, "template": "takeaway"}}
-  ]
-}}
+OUTPUT JSON (must have exactly {n_middle + 2} beats):
+{example_json}
 
 Rules:
 - Always include beat 1 (hook) and the last beat (takeaway)
-- Only include middle beats for concept bullets with real, distinct content
+- One middle beat per concept bullet — never merge or drop bullets
 - Renumber beats sequentially starting from 1
 - Return ONLY valid JSON. No markdown, no explanation.
 """
@@ -119,6 +127,9 @@ def main():
     prompt   = build_prompt(topic, script)
     last_err = None
 
+    non_empty_bullets = [b for b in script.get("concept_bullets", []) if b and b.strip()]
+    expected_beats    = len(non_empty_bullets) + 2  # hook + N middle + takeaway
+
     for attempt in range(1, 4):
         try:
             raw  = claude_client.call(prompt, stage="scene_planner", json_mode=True)
@@ -126,10 +137,15 @@ def main():
             plan = _renumber(plan)
             beats = plan.get("beats", [])
             assert len(beats) >= 3, "Need at least 3 beats (hook + 1 middle + takeaway)"
-            assert beats[0]["template"] == "hook", "Beat 1 must be hook"
+            assert beats[0]["template"] == "hook",     "Beat 1 must be hook"
             assert beats[-1]["template"] == "takeaway", "Last beat must be takeaway"
             for b in beats[1:-1]:
                 assert b["template"] in MIDDLE_TEMPLATES, f"Unknown template: {b['template']}"
+            assert len(beats) == expected_beats, (
+                f"Beat count mismatch: got {len(beats)}, expected {expected_beats} "
+                f"({len(non_empty_bullets)} concept bullets + hook + takeaway). "
+                f"LLM must not drop or merge concept bullets."
+            )
             last_err = None
             break
         except (json.JSONDecodeError, KeyError, AssertionError, ValueError) as e:
@@ -137,14 +153,17 @@ def main():
             print(f"[scene_planner] attempt {attempt}/3 failed: {e} — retrying...")
 
     if last_err:
-        print(f"[scene_planner] all attempts failed, using default plan")
+        print(f"[scene_planner] all attempts failed — building fallback plan from bullet count")
+        middle = []
+        tpl_cycle = ["stats_grid", "comparison", "pipeline"]
+        for i, _ in enumerate(non_empty_bullets):
+            middle.append({"beat": i + 2, "template": tpl_cycle[i % len(tpl_cycle)]})
         plan = {
-            "beats": [
-                {"beat": 1, "template": "hook"},
-                {"beat": 2, "template": "stats_grid"},
-                {"beat": 3, "template": "comparison"},
-                {"beat": 4, "template": "takeaway"},
-            ]
+            "beats": (
+                [{"beat": 1, "template": "hook"}]
+                + middle
+                + [{"beat": expected_beats, "template": "takeaway"}]
+            )
         }
 
     with open(OUTPUT_PATH, "w") as f:
