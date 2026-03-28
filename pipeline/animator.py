@@ -157,11 +157,11 @@ def assemble_props(
 
     return {
         "beats":       scene_plan.get("beats", []),
-        "params":      params,
+        "scenes":      params,   # v3 ScenePayload format — routed by SceneRouter in Remotion
         "timing":      timing,
         "audioSrc":    "narration.wav",
         "totalFrames": total_frames,
-        "cues":        cue_map,           # {label: frameNumber} — consumed by useCue()
+        "cues":        cue_map,
     }
 
 

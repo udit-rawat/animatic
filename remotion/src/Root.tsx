@@ -30,8 +30,9 @@ async function dynamicDuration({
   }
 }
 
-// ── Default props (new BeatLayout format) ─────────────────────────────────────
-// All params are now BeatLayout objects: { animate_in, layout: LayoutNode }
+// ── Default props (Motion Design v3 — ScenePayload format) ───────────────────
+// All beats use typed SceneData discriminated unions → routed by SceneRouter.
+// beat_4 uses TakeawayScene with ambient breath + word reveal + progress border.
 
 const defaultProps: RemotionProps = {
   beats: [
@@ -40,81 +41,64 @@ const defaultProps: RemotionProps = {
     { beat: 3 },
     { beat: 4 },
   ],
-  params: {
+  scenes: {
     beat_1: {
       animate_in: "spring_scale",
-      layout: {
-        type: "column",
-        gap: 32,
-        justify: "flex-start",
-        padding: 60,
-        children: [
-          { type: "SectionLabel", text: "adamax.ai", color: "cyan" },
-          { type: "Spacer", size: 650 },
-          { type: "NumberCounter", value: "3B", label: "parameters", color: "green", delay: 0 },
-          { type: "Spacer", size: 32 },
-          { type: "TerminalText", text: "ElevenLabs beaten.", size: "lg",
-            color: "white", typewriter: true, cursor: true, delay: 20 },
-        ],
+      data: {
+        layout:        "MetricFocus",
+        section_label: "adamax.ai",
+        hero:          { value: "3B", label: "parameters", color: "green" },
+        context:       "Voxtral TTS beats ElevenLabs with an open-weight model.",
+        chips:         ["open-weight", "3B params", "CPU-safe"],
       },
     },
     beat_2: {
       animate_in: "spring_in",
-      layout: {
-        type: "column",
-        gap: 32,
-        padding: 60,
-        children: [
-          { type: "SectionLabel", text: "Voxtral TTS", color: "yellow" },
-          { type: "Divider", color: "white", opacity: 0.12 },
-          { type: "TerminalText", text: "Open-weight model, closed-source performance.",
-            size: "sm", color: "white" },
-          { type: "grid", columns: 2, gap: 24, children: [
-            { type: "MetricCard", label: "Params", value: "> 3B",
-              color: "cyan", glow: true, delay: 0 },
-            { type: "MetricCard", label: "RAM",    value: "> 3GB",
-              color: "cyan", glow: true, delay: 8 },
-          ]},
+      data: {
+        layout:        "DataGrid",
+        section_label: "Voxtral TTS",
+        metrics: [
+          { label: "Params",   value: "> 3B",   color: "cyan",  glow: true },
+          { label: "RAM",      value: "> 3GB",   color: "cyan"              },
+          { label: "License",  value: "Open",    color: "green", glow: true },
+          { label: "Quality",  value: "+ MOS",   color: "green"             },
         ],
+        highlight_index: 0,
+        caption: "First open-weight model to beat ElevenLabs on MOS benchmarks.",
       },
     },
     beat_3: {
       animate_in: "fade",
-      layout: {
-        type: "column",
-        gap: 32,
-        padding: 60,
-        children: [
-          { type: "SectionLabel", text: "Latency", color: "yellow" },
-          { type: "Divider", color: "white", opacity: 0.12 },
-          { type: "row", gap: 24, children: [
-            { type: "column", gap: 16, children: [
-              { type: "TerminalText", text: "Flash v2.5", size: "sm", color: "red" },
-              { type: "MetricCard", label: "TTFA", value: "Slower",
-                color: "red", delay: 0 },
-            ]},
-            { type: "column", gap: 16, children: [
-              { type: "TerminalText", text: "Voxtral", size: "sm", color: "green" },
-              { type: "MetricCard", label: "TTFA", value: "90ms",
-                color: "green", glow: true, delay: 8 },
-            ]},
-          ]},
-        ],
+      data: {
+        layout:        "ComparisonSplit",
+        section_label: "Latency",
+        divider_label: "vs",
+        left:  {
+          heading: "Flash v2.5",
+          color:   "red",
+          metrics: [
+            { label: "TTFA",    value: "340ms"  },
+            { label: "Quality", value: "Baseline" },
+          ],
+        },
+        right: {
+          heading: "Voxtral",
+          color:   "green",
+          metrics: [
+            { label: "TTFA",    value: "90ms",  glow: true },
+            { label: "Quality", value: "+12 MOS" },
+          ],
+        },
       },
     },
     beat_4: {
-      animate_in: "typewriter",
-      layout: {
-        type: "column",
-        gap: 32,
-        padding: 60,
-        children: [
-          { type: "SectionLabel", text: "takeaway", color: "cyan" },
-          { type: "Spacer", size: 700 },
-          { type: "TerminalText",
-            text: "Open weights now outperform closed ones. What's your bias?",
-            size: "lg", color: "white", typewriter: true, cursor: true, delay: 0 },
-        ],
+      animate_in: "none",
+      data: {
+        layout:        "TakeawayScene",
+        section_label: "takeaway",
+        headline:      "Open weights now outperform closed ones. Pick your stack wisely.",
+        cta:           "Follow for daily ML breakdowns",
+        accent_color:  "cyan",
       },
     },
   },
@@ -124,7 +108,7 @@ const defaultProps: RemotionProps = {
     concept_2:    { start: 23.942, duration: 14.251, end: 38.193 },
     takeaway_cta: { start: 38.193, duration: 9.771,  end: 47.964 },
   },
-  audioSrc: "narration.wav",
+  audioSrc:    "narration.wav",
   totalFrames: Math.round(47.964 * 30),
 };
 
@@ -162,7 +146,7 @@ const GateTestComposition: React.FC = () => (
 
 const phase2Props: RemotionProps = {
   ...defaultProps,
-  // Use compact timing so the 4-beat pan test renders quickly (~30s video)
+  // Compact timing: 4-beat pan test renders in ~30s
   timing: {
     hook:         { start: 0.0,  duration: 7.5, end: 7.5  },
     concept_1:    { start: 7.5,  duration: 7.5, end: 15.0 },
@@ -171,6 +155,7 @@ const phase2Props: RemotionProps = {
   },
   audioSrc:    "narration.wav",
   totalFrames: Math.round(30.0 * 30),
+  // scenes inherited from defaultProps spread — all 4 ScenePayload beats
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

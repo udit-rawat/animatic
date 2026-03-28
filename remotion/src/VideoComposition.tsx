@@ -15,8 +15,10 @@
 
 import React from "react";
 import { Audio, interpolate, staticFile, useVideoConfig } from "remotion";
-import type { AnimateIn, RemotionProps, TimingEntry } from "./types";
+import type { AnimateIn, RemotionProps, TakeawaySceneData, TimingEntry } from "./types";
 import { LayoutRenderer }  from "./LayoutRenderer";
+import { SceneRouter }     from "./SceneRouter";
+import { TakeawayScene }   from "./layouts/TakeawayScene";
 import { CameraViewport, VirtualCanvas, BeatZone } from "./CameraViewport";
 import { useCameraY }      from "./hooks/useCameraY";
 import { useBeatFrame }    from "./hooks/useBeatFrame";
@@ -69,6 +71,7 @@ function beatToTimingKey(beatNum: number, totalBeats: number): string {
 
 export const VideoComposition: React.FC<RemotionProps> = ({
   beats,
+  scenes,
   params,
   timing,
   audioSrc,
@@ -97,14 +100,20 @@ export const VideoComposition: React.FC<RemotionProps> = ({
           {beats.map((beatInfo, index) => {
             const timingKey                      = beatToTimingKey(beatInfo.beat, totalBeats);
             const entry: TimingEntry | undefined = timing[timingKey];
-            const beatLayout                     = params[`beat_${beatInfo.beat}`];
+            const beatStartFrame = entry ? Math.round(entry.start * FPS) : 0;
+            const beatDurFrames  = entry ? Math.round(entry.duration * FPS) : 300;
 
-            if (!beatLayout) {
-              console.warn(`[VideoComposition] No params for beat_${beatInfo.beat}`);
+            // v3 path: ScenePayload → SceneRouter / TakeawayScene
+            const scenePayload = scenes?.[`beat_${beatInfo.beat}`];
+            // v2 fallback: BeatLayout → LayoutRenderer
+            const beatLayout   = params?.[`beat_${beatInfo.beat}`];
+
+            if (!scenePayload && !beatLayout) {
+              console.warn(`[VideoComposition] No scene or params for beat_${beatInfo.beat}`);
               return null;
             }
 
-            const beatStartFrame = entry ? Math.round(entry.start * FPS) : 0;
+            const animateIn = scenePayload?.animate_in ?? beatLayout?.animate_in ?? "none";
 
             return (
               <BeatZone
@@ -112,8 +121,17 @@ export const VideoComposition: React.FC<RemotionProps> = ({
                 index={index}
                 beatStartFrame={beatStartFrame}
               >
-                <BeatAnimateIn animateIn={beatLayout.animate_in} fps={fps}>
-                  <LayoutRenderer node={beatLayout.layout} />
+                <BeatAnimateIn animateIn={animateIn} fps={fps}>
+                  {scenePayload ? (
+                    scenePayload.data.layout === "TakeawayScene"
+                      ? <TakeawayScene
+                          data={scenePayload.data as TakeawaySceneData}
+                          durationFrames={beatDurFrames}
+                        />
+                      : <SceneRouter data={scenePayload.data} />
+                  ) : beatLayout ? (
+                    <LayoutRenderer node={beatLayout.layout} />
+                  ) : null}
                 </BeatAnimateIn>
               </BeatZone>
             );
