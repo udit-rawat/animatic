@@ -59,9 +59,9 @@ def _check_metric(m, prefix, errors):
         errors.append(f"{prefix}: missing label")
     if not m.get("value"):
         errors.append(f"{prefix}: missing value")
-    if len(str(m.get("label", ""))) > 10:
+    if len(str(m.get("label", ""))) > 8:
         errors.append(f"{prefix}.label too long (≤ 8 chars)")
-    if len(str(m.get("value", ""))) > 10:
+    if len(str(m.get("value", ""))) > 8:
         errors.append(f"{prefix}.value too long (≤ 8 chars)")
     _check_color(m.get("color"), f"{prefix}.color", errors)
 
@@ -127,10 +127,15 @@ def _validate_scene_payload(payload: dict, template: str = "") -> list[str]:
                 errors.append(f"steps[{i}] must be object"); continue
             if not s.get("label"):
                 errors.append(f"steps[{i}].label required")
+            elif len(str(s["label"])) > 12:
+                errors.append(f"steps[{i}].label too long (≤ 12 chars): {s['label']!r}")
             if s.get("state") not in _ALLOWED_PIPELINE_STATES:
                 errors.append(f"steps[{i}].state must be idle|active|bottleneck")
-        if data.get("flow_direction") not in _ALLOWED_FLOW_DIRS:
+        flow_dir = data.get("flow_direction")
+        if flow_dir not in _ALLOWED_FLOW_DIRS:
             errors.append("PipelineFlow.data.flow_direction must be horizontal|vertical")
+        elif flow_dir == "horizontal" and isinstance(steps, list) and len(steps) >= 5:
+            errors.append("PipelineFlow: 5+ steps must use flow_direction 'vertical'")
 
     elif kind == "DataGrid":
         metrics = data.get("metrics", [])
@@ -169,7 +174,7 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
         "animate_in": "spring_scale",
         "data": {
             "layout":        "MetricFocus",
-            "section_label": "adamax.ai",
+            "section_label": "THE HOOK",
             "hero":          {"value": "N/A", "label": "metric", "color": "cyan"},
             "context":       "Content unavailable — check pipeline logs.",
             "chips":         [],
@@ -234,7 +239,7 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
         "animate_in": "none",
         "data": {
             "layout":        "TakeawayScene",
-            "section_label": "takeaway",
+            "section_label": "TAKEAWAY",
             "headline":      "Run your own experiments.",
             "cta":           "Follow for daily ML breakdowns",
             "accent_color":  "cyan",
@@ -301,10 +306,10 @@ CONSTRAINTS (validator enforced — violations cause retry):
 REFERENCE EXAMPLES:
 
 hook beat → MetricFocus:
-  {"animate_in":"spring_scale","data":{"layout":"MetricFocus","section_label":"adamax.ai",
-    "hero":{"value":"3.8×","label":"throughput gain","color":"cyan"},
+  {"animate_in":"spring_scale","data":{"layout":"MetricFocus","section_label":"THE GAIN",
+    "hero":{"value":"3.8×","label":"throughput","color":"cyan"},
     "context":"One config change. Same 96 GPUs. Tensor parallelism changed everything.",
-    "chips":["open-source","96 GPUs","zero code change"]}}
+    "chips":["open-source","96 GPUs","no code"]}}
 
 stats beat → DataGrid:
   {"animate_in":"spring_in","data":{"layout":"DataGrid","section_label":"Voxtral TTS",
@@ -327,7 +332,7 @@ pipeline beat → PipelineFlow:
     "bottleneck_label":"Prefill is the latency wall — Voxtral attacks here."}}
 
 takeaway beat → TakeawayScene:
-  {"animate_in":"none","data":{"layout":"TakeawayScene","section_label":"takeaway",
+  {"animate_in":"none","data":{"layout":"TakeawayScene","section_label":"TAKEAWAY",
     "headline":"Open weights now beat closed-source. Pick your stack wisely.",
     "cta":"Follow for daily ML breakdowns","accent_color":"cyan"}}"""
 
@@ -389,6 +394,13 @@ DESIGN RULES (non-negotiable):
 - Extract the single most dramatic number for MetricFocus.hero.value.
 - On ComparisonSplit: left=worse/before (red), right=better/after (green).
 - On PipelineFlow: mark the bottleneck step with state "bottleneck".
+- PipelineFlow with ≥ 5 steps MUST use flow_direction "vertical" — horizontal overflows.
+- PipelineFlow step labels: ≤ 12 chars, single word or short abbreviation, no spaces.
+- MetricItem label and value: ≤ 8 chars each. Use compact tokens, not full words.
+  BAD: "Improvement", "Claude Code"  GOOD: "improve", "δ+3.2%", "Code+"
+- section_label: ALL CAPS, 2–4 words describing the visual frame.
+  GOOD: "THE BOTTLENECK", "BEFORE vs AFTER", "THE FIX", "TAKEAWAY"
+  BAD:  "adamax.ai", "takeaway", "Experiment Setup"
 - Do NOT use TakeawayScene on any beat except the last.
 
 OUTPUT (exact JSON, no markdown fences, no extra fields):
@@ -404,14 +416,27 @@ def _sanitize_payload(data: dict) -> dict:
     """
     Truncate strings that would fail length validation rather than rejecting the
     whole beat. Called after JSON parse, before validation.
-    Covers MetricItem label/value, hero value/label, and chip strings.
+
+    Truncation is word-boundary-aware:
+      - If the string has a space before the limit, cut there (no mid-word break).
+      - If the string is one long token (no spaces), cut with an ellipsis so the
+        result looks intentional rather than misspelled.
     """
-    MAX_METRIC = 10   # _check_metric allows > 10 → error; we cap at 10
-    MAX_CHIP   = 16
+    MAX_METRIC   = 8   # MetricItem label + value: ≤ 8 chars (renders at 60-220px)
+    MAX_CHIP     = 16
+    MAX_STEP_LBL = 12  # PipelineFlow step labels (renders at 26px)
 
     def _trunc(s: str, n: int) -> str:
-        s = str(s)
-        return s[:n] if len(s) > n else s
+        s = str(s).strip()
+        if len(s) <= n:
+            return s
+        short     = s[:n]
+        last_space = short.rfind(" ")
+        if last_space > n // 2:
+            # Word boundary is in the second half of the limit — use it.
+            return short[:last_space]
+        # No good word boundary — truncate with ellipsis so it doesn't look like a typo.
+        return s[:n - 1] + "…"
 
     def _sanitize_metric(m: dict) -> dict:
         if not isinstance(m, dict):
@@ -439,7 +464,7 @@ def _sanitize_payload(data: dict) -> dict:
                     hero["label"] = _trunc(hero["label"], MAX_METRIC)
             d["chips"] = [_trunc(c, MAX_CHIP) for c in (d.get("chips") or [])]
 
-        elif kind in ("DataGrid",):
+        elif kind == "DataGrid":
             d["metrics"] = [_sanitize_metric(m) for m in (d.get("metrics") or [])]
 
         elif kind == "ComparisonSplit":
@@ -447,6 +472,15 @@ def _sanitize_payload(data: dict) -> dict:
                 panel = d.get(side)
                 if isinstance(panel, dict):
                     panel["metrics"] = [_sanitize_metric(m) for m in (panel.get("metrics") or [])]
+
+        elif kind == "PipelineFlow":
+            steps = d.get("steps") or []
+            for step in steps:
+                if isinstance(step, dict) and "label" in step:
+                    step["label"] = _trunc(step["label"], MAX_STEP_LBL)
+            # Enforce vertical layout for 5+ steps — horizontal overflows at that count.
+            if len(steps) >= 5 and d.get("flow_direction") == "horizontal":
+                d["flow_direction"] = "vertical"
 
     return data
 

@@ -25,6 +25,11 @@ export const MetricFocus: React.FC<{ data: MetricFocusData }> = ({ data }) => {
   const { opacity: heroOpacity, scale: heroScale } = scaleIn(frame, fps, 8, "hero");
   const ctx = slideUp(frame, fps, 28, "crisp");
 
+  // Scale hero font down for values longer than 4 chars so they don't overflow.
+  // 880 / 4 chars = exactly 220px (unchanged for short values like "3.8×", "40%").
+  // 880 / 8 chars = 110px — safe for the 8-char max the schema enforces.
+  const heroFontSize = Math.min(220, Math.floor(880 / Math.max(data.hero.value.length, 1)));
+
   return (
     <div style={{
       padding:        60,
@@ -45,13 +50,16 @@ export const MetricFocus: React.FC<{ data: MetricFocusData }> = ({ data }) => {
         transformOrigin: "left center",
       }}>
         <div style={{
-          fontSize:      220,
+          fontSize:      heroFontSize,
           fontWeight:    800,
           color:         accent,
           lineHeight:    0.9,
           letterSpacing: "-0.04em",
           fontFamily:    FONT,
           textShadow:    `0 0 120px ${accent}25`,
+          maxWidth:      "100%",
+          overflow:      "hidden",
+          whiteSpace:    "nowrap",
         }}>
           {data.hero.value}
         </div>

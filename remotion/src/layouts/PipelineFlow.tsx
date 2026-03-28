@@ -49,13 +49,15 @@ const StepNode: React.FC<{
       justifyContent:"center",
       gap:           6,
       minHeight:     isHoriz ? 110 : 72,
-      minWidth:      isHoriz ? 140 : 0,
-      flex:          isHoriz ? "0 0 auto" : 1,
+      minWidth:      isHoriz ? 80 : 0,
+      flex:          isHoriz ? "1 1 0" : 1,
+      overflow:      "hidden",
       boxShadow:     step.state !== "idle" ? `0 0 28px ${s.glow}` : undefined,
       boxSizing:     "border-box",
     }}>
       <div style={{ fontSize: 26, fontWeight: 600, color: s.text, fontFamily: FONT,
-                    letterSpacing: "0.04em", textAlign: "center" }}>
+                    letterSpacing: "0.04em", textAlign: "center",
+                    wordBreak: "break-word", overflowWrap: "break-word", maxWidth: "100%" }}>
         {step.label}
       </div>
       {step.sublabel && (
