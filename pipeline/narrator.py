@@ -94,14 +94,26 @@ No markdown, no extra text.
 
 def generate_segmented_script(topic: dict, script: dict) -> dict:
     # content_generator.py writes spoken_narration.json with the exact segment
-    # keys narrator needs for TTS. If it exists, skip the LLM rewrite entirely —
-    # the narration is already anti-bloat validated by Pydantic.
+    # keys narrator needs for TTS. Only use it if the key set matches what the
+    # current script requires — stale files from a different pipeline mode or a
+    # different bullet count would cause a beat/timing mismatch downstream.
     _spoken_path = os.path.join(os.path.dirname(__file__), "..", "output", "spoken_narration.json")
     if os.path.exists(_spoken_path):
         with open(_spoken_path) as _f:
             _spoken = json.load(_f)
-        print("[narrator] spoken_narration.json found — skipping LLM rewrite step.")
-        return _spoken
+        n_bullets = len(script.get("concept_bullets", []))
+        _expected_keys = set(
+            ["hook"] + [f"concept_{i+1}" for i in range(n_bullets)] + ["takeaway_cta"]
+        )
+        if set(_spoken.keys()) == _expected_keys:
+            print("[narrator] spoken_narration.json matches script — skipping LLM rewrite step.")
+            return _spoken
+        else:
+            print(
+                f"[narrator] spoken_narration.json key mismatch "
+                f"(have {sorted(_spoken.keys())}, need {sorted(_expected_keys)}) "
+                f"— falling through to LLM rewrite."
+            )
 
     import re as _re
     prompt = build_narration_prompt(topic, script)

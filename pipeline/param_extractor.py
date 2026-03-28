@@ -398,6 +398,59 @@ Return ONLY valid JSON. No explanation. No markdown.
 """
 
 
+# ── Sanitizer — truncates instead of rejecting ───────────────────────────────
+
+def _sanitize_payload(data: dict) -> dict:
+    """
+    Truncate strings that would fail length validation rather than rejecting the
+    whole beat. Called after JSON parse, before validation.
+    Covers MetricItem label/value, hero value/label, and chip strings.
+    """
+    MAX_METRIC = 10   # _check_metric allows > 10 → error; we cap at 10
+    MAX_CHIP   = 16
+
+    def _trunc(s: str, n: int) -> str:
+        s = str(s)
+        return s[:n] if len(s) > n else s
+
+    def _sanitize_metric(m: dict) -> dict:
+        if not isinstance(m, dict):
+            return m
+        if "label" in m:
+            m["label"] = _trunc(m["label"], MAX_METRIC)
+        if "value" in m:
+            m["value"] = _trunc(m["value"], MAX_METRIC)
+        return m
+
+    for beat_key, payload in data.items():
+        if not isinstance(payload, dict):
+            continue
+        d = payload.get("data", {})
+        if not isinstance(d, dict):
+            continue
+        kind = d.get("layout", "")
+
+        if kind == "MetricFocus":
+            hero = d.get("hero")
+            if isinstance(hero, dict):
+                if "value" in hero:
+                    hero["value"] = _trunc(hero["value"], MAX_METRIC)
+                if "label" in hero:
+                    hero["label"] = _trunc(hero["label"], MAX_METRIC)
+            d["chips"] = [_trunc(c, MAX_CHIP) for c in (d.get("chips") or [])]
+
+        elif kind in ("DataGrid",):
+            d["metrics"] = [_sanitize_metric(m) for m in (d.get("metrics") or [])]
+
+        elif kind == "ComparisonSplit":
+            for side in ("left", "right"):
+                panel = d.get(side)
+                if isinstance(panel, dict):
+                    panel["metrics"] = [_sanitize_metric(m) for m in (panel.get("metrics") or [])]
+
+    return data
+
+
 # ── JSON extraction ───────────────────────────────────────────────────────────
 
 def _extract_json(raw: str) -> dict:
@@ -428,15 +481,22 @@ def main():
     with open(SCENE_PLAN_PATH) as f:
         scene_plan = json.load(f)
 
-    beats    = scene_plan.get("beats", [])
-    prompt   = build_prompt(topic, script, scene_plan)
-    last_err = None
+    beats      = scene_plan.get("beats", [])
+    prompt     = build_prompt(topic, script, scene_plan)
+    last_err   = None
     params: dict = {}
+    correction = ""   # injected into retry prompt after first failure
 
     for attempt in range(1, 4):
         try:
-            raw  = claude_client.call(prompt, stage="param_extractor", json_mode=True)
+            retry_prompt = prompt if not correction else (
+                prompt + f"\n\nCORRECTION (attempt {attempt}/3 — fix these before responding):\n{correction}"
+            )
+            raw  = claude_client.call(retry_prompt, stage="param_extractor", json_mode=True)
             data = _extract_json(raw)
+
+            # Sanitize string lengths in-place (truncate rather than reject)
+            data = _sanitize_payload(data)
 
             all_errors: list[str] = []
             for beat in beats:
@@ -449,6 +509,7 @@ def main():
                     all_errors += [f"{key}: {e}" for e in errs]
 
             if all_errors:
+                correction = "\n".join(f"- {e}" for e in all_errors)
                 raise ValueError(f"Validation errors: {all_errors}")
 
             params   = data
