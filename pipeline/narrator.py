@@ -93,6 +93,16 @@ No markdown, no extra text.
 
 
 def generate_segmented_script(topic: dict, script: dict) -> dict:
+    # content_generator.py writes spoken_narration.json with the exact segment
+    # keys narrator needs for TTS. If it exists, skip the LLM rewrite entirely —
+    # the narration is already anti-bloat validated by Pydantic.
+    _spoken_path = os.path.join(os.path.dirname(__file__), "..", "output", "spoken_narration.json")
+    if os.path.exists(_spoken_path):
+        with open(_spoken_path) as _f:
+            _spoken = json.load(_f)
+        print("[narrator] spoken_narration.json found — skipping LLM rewrite step.")
+        return _spoken
+
     import re as _re
     prompt = build_narration_prompt(topic, script)
     last_err = None

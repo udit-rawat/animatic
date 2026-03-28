@@ -8,6 +8,10 @@ load_dotenv()
 
 STAGES = ["scraper", "ranker", "scripter", "verifier", "scene_planner", "narrator", "word_aligner", "param_extractor", "animator", "notifier"]
 
+# Single-shot pipeline: replaces scripter+verifier+scene_planner+param_extractor
+# with one Pydantic-validated call. Activate with --single-shot.
+STAGES_SINGLE_SHOT = ["scraper", "ranker", "content_generator", "narrator", "word_aligner", "animator", "notifier"]
+
 
 def apply_provider(provider: str, model: str | None):
     """
@@ -59,6 +63,8 @@ def run_stage(name: str):
         from pipeline.scraper import main
     elif name == "ranker":
         from pipeline.ranker import main
+    elif name == "content_generator":
+        from pipeline.content_generator import main
     elif name == "scripter":
         from pipeline.scripter import main
     elif name == "animator":
@@ -120,6 +126,14 @@ def main():
         help=(
             "Run the full pipeline, pause at animator with NO timeout. "
             "Copy the prompt to Claude chat, get the code, then: pbpaste > output/handoff_animator_output.txt"
+        ),
+    )
+    parser.add_argument(
+        "--single-shot",
+        action="store_true",
+        help=(
+            "Use content_generator instead of scripter+verifier+scene_planner+param_extractor. "
+            "Single Pydantic-validated LLM call — anti-bloat narration + structured visuals."
         ),
     )
     parser.add_argument(
@@ -201,7 +215,15 @@ def main():
         except Exception:
             pass  # quota check is non-critical — never block the pipeline
 
-    stages_to_run = [args.stage] if args.stage else STAGES
+    if getattr(args, "single_shot", False):
+        os.environ["PIPELINE_MODE"] = "single_shot"
+
+    if args.stage:
+        stages_to_run = [args.stage]
+    elif getattr(args, "single_shot", False):
+        stages_to_run = STAGES_SINGLE_SHOT
+    else:
+        stages_to_run = STAGES
     run_type = args.stage if args.stage else "full"
 
     # Record run start (Gemini-only — other providers don't have quota concerns)
