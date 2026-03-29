@@ -251,8 +251,10 @@ class VideoPayload(BaseModel):
 # ══════════════════════════════════════════════════════════════════════════════
 
 SYSTEM_PROMPT = textwrap.dedent("""
-    You are a Senior Staff ML Engineer writing a 60-second explainer for TikTok / Shorts.
-    Your audience: L5-L7 engineers who will stop scrolling the instant they sense padding.
+    You are writing a 60-second AI explainer for Instagram Reels / YouTube Shorts.
+    Your audience: anyone technically curious — from a Python developer who has never touched ML
+    to a seasoned data scientist who wants a sharp refresher. Write so both can follow.
+    The non-expert must understand the WHAT. The expert must feel the WHY is worth their time.
 
     ═══════════════════════════════════════════════════════
      VOICE  —  TL;DR to a smart colleague, not a lecture
@@ -558,32 +560,52 @@ def _build_params_json(payload: VideoPayload) -> dict:
     Beat structure (always 4 beats for this 4-segment narration design):
         beat_1: MetricFocus    ← hook — hero number teaser
         beat_2: <layout_mode>  ← main concept visual
-        beat_3: <layout_mode>  ← (same data, second concept segment persists it)
+        beat_3: KineticBridge  ← insight keywords — never a duplicate of beat_2
         beat_4: TakeawayScene  ← outro
     """
     ui   = payload.ui_content
-    data = ui.model_dump()  # already has correct `layout` field
+    data = ui.model_dump()
     anim = _LAYOUT_TO_ANIMATE_IN.get(ui.layout, "spring_in")
 
-    # Hook beat: always a stripped-down MetricFocus teaser
+    # Hook beat: section_label describes the visual content, never the pipeline stage.
+    # Use the topic's section_label (e.g. "VOXEL SCALE") not "THE HOOK".
+    hook_section = ui.section_label  # already topical from LLM
     if isinstance(ui, MetricUIContent):
         hook_data = data.copy()
-        hook_data["section_label"] = "THE HOOK"
+        hook_data["section_label"] = hook_section
     else:
-        # For comparison/pipeline topics, show first metric panel as hook teaser
         hook_data = {
             "layout":        "MetricFocus",
-            "section_label": "THE HOOK",
-            "hero":          {"value": "?", "label": ui.section_label, "color": "cyan"},
+            "section_label": hook_section,
+            "hero":          {"value": "?", "label": ui.section_label[:10], "color": "cyan"},
             "context":       payload.narration.hook,
             "chips":         [ui.section_label[:16]],
         }
 
+    # Beat_3: KineticBridge — pull 3-4 key terms from the insight narration so
+    # the screen is never a duplicate of beat_2. Words must be ≤ 20 chars each.
+    insight_words = [
+        w.strip(".,;:?!\"'") for w in payload.narration.insight.split()
+        if len(w) >= 5 and w[0].isupper()
+    ]
+    # Fallback to first significant nouns if nothing is capitalised mid-sentence
+    if len(insight_words) < 2:
+        insight_words = [
+            w.strip(".,;:?!\"'") for w in payload.narration.insight.split()
+            if len(w) >= 6
+        ]
+    bridge_keywords = [w[:20] for w in insight_words[:4]] or ["key insight", "think about it"]
+
+    # TakeawayScene headline: cut at first sentence boundary to avoid mid-sentence
+    # truncation with "…". Fall back to first 16 words, no ellipsis appended.
     headline = payload.narration.takeaway
-    # Trim to ≤ 14 words for TakeawayScene
+    if "." in headline:
+        first_sentence = headline.split(".")[0].strip()
+        if 4 <= len(first_sentence.split()) <= 18:
+            headline = first_sentence
     words = headline.split()
-    if len(words) > 14:
-        headline = " ".join(words[:14]) + "…"
+    if len(words) > 16:
+        headline = " ".join(words[:16])
 
     return {
         "beat_1": {
@@ -595,8 +617,13 @@ def _build_params_json(payload: VideoPayload) -> dict:
             "data": data,
         },
         "beat_3": {
-            "animate_in": "none",   # camera already here — no re-entrance
-            "data": data,
+            "animate_in": "fade",
+            "data": {
+                "layout":        "KineticBridge",
+                "section_label": ui.section_label,
+                "keywords":      bridge_keywords,
+                "accent_color":  "cyan",
+            },
         },
         "beat_4": {
             "animate_in": "none",
@@ -619,7 +646,7 @@ def _build_scene_plan() -> dict:
         "beats": [
             {"beat": 1, "template": "hook"},
             {"beat": 2, "template": "stats_grid"},
-            {"beat": 3, "template": "stats_grid"},
+            {"beat": 3, "template": "bridge"},
             {"beat": 4, "template": "takeaway"},
         ]
     }

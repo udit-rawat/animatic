@@ -29,10 +29,11 @@ VOICE_NAME = os.environ.get("TTS_VOICE", "Puck")   # Puck = fast-paced, energeti
 # Gemini 2.5 TTS reads this and physically alters pacing/delivery.
 # Change the style here to reshape the whole video's voice character.
 VOICE_DIRECTIVE = (
-    "Say this in the tone of a Senior ML Engineer talking to a colleague. "
-    "Dry, highly technical, slightly cynical, and matter-of-fact. "
-    "Do NOT overact. Speak at a steady, flat pace. "
-    "Do not sound like an announcer or a YouTuber. "
+    "Speak like a sharp, curious person explaining something genuinely interesting to a friend. "
+    "Clear and direct — no jargon without a quick explanation, no padding, no hype. "
+    "The listener might be a Python developer, a data analyst, or just a tech-curious person. "
+    "Energetic but grounded. Fast enough to feel urgent, slow enough to land each idea. "
+    "Do not sound like a lecturer or a YouTuber. "
 )
 
 

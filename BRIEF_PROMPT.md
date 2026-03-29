@@ -1,7 +1,8 @@
 # adamax content brief — paste this into any LLM
 
 You are generating a technical brief for a 60-second short-form AI explainer video.
-The audience is ML engineers and AI practitioners — from curious beginners to senior engineers.
+The audience ranges from Python developers with no ML background to senior data scientists.
+The non-expert must understand the WHAT. The expert must feel the WHY is worth their time.
 The video will be posted on Instagram Reels / YouTube Shorts.
 
 ---
@@ -31,7 +32,7 @@ The brief must contain:
 The brief must NOT contain:
 - Hype words: "revolutionary", "game-changing", "groundbreaking", "incredible"
 - Vague claims with no numbers attached
-- Beginner-level analogies
+- Unexplained jargon — if you use a technical term, define it in one clause
 - Anything that cannot be verified from a paper, benchmark, or official repo
 
 Target length: 80–120 words. Dense. Every sentence must carry a fact.
