@@ -567,12 +567,28 @@ def _build_params_json(payload: VideoPayload) -> dict:
     data = ui.model_dump()
     anim = _LAYOUT_TO_ANIMATE_IN.get(ui.layout, "spring_in")
 
-    # Hook beat: section_label describes the visual content, never the pipeline stage.
-    # Use the topic's section_label (e.g. "VOXEL SCALE") not "THE HOOK".
-    hook_section = ui.section_label  # already topical from LLM
+    hook_section = ui.section_label
+
+    # beat_1: always MetricFocus — the hook number.
+    # beat_2: always the LLM-chosen layout (ComparisonSplit / PipelineFlow / DataGrid).
+    #         For MetricFocus topics, synthesise a DataGrid from context + chips so
+    #         beat_2 is VISUALLY DIFFERENT from beat_1 — no duplicate screens.
     if isinstance(ui, MetricUIContent):
         hook_data = data.copy()
-        hook_data["section_label"] = hook_section
+        # beat_2 for MetricFocus: DataGrid with supporting metrics derived from chips + context
+        chip_metrics = [
+            {"label": c[:8], "value": "—", "color": "cyan"}
+            for c in (ui.chips or [])[:3]
+        ]
+        if not chip_metrics:
+            chip_metrics = [{"label": "detail", "value": "—", "color": "cyan"}]
+        beat2_data = {
+            "layout":          "DataGrid",
+            "section_label":   hook_section,
+            "metrics":         chip_metrics,
+            "highlight_index": 0,
+            "caption":         ui.context[:80] if ui.context else "",
+        }
     else:
         hook_data = {
             "layout":        "MetricFocus",
@@ -581,23 +597,23 @@ def _build_params_json(payload: VideoPayload) -> dict:
             "context":       payload.narration.hook,
             "chips":         [ui.section_label[:16]],
         }
+        beat2_data = data
 
-    # Beat_3: KineticBridge — pull 3-4 key terms from the insight narration so
-    # the screen is never a duplicate of beat_2. Words must be ≤ 20 chars each.
-    insight_words = [
-        w.strip(".,;:?!\"'") for w in payload.narration.insight.split()
-        if len(w) >= 5 and w[0].isupper()
-    ]
-    # Fallback to first significant nouns if nothing is capitalised mid-sentence
-    if len(insight_words) < 2:
-        insight_words = [
-            w.strip(".,;:?!\"'") for w in payload.narration.insight.split()
-            if len(w) >= 6
-        ]
-    bridge_keywords = [w[:20] for w in insight_words[:4]] or ["key insight", "think about it"]
+    # beat_3: KineticBridge — 3-4 meaningful keywords from the insight block.
+    # Prefer longer content words; skip stop words and very short tokens.
+    _stop = {"this", "that", "with", "from", "they", "their", "about", "which",
+             "will", "have", "been", "into", "your", "more", "also", "when",
+             "these", "than", "both", "just", "now"}
+    bridge_keywords = [
+        w.strip(".,;:?!\"'()") for w in payload.narration.insight.split()
+        if len(w.strip(".,;:?!\"'()")) >= 5
+        and w.strip(".,;:?!\"'()").lower() not in _stop
+    ][:4]
+    if len(bridge_keywords) < 2:
+        bridge_keywords = ["key insight", "think about it"]
+    bridge_keywords = [w[:20] for w in bridge_keywords]
 
-    # TakeawayScene headline: cut at first sentence boundary to avoid mid-sentence
-    # truncation with "…". Fall back to first 16 words, no ellipsis appended.
+    # TakeawayScene headline: first complete sentence, ≤ 16 words, no ellipsis.
     headline = payload.narration.takeaway
     if "." in headline:
         first_sentence = headline.split(".")[0].strip()
@@ -613,14 +629,14 @@ def _build_params_json(payload: VideoPayload) -> dict:
             "data": hook_data,
         },
         "beat_2": {
-            "animate_in": anim,
-            "data": data,
+            "animate_in": "spring_in",
+            "data": beat2_data,
         },
         "beat_3": {
             "animate_in": "fade",
             "data": {
                 "layout":        "KineticBridge",
-                "section_label": ui.section_label,
+                "section_label": hook_section,
                 "keywords":      bridge_keywords,
                 "accent_color":  "cyan",
             },

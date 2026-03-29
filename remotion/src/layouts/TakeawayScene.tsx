@@ -72,17 +72,11 @@ const WordReveal: React.FC<{
     // fontSize — so 0.3em at fontSize:68 = ~20px, correct word spacing.
     <div style={{ display: "flex", flexWrap: "wrap", lineHeight: 1.3 }}>
       {words.map((word, i) => {
-        const delay    = baseDelay + i * 5;
+        const delay    = baseDelay + i * 3;  // tighter stagger for Reels pace
         const progress = spring({
           frame: Math.max(0, frame - delay),
           fps,
-          // BUG FIX: bounce-up spring.
-          // Old: damping:24, stiffness:160, translateY from 28px — barely perceptible.
-          // New: damping:18 (less resistance → real oscillation past rest),
-          //      stiffness:220 (snappier initial velocity),
-          //      translateY from 120px (comes from further below).
-          // overshootClamping:false lets it spring past 0 → genuine bounce.
-          config: { damping: 18, stiffness: 220, overshootClamping: false },
+          config: { damping: 22, stiffness: 280, overshootClamping: true },
         });
         const isLast = i === words.length - 1;
         return (
@@ -147,7 +141,7 @@ export const TakeawayScene: React.FC<{
 
   // ── Card entrance (spring slide-up) ─────────────────────────────────────────
   const cardEntry = spring({ frame: Math.max(0, frame), fps,
-    config: { damping: 28, stiffness: 160, overshootClamping: false } });
+    config: { damping: 32, stiffness: 220, overshootClamping: true } });
   const cardOpacity    = interpolate(cardEntry, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
   const cardTranslateY = interpolate(cardEntry, [0, 1], [44, 0]);
 
