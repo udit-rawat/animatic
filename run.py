@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 
@@ -12,33 +13,33 @@ STAGES = ["scraper", "ranker", "scripter", "verifier", "scene_planner", "narrato
 # with one Pydantic-validated call. Activate with --single-shot.
 STAGES_SINGLE_SHOT = ["scraper", "ranker", "content_generator", "narrator", "word_aligner", "animator", "notifier"]
 
+# Custom pipeline: skips scraper+ranker entirely — topic comes from CLI.
+STAGES_CUSTOM = ["content_generator", "narrator", "word_aligner", "animator", "notifier"]
+
+OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), "output")
+TOPIC_PATH  = os.path.join(OUTPUT_DIR, "topic.json")
+SCRIPT_PATH = os.path.join(OUTPUT_DIR, "script.json")
+PARAMS_PATH = os.path.join(OUTPUT_DIR, "params.json")
+
 
 def apply_provider(provider: str, model: str | None):
-    """
-    Sets FORCE_PROVIDER env var so claude_client uses the right LLM backend.
-    Does NOT pop GEMINI_API_KEY — narrator TTS always needs it regardless of provider.
-    """
     if provider == "claude":
         os.environ["FORCE_PROVIDER"] = "claude"
-
     elif provider == "openrouter":
         if not os.environ.get("OPENROUTER_API_KEY"):
             print("[ERROR] --provider openrouter requires OPENROUTER_API_KEY in .env", file=sys.stderr)
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "openrouter"
-
     elif provider == "gemini":
         if not os.environ.get("GEMINI_API_KEY"):
             print("[ERROR] --provider gemini requires GEMINI_API_KEY in .env", file=sys.stderr)
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "gemini"
-
     elif provider == "anthropic":
         if not os.environ.get("ANTHROPIC_API_KEY"):
             print("[ERROR] --provider anthropic requires ANTHROPIC_API_KEY in .env", file=sys.stderr)
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "anthropic"
-
     elif provider == "handoff":
         os.environ["FORCE_PROVIDER"] = "handoff"
 
@@ -53,6 +54,99 @@ def _is_gemini_active() -> bool:
     if force:
         return force == "gemini"
     return bool(os.environ.get("GEMINI_API_KEY"))
+
+
+def _write_custom_topic(title: str, summary: str):
+    """Write a topic.json from CLI args, bypassing scraper + ranker."""
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    topic = {
+        "title":      title,
+        "summary":    summary,
+        "source":     "custom",
+        "why_picked": "Provided via --custom flag.",
+    }
+    with open(TOPIC_PATH, "w") as f:
+        json.dump(topic, f, indent=2)
+    print(f"[custom] topic.json written → {title}")
+
+
+def _intervention_checkpoint() -> bool:
+    """
+    Print script + beat layout plan, ask user to confirm before TTS + render.
+    Returns True to continue, False to abort.
+    """
+    print("\n" + "═" * 60)
+    print("  INTERVENTION CHECKPOINT")
+    print("═" * 60)
+
+    # Topic
+    if os.path.exists(TOPIC_PATH):
+        with open(TOPIC_PATH) as f:
+            topic = json.load(f)
+        print(f"\n  TOPIC : {topic.get('title', '?')}\n")
+
+    # Narration
+    spoken_path = os.path.join(OUTPUT_DIR, "spoken_narration.json")
+    script_path = SCRIPT_PATH
+    if os.path.exists(spoken_path):
+        with open(spoken_path) as f:
+            spoken = json.load(f)
+        print("  NARRATION:")
+        for key, text in spoken.items():
+            label = key.upper().replace("_", " ")
+            # word-wrap at 56 chars
+            words, line, lines = text.split(), "", []
+            for w in words:
+                if len(line) + len(w) + 1 > 56:
+                    lines.append(line)
+                    line = w
+                else:
+                    line = (line + " " + w).strip()
+            if line:
+                lines.append(line)
+            print(f"    [{label}]")
+            for l in lines:
+                print(f"      {l}")
+            print()
+    elif os.path.exists(script_path):
+        with open(script_path) as f:
+            script = json.load(f)
+        print(f"  HOOK    : {script.get('hook', '')}")
+        for i, b in enumerate(script.get("concept_bullets", []), 1):
+            print(f"  BULLET {i}: {b}")
+        print(f"  TAKEAWAY: {script.get('takeaway', '')}\n")
+
+    # Beat layouts
+    if os.path.exists(PARAMS_PATH):
+        with open(PARAMS_PATH) as f:
+            params = json.load(f)
+        print("  BEAT LAYOUTS:")
+        for beat_key in sorted(params):
+            d = params[beat_key].get("data", {})
+            layout = d.get("layout", "?")
+            label  = d.get("section_label", "")
+            extra  = ""
+            if layout == "MetricFocus":
+                hero = d.get("hero", {})
+                extra = f"  hero={hero.get('value','?')} {hero.get('label','')}"
+            elif layout == "PipelineFlow":
+                steps = d.get("steps", [])
+                extra = f"  steps={len(steps)} dir={d.get('flow_direction','?')}"
+            elif layout == "ComparisonSplit":
+                lh = d.get("left",  {}).get("heading", "?")
+                rh = d.get("right", {}).get("heading", "?")
+                extra = f"  {lh} vs {rh}"
+            elif layout == "TakeawayScene":
+                extra = f"  \"{d.get('headline', '')[:50]}\""
+            print(f"    {beat_key}: {layout} [{label}]{extra}")
+
+    print("\n" + "═" * 60)
+    try:
+        ans = input("  Continue to TTS + render? [y/n] → ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        ans = "n"
+    print("═" * 60 + "\n")
+    return ans == "y"
 
 
 def run_stage(name: str):
@@ -88,73 +182,42 @@ def run_stage(name: str):
 
 def main():
     parser = argparse.ArgumentParser(description="adamax-content-engine pipeline")
-    parser.add_argument(
-        "--stage",
-        choices=STAGES,
-        help="Run a single stage instead of the full pipeline",
-    )
+    parser.add_argument("--stage", choices=STAGES, help="Run a single stage")
     parser.add_argument(
         "--provider",
         choices=["claude", "openrouter", "anthropic", "gemini", "handoff"],
+    )
+    parser.add_argument("--model", help="Override OpenRouter model for all stages")
+    parser.add_argument("--handoff-animator", action="store_true")
+    parser.add_argument("--hop", action="store_true")
+    parser.add_argument("--single-shot", action="store_true")
+    parser.add_argument(
+        "--gemini", action="store_true",
+        help="Run full pipeline on Gemini only (gemini-2.5-flash-lite).",
+    )
+    parser.add_argument("--check-quota", action="store_true")
+    parser.add_argument("--rca", action="store_true")
+
+    # ── Custom content path ───────────────────────────────────────────────────
+    parser.add_argument(
+        "--custom", action="store_true",
         help=(
-            "LLM provider to use. "
-            "gemini = Gemini API, free tier (needs GEMINI_API_KEY). "
-            "claude = Claude Code CLI session (default, no key needed). "
-            "openrouter = free/cheap models via OpenRouter (needs OPENROUTER_API_KEY). "
-            "anthropic = Anthropic SDK (needs ANTHROPIC_API_KEY)."
+            "Skip scraper + ranker. Provide topic via --title and --summary. "
+            "Runs single-shot content_generator directly."
         ),
     )
+    parser.add_argument("--title",   default="", help="Topic title (required with --custom)")
+    parser.add_argument("--summary", default="", help="Topic summary or context (used with --custom)")
+
+    # ── Intervention checkpoint ───────────────────────────────────────────────
     parser.add_argument(
-        "--model",
+        "--checkpoint", action="store_true",
         help=(
-            "Override the OpenRouter model for all stages "
-            "(e.g. deepseek/deepseek-r1:free). "
-            "Only applies with --provider openrouter."
+            "Pause after content generation, print script + beat layout plan, "
+            "and ask for confirmation before TTS + render."
         ),
     )
-    parser.add_argument(
-        "--handoff-animator",
-        action="store_true",
-        help=(
-            "Run the full pipeline with Gemini except the animator stage, "
-            "which pauses and waits for you to paste the prompt into a Claude session."
-        ),
-    )
-    parser.add_argument(
-        "--hop",
-        action="store_true",
-        help=(
-            "Run the full pipeline, pause at animator with NO timeout. "
-            "Copy the prompt to Claude chat, get the code, then: pbpaste > output/handoff_animator_output.txt"
-        ),
-    )
-    parser.add_argument(
-        "--single-shot",
-        action="store_true",
-        help=(
-            "Use content_generator instead of scripter+verifier+scene_planner+param_extractor. "
-            "Single Pydantic-validated LLM call — anti-bloat narration + structured visuals."
-        ),
-    )
-    parser.add_argument(
-        "--gemini",
-        action="store_true",
-        help=(
-            "Run the full pipeline end-to-end on Gemini only. "
-            "Uses gemini-2.5-flash-lite for all stages. "
-            "No handoff, no OpenRouter, fully automated."
-        ),
-    )
-    parser.add_argument(
-        "--check-quota",
-        action="store_true",
-        help="Show Gemini daily quota status and exit (no pipeline run).",
-    )
-    parser.add_argument(
-        "--rca",
-        action="store_true",
-        help="Show day-level run audit + root cause analysis for quota spend, then exit.",
-    )
+
     args = parser.parse_args()
 
     if args.gemini:
@@ -162,7 +225,6 @@ def main():
             print("[ERROR] --gemini requires GEMINI_API_KEY or GEMINI_API_KEYS in .env", file=sys.stderr)
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "gemini"
-        # Set stage-optimal models (overridable via .env)
         os.environ.setdefault("GEMINI_MODEL_RANKER",          "gemini-2.5-flash-lite")
         os.environ.setdefault("GEMINI_MODEL_SCRIPTER",        "gemini-2.5-flash-lite")
         os.environ.setdefault("GEMINI_MODEL_VERIFIER",         "gemini-2.5-flash-lite")
@@ -176,12 +238,10 @@ def main():
 
     if args.handoff_animator:
         os.environ["FORCE_PROVIDER_ANIMATOR"] = "handoff"
-
     if args.hop:
         os.environ["FORCE_PROVIDER_ANIMATOR"] = "handoff"
         os.environ["HANDOFF_HOP_MODE"] = "1"
 
-    # ── Quota / RCA check ─────────────────────────────────────────────────────
     if args.check_quota:
         from pipeline.quota import print_status
         print_status(verbose=True)
@@ -193,6 +253,14 @@ def main():
         print_rca()
         return
 
+    # ── Custom mode: validate + write topic.json ──────────────────────────────
+    if args.custom:
+        if not args.title:
+            print("[ERROR] --custom requires --title", file=sys.stderr)
+            sys.exit(1)
+        _write_custom_topic(args.title, args.summary)
+        os.environ["PIPELINE_MODE"] = "single_shot"
+
     from pipeline.logger import setup as log_setup
     log = log_setup()
 
@@ -201,8 +269,6 @@ def main():
     log.info(f"Pipeline starting — LLM mode: {mode}")
     print(f"\n🔧 LLM mode: {mode}\n")
 
-    # Auto-print quota status before a Gemini full-pipeline run so the user
-    # knows upfront if they're likely to hit the daily limit mid-run.
     if _is_gemini_active() and not args.stage:
         try:
             from pipeline.quota import print_status, get_status
@@ -210,23 +276,30 @@ def main():
             s = get_status()
             if not s["can_run_minimal"]:
                 print("[ERROR] Gemini quota too low to attempt a full run.", file=sys.stderr)
-                print("        Run with --provider openrouter as a fallback.", file=sys.stderr)
                 sys.exit(1)
         except Exception:
-            pass  # quota check is non-critical — never block the pipeline
+            pass
 
     if getattr(args, "single_shot", False):
         os.environ["PIPELINE_MODE"] = "single_shot"
 
+    # ── Stage selection ───────────────────────────────────────────────────────
     if args.stage:
         stages_to_run = [args.stage]
+    elif args.custom:
+        stages_to_run = STAGES_CUSTOM
     elif getattr(args, "single_shot", False):
         stages_to_run = STAGES_SINGLE_SHOT
     else:
         stages_to_run = STAGES
     run_type = args.stage if args.stage else "full"
 
-    # Record run start (Gemini-only — other providers don't have quota concerns)
+    # Checkpoint fires after content generation, before TTS + render.
+    # Content stages = everything up to and including content_generator /
+    # param_extractor. Post-content stages = narrator onwards.
+    POST_CONTENT = {"narrator", "word_aligner", "animator", "notifier"}
+    checkpoint_needed = args.checkpoint and not args.stage
+
     run_id = None
     if _is_gemini_active():
         try:
@@ -237,6 +310,19 @@ def main():
 
     failed_stage = None
     for stage in stages_to_run:
+
+        # ── Intervention checkpoint ───────────────────────────────────────────
+        if checkpoint_needed and stage == "narrator":
+            if not _intervention_checkpoint():
+                print("\n[checkpoint] Aborted by user — TTS + render skipped.")
+                if run_id is not None:
+                    try:
+                        from pipeline.quota import end_run
+                        end_run(run_id, outcome="aborted", failed_stage="checkpoint")
+                    except Exception:
+                        pass
+                return
+
         try:
             run_stage(stage)
         except Exception as e:

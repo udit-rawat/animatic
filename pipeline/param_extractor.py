@@ -241,7 +241,6 @@ STATIC_FALLBACK_TREES: dict[str, dict] = {
             "layout":        "TakeawayScene",
             "section_label": "TAKEAWAY",
             "headline":      "Run your own experiments.",
-            "cta":           "Follow for daily ML breakdowns",
             "accent_color":  "cyan",
         },
     },
@@ -256,7 +255,7 @@ _TEMPLATE_HINTS = {
     "pipeline":   "PipelineFlow — 3–5 steps with state idle|active|bottleneck. flow_direction horizontal if ≤ 4 steps, vertical if ≥ 5. Mark bottleneck step.",
     "comparison": "ComparisonSplit — left=before/baseline, right=after/optimised. Each side has heading + 1–3 MetricItems. Use red for worse, green for better.",
     "timeline":   "DataGrid — chronological. label=year/version, value=milestone keyword. highlight_index on most recent.",
-    "takeaway":   "TakeawayScene — headline is the key takeaway ≤ 14 words. cta is optional follow prompt. accent_color cyan|green|yellow.",
+    "takeaway":   "TakeawayScene — headline is the key takeaway ≤ 14 words. Do NOT include a cta field. accent_color cyan|green|yellow.",
 }
 
 _SCHEMA_REFERENCE = """\
@@ -334,7 +333,7 @@ pipeline beat → PipelineFlow:
 takeaway beat → TakeawayScene:
   {"animate_in":"none","data":{"layout":"TakeawayScene","section_label":"TAKEAWAY",
     "headline":"Open weights now beat closed-source. Pick your stack wisely.",
-    "cta":"Follow for daily ML breakdowns","accent_color":"cyan"}}"""
+    "accent_color":"cyan"}}"""
 
 
 def build_prompt(topic: dict, script: dict, scene_plan: dict) -> str:
