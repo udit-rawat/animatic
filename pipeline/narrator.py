@@ -186,6 +186,11 @@ def call_tts(text: str, api_key: str) -> bytes:
         raise _TTSRateLimited() from e   # treat timeout as RPM — rotate to next key
 
     audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+    try:
+        from pipeline import quota as _q
+        _q.record_call("narrator")
+    except Exception:
+        pass
     return base64.b64decode(audio_b64)
 
 

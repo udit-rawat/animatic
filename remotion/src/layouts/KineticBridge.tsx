@@ -12,7 +12,7 @@
  *   Exit:  opacity 1 → 0 over last 10 frames of window.
  *   Next keyword fires immediately after exit.
  *
- * After all keywords cycle, the last one stays dimly on screen (no second black hole).
+ * After all keywords cycle, loops back to the first — perpetual motion for the full beat duration.
  */
 
 import React from "react";
@@ -30,10 +30,9 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
   const accent  = COLOR[data.accent_color ?? "cyan"];
   const kws     = data.keywords;
 
-  // After all keywords played, hold on last one faintly
+  // Loop keywords for the full beat duration — no dead-air hold after last keyword.
   const totalCycleFrames = kws.length * HOLD_FRAMES;
-  const isPostCycle      = frame >= totalCycleFrames;
-  const effectiveFrame   = isPostCycle ? totalCycleFrames - 1 : frame;
+  const effectiveFrame   = frame % totalCycleFrames;
 
   // Ambient drift on the active keyword (0.25 Hz breath, ±1.5% scale)
   const breathScale = 1 + Math.sin((frame / fps) * Math.PI * 2 * 0.25) * 0.015;
@@ -63,12 +62,10 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
       }}>
         {kws.map((kw, i) => {
           const windowStart = i * HOLD_FRAMES;
-          const kwFrame     = effectiveFrame - windowStart; // frame offset within this keyword's window
+          const kwFrame     = effectiveFrame - windowStart;
           const inWindow    = kwFrame >= 0 && kwFrame < HOLD_FRAMES;
-          const isLast      = i === kws.length - 1;
 
-          // Post-cycle: keep last keyword dimly visible
-          if (!inWindow && !(isPostCycle && isLast)) return null;
+          if (!inWindow) return null;
 
           const entryProgress = spring({
             frame: Math.max(0, kwFrame),
@@ -79,19 +76,15 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
           const entryOpacity = interpolate(
             entryProgress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" },
           );
-          const exitOpacity = isPostCycle && isLast
-            ? 0.18  // dim hold after last keyword cycles
-            : interpolate(kwFrame, [EXIT_START, HOLD_FRAMES - 2], [1, 0], {
-                extrapolateLeft: "clamp", extrapolateRight: "clamp",
-              });
+          const exitOpacity = interpolate(kwFrame, [EXIT_START, HOLD_FRAMES - 2], [1, 0], {
+            extrapolateLeft: "clamp", extrapolateRight: "clamp",
+          });
 
-          const scale = isPostCycle && isLast
-            ? 1 * breathScale
-            : interpolate(entryProgress, [0, 1], [0.72, 1.0]) * breathScale;
+          const scale = interpolate(entryProgress, [0, 1], [0.72, 1.0]) * breathScale;
 
           const opacity = entryOpacity * exitOpacity;
 
-          // Colour shifts: accent for first kw, then cycle through palette
+          // Colour cycles per-keyword, loops naturally with frame looping
           const kwColor = i === 0 ? accent
             : i % 3 === 1 ? COLOR.white
             : i % 3 === 2 ? COLOR[data.accent_color === "green" ? "cyan" : "green"]

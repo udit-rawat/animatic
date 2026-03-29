@@ -91,6 +91,16 @@ class MetricUIContent(BaseModel):
         min_length=2, max_length=3,
         description="2-3 short tags ≤ 16 chars each, e.g. ['llama.cpp', 'M5 Max', '32K ctx']",
     )
+    supporting_metrics: list[MetricItem] = Field(
+        default_factory=list,
+        max_length=3,
+        description=(
+            "1-3 additional data points shown alongside the hero in a grid. "
+            "Use only numbers present in the topic summary — do NOT invent values. "
+            "E.g. if summary mentions '14 ms before, 8 ms after', use those as two items. "
+            "Leave empty if the summary contains no other usable numbers."
+        ),
+    )
 
     @field_validator("chips")
     @classmethod
@@ -313,6 +323,11 @@ SYSTEM_PROMPT = textwrap.dedent("""
     • MetricFocus chips: 2-3 tags ≤ 16 chars. These are environment or context tags,
       not summaries: ["M5 Max", "llama.cpp", "32K ctx"] not ["Faster", "Better", "Cheaper"].
 
+    • MetricFocus supporting_metrics: 1-3 real data points from the topic summary shown
+      in a grid below the hero. label ≤ 8 chars, value ≤ 8 chars.
+      GOOD: [{"label":"before","value":"14 ms"},{"label":"after","value":"8 ms"}]
+      BAD:  leave empty or invent numbers not in the summary.
+
     • ComparisonSplit metrics: 2-4 items per panel. label ≤ 8 chars, value ≤ 8 chars.
       Use real numbers from the topic summary. Never invent benchmarks.
 
@@ -405,6 +420,11 @@ def _generate_gemini(topic: dict, max_retries: int) -> VideoPayload:
         response_model=VideoPayload,
         max_retries=max_retries,
     )
+    try:
+        from pipeline import quota as _q
+        _q.record_call("content_generator")
+    except Exception:
+        pass
     return payload
 
 
@@ -569,31 +589,66 @@ def _build_params_json(payload: VideoPayload) -> dict:
 
     hook_section = ui.section_label
 
-    # beat_1: always MetricFocus — the hook number.
-    # beat_2: always the LLM-chosen layout (ComparisonSplit / PipelineFlow / DataGrid).
-    #         For MetricFocus topics, synthesise a DataGrid from context + chips so
-    #         beat_2 is VISUALLY DIFFERENT from beat_1 — no duplicate screens.
+    # beat_1: always MetricFocus — the hook number, sourced from real UI content.
+    # beat_2: DataGrid (MetricFocus) or the LLM layout (Comparison/Pipeline).
+    #         beat_2 is always visually distinct from beat_1.
     if isinstance(ui, MetricUIContent):
         hook_data = data.copy()
-        # beat_2 for MetricFocus: DataGrid with supporting metrics derived from chips + context
-        chip_metrics = [
-            {"label": c[:8], "value": "—", "color": "cyan"}
-            for c in (ui.chips or [])[:3]
+        # beat_2: DataGrid — hero metric + any supporting_metrics the LLM provided
+        hero_card = {
+            "label": ui.hero.label[:8],
+            "value": ui.hero.value[:8],
+            "color": ui.hero.color,
+            "glow":  True,
+        }
+        support_cards = [
+            {"label": m.label[:8], "value": m.value[:8], "color": m.color, "glow": m.glow}
+            for m in ui.supporting_metrics
         ]
-        if not chip_metrics:
-            chip_metrics = [{"label": "detail", "value": "—", "color": "cyan"}]
+        beat2_metrics = [hero_card] + support_cards
+        # Guarantee at least 2 cards so the grid isn't a single orphan cell
+        if len(beat2_metrics) == 1 and ui.chips:
+            beat2_metrics.append({"label": "on", "value": ui.chips[0][:8], "color": "white", "glow": False})
         beat2_data = {
             "layout":          "DataGrid",
             "section_label":   hook_section,
-            "metrics":         chip_metrics,
+            "metrics":         beat2_metrics,
             "highlight_index": 0,
             "caption":         ui.context[:80] if ui.context else "",
         }
+    elif isinstance(ui, ComparisonUIContent):
+        # beat_1: pull the most salient metric from the comparison panels as hero
+        # prefer the panel that represents the "better" outcome (green/cyan)
+        best = ui.right if ui.right.color in ("green", "cyan") else ui.left
+        hero_m = best.metrics[0]
+        hook_data = {
+            "layout":        "MetricFocus",
+            "section_label": hook_section,
+            "hero":          {"value": hero_m.value[:8], "label": hero_m.label[:8], "color": best.color},
+            "context":       payload.narration.hook,
+            "chips":         [ui.left.heading[:16], ui.right.heading[:16]],
+        }
+        beat2_data = data
+    elif isinstance(ui, PipelineUIContent):
+        # beat_1: use bottleneck sublabel as hero (if present), else step count
+        bottleneck = next((s for s in ui.steps if s.state == "bottleneck"), None)
+        hero_value = (bottleneck.sublabel[:8] if bottleneck and bottleneck.sublabel
+                      else f"{len(ui.steps)} steps")
+        hero_label = bottleneck.label[:8] if bottleneck else "pipeline"
+        hook_data = {
+            "layout":        "MetricFocus",
+            "section_label": hook_section,
+            "hero":          {"value": hero_value, "label": hero_label,
+                              "color": "red" if bottleneck else "cyan"},
+            "context":       payload.narration.hook,
+            "chips":         [s.label[:16] for s in ui.steps[:3]],
+        }
+        beat2_data = data
     else:
         hook_data = {
             "layout":        "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": "?", "label": ui.section_label[:10], "color": "cyan"},
+            "hero":          {"value": "—", "label": ui.section_label[:10], "color": "cyan"},
             "context":       payload.narration.hook,
             "chips":         [ui.section_label[:16]],
         }
