@@ -21,8 +21,13 @@ import type { KineticBridgeData } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
 import { COLOR, FONT, SectionLabelRow } from "./_shared";
 
-const HOLD_FRAMES = 44; // 1.47s per keyword @30fps — tweak if needed
-const EXIT_START  = HOLD_FRAMES - 10;
+const HOLD_FRAMES = 44; // full spring window per keyword @30fps
+const EXIT_FRAMES = 10; // fade-out duration at end of window
+const EXIT_START  = HOLD_FRAMES - EXIT_FRAMES; // 34
+
+// Each keyword starts exactly when the previous begins its exit — crossfade overlap,
+// zero dark gap between words. Total cycle = N × EXIT_START (34 frames each).
+const STEP = EXIT_START; // 34
 
 export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) => {
   const frame   = useBeatFrame();
@@ -30,8 +35,7 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
   const accent  = COLOR[data.accent_color ?? "cyan"];
   const kws     = data.keywords;
 
-  // Loop keywords for the full beat duration — no dead-air hold after last keyword.
-  const totalCycleFrames = kws.length * HOLD_FRAMES;
+  const totalCycleFrames = kws.length * STEP;
   const effectiveFrame   = frame % totalCycleFrames;
 
   // Ambient drift on the active keyword (0.25 Hz breath, ±1.5% scale)
@@ -61,8 +65,10 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
         alignItems:     "center",
       }}>
         {kws.map((kw, i) => {
-          const windowStart = i * HOLD_FRAMES;
+          const windowStart = i * STEP;
           const kwFrame     = effectiveFrame - windowStart;
+          // Window spans HOLD_FRAMES so the full spring + exit plays out,
+          // but the next keyword already enters at EXIT_START (crossfade overlap).
           const inWindow    = kwFrame >= 0 && kwFrame < HOLD_FRAMES;
 
           if (!inWindow) return null;
