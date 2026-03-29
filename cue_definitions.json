@@ -1,9 +1,6 @@
 {
-  "_comment": "Static cue definitions — human-editable, version-controlled. Never hardcode frame numbers. This file defines WHAT to look for; build_cue_map() in animator.py resolves WHERE (frame number) each day.",
-
   "segment_cues": [
     {
-      "_comment": "Segment cues fire at segment boundaries from narration_timing.json — always available, no whisper needed.",
       "label": "hook_start",
       "segment": "hook",
       "offset_frames": 0
@@ -19,55 +16,40 @@
       "offset_frames": 0
     },
     {
-      "label": "concept_3_start",
-      "segment": "concept_3",
-      "offset_frames": 0
-    },
-    {
       "label": "takeaway_start",
       "segment": "takeaway_cta",
       "offset_frames": 0
     }
   ],
-
   "word_cues": [
     {
-      "_comment": "Word cues require word_timings.json from word_aligner.py. If absent, these are silently skipped.",
-      "_comment2": "occurrence: 0=first match, 1=second, -1=last. offset_frames: shift trigger earlier (<0) or later (>0).",
-
       "label": "metric_reveal",
-      "trigger_word": "instead",
+      "trigger_word": "70%",
       "occurrence": 0,
-      "offset_frames": -2
+      "offset_frames": -12
     },
     {
-      "label": "before_after_split",
-      "trigger_word": "versus",
+      "label": "context_explain",
+      "trigger_word": "PCA-based",
       "occurrence": 0,
       "offset_frames": 0
+    },
+    {
+      "label": "split_enter",
+      "trigger_word": "20x",
+      "occurrence": 0,
+      "offset_frames": -12
     },
     {
       "label": "insight_drop",
-      "trigger_word": "because",
-      "occurrence": 0,
-      "offset_frames": 0
-    },
-    {
-      "label": "key_number",
-      "trigger_word": "times",
-      "occurrence": 0,
-      "offset_frames": -3
-    },
-    {
-      "label": "bottleneck_reveal",
-      "trigger_word": "bottleneck",
+      "trigger_word": "lossless",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
       "label": "takeaway_flash",
-      "trigger_word": "what",
-      "occurrence": -1,
+      "trigger_word": "overlooking",
+      "occurrence": 0,
       "offset_frames": 0
     }
   ]
