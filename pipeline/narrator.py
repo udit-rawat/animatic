@@ -185,7 +185,14 @@ def call_tts(text: str, api_key: str) -> bytes:
     except (TimeoutError, OSError) as e:
         raise _TTSRateLimited() from e   # treat timeout as RPM — rotate to next key
 
-    audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+    candidate = data.get("candidates", [{}])[0]
+    if "content" not in candidate:
+        finish_reason = candidate.get("finishReason", "UNKNOWN")
+        # RECITATION / transient server hiccup → rotate key and retry
+        # SAFETY → also rotate (different key may succeed; TTS safety is rare for factual text)
+        print(f" [no content: finishReason={finish_reason}]", end="", flush=True)
+        raise _TTSRateLimited()
+    audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
     try:
         from pipeline import quota as _q
         _q.record_call("narrator")
