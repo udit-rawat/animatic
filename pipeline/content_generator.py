@@ -44,9 +44,14 @@ CUES_OUT    = os.path.join(_ROOT, "cue_definitions.json")
 # ══════════════════════════════════════════════════════════════════════════════
 
 class LayoutMode(str, Enum):
-    METRIC     = "metric"
-    COMPARISON = "comparison"
-    PIPELINE   = "pipeline"
+    METRIC      = "metric"
+    COMPARISON  = "comparison"
+    PIPELINE    = "pipeline"
+    TIMELINE    = "timeline"
+    TRISTAT     = "tristat"
+    LEADERBOARD = "leaderboard"
+    BAR         = "bar"
+    CODEDIFF    = "codediff"
 
 
 # ── Shared sub-objects ────────────────────────────────────────────────────────
@@ -132,9 +137,92 @@ class PipelineUIContent(BaseModel):
     )
 
 
+class TimelineMilestone(BaseModel):
+    """One milestone in a TimelineFlow beat."""
+    date:      str  = Field(max_length=12, description="e.g. 'Nov 2025' or 'Day 1'")
+    label:     str  = Field(max_length=20, description="Event name, e.g. 'Peak Downloads'")
+    value:     str | None = Field(default=None, max_length=10, description="Optional metric, e.g. '3.3M'")
+    highlight: bool = Field(default=False, description="Accent this milestone — use for the key inflection point")
+
+
+class TimelineUIContent(BaseModel):
+    """Chronological sequence of 3-5 milestones with optional metrics."""
+    layout:        Literal["TimelineFlow"]
+    section_label: str = Field(max_length=24)
+    items:         list[TimelineMilestone] = Field(min_length=3, max_length=5)
+    accent_color:  Literal["green", "cyan", "yellow"] = "cyan"
+
+
+class TriStatItem(BaseModel):
+    """One stat card in a TriStat beat."""
+    value:    str      = Field(max_length=10, description="Formatted number, e.g. '$130' or '64%'")
+    label:    str      = Field(max_length=20, description="What this number measures, e.g. 'compute/clip'")
+    sublabel: str | None = Field(default=None, max_length=32, description="Supporting detail, e.g. 'per 10-second video'")
+    color:    Literal["green", "cyan", "yellow", "red", "white"] = "white"
+    glow:     bool = False
+
+
+class TriStatUIContent(BaseModel):
+    """2-3 key numbers stacked as cards — for topics with distinct metrics."""
+    layout:        Literal["TriStat"]
+    section_label: str = Field(max_length=24)
+    stats:         list[TriStatItem] = Field(min_length=2, max_length=3)
+    accent_color:  Literal["green", "cyan", "yellow"] = "cyan"
+
+
+class LeaderboardItem(BaseModel):
+    """One row in a LeaderboardRank beat."""
+    rank:      int  = Field(ge=1, le=10)
+    name:      str  = Field(max_length=24, description="Model or item name")
+    score:     str  = Field(max_length=10, description="Benchmark result, e.g. '86.9%'")
+    highlight: bool = Field(default=False, description="Accent this row — use for the notable result, not necessarily rank 1")
+
+
+class LeaderboardUIContent(BaseModel):
+    """Ordered ranking table — for benchmark comparisons and model rankings."""
+    layout:        Literal["LeaderboardRank"]
+    section_label: str = Field(max_length=24)
+    metric_label:  str = Field(max_length=20, description="What's being ranked, e.g. 'GPQA Diamond' or 'tok/s'")
+    items:         list[LeaderboardItem] = Field(min_length=2, max_length=6)
+    accent_color:  Literal["green", "cyan", "yellow"] = "cyan"
+
+
+class BarItem(BaseModel):
+    """One bar in a BarComparison beat."""
+    label:     str       = Field(max_length=24, description="Item name")
+    value:     str       = Field(max_length=10, description="Numeric string ONLY — no units here, e.g. '382' not '382 tok/s'")
+    unit:      str | None = Field(default=None, max_length=8, description="Unit label, e.g. 'tok/s' or '%'")
+    highlight: bool = Field(default=False, description="Accent the standout bar")
+
+
+class BarComparisonUIContent(BaseModel):
+    """Horizontal bar chart — use when the SIZE of the gap between values is the story."""
+    layout:        Literal["BarComparison"]
+    section_label: str = Field(max_length=24)
+    items:         list[BarItem] = Field(min_length=2, max_length=5)
+    accent_color:  Literal["green", "cyan", "yellow"] = "cyan"
+
+
+class CodeBlock(BaseModel):
+    """One code block (before or after)."""
+    label: str       = Field(max_length=10, description="e.g. 'BEFORE' or 'AFTER'")
+    lines: list[str] = Field(min_length=1, max_length=6, description="Code lines ≤ 50 chars each — simplified for visual impact")
+
+
+class CodeDiffUIContent(BaseModel):
+    """Before/after code comparison — for drop-in replacements, API migrations, single-line fixes."""
+    layout:        Literal["CodeDiff"]
+    section_label: str = Field(max_length=24)
+    before:        CodeBlock
+    after:         CodeBlock
+    accent_color:  Literal["green", "cyan", "yellow"] = "green"
+
+
 # Discriminated union — Pydantic narrows automatically on `layout` field
 UIContent = Annotated[
-    Union[MetricUIContent, ComparisonUIContent, PipelineUIContent],
+    Union[MetricUIContent, ComparisonUIContent, PipelineUIContent,
+          TimelineUIContent, TriStatUIContent,
+          LeaderboardUIContent, BarComparisonUIContent, CodeDiffUIContent],
     Field(discriminator="layout"),
 ]
 
@@ -175,6 +263,17 @@ class NarrationScript(BaseModel):
             "One sharp sentence restating what they now know. "
             "End with a provocation that makes them think beyond this topic. ≤ 28 words."
         ),
+    )
+    statement_lines: list[str] = Field(
+        description=(
+            "2-3 punchy display lines for the StatementSlam beat_3 visual. "
+            "Each line ≤ 35 chars — must fit on one screen line at 80px bold. "
+            "Distil the insight into short declarative fragments or sentences. "
+            "Line 0 should be the sharpest / most surprising. "
+            "Example: ['$130 compute cost.', '$8 in revenue.', \"Math doesn't close.\"]"
+        ),
+        min_length=2,
+        max_length=3,
     )
 
     @model_validator(mode="after")
@@ -242,9 +341,14 @@ class VideoPayload(BaseModel):
     def layout_content_agreement(self) -> "VideoPayload":
         """layout_mode and ui_content.layout must refer to the same template."""
         mapping = {
-            LayoutMode.METRIC:     "MetricFocus",
-            LayoutMode.COMPARISON: "ComparisonSplit",
-            LayoutMode.PIPELINE:   "PipelineFlow",
+            LayoutMode.METRIC:       "MetricFocus",
+            LayoutMode.COMPARISON:   "ComparisonSplit",
+            LayoutMode.PIPELINE:     "PipelineFlow",
+            LayoutMode.TIMELINE:     "TimelineFlow",
+            LayoutMode.TRISTAT:      "TriStat",
+            LayoutMode.LEADERBOARD:  "LeaderboardRank",
+            LayoutMode.BAR:          "BarComparison",
+            LayoutMode.CODEDIFF:     "CodeDiff",
         }
         expected = mapping[self.layout_mode]
         actual   = self.ui_content.layout
@@ -330,9 +434,37 @@ SYSTEM_PROMPT = textwrap.dedent("""
 
     • ComparisonSplit metrics: 2-4 items per panel. label ≤ 8 chars, value ≤ 8 chars.
       Use real numbers from the topic summary. Never invent benchmarks.
+      IMPORTANT: each panel must have ≥ 2 metrics. If each side only has 1 number,
+      use "bar" instead of "comparison".
 
     • PipelineFlow steps: 3-5 nodes. Exactly ONE step should have state="bottleneck".
       bottleneck_label annotates it with the cost, e.g. "40 % decode time".
+
+    • TimelineFlow items: 3-5 milestones in chronological order. Mark exactly ONE as
+      highlight=true (the key inflection point). value is an optional short metric, e.g. "3.3M".
+      Only use dates/events present in the topic summary.
+
+    • TriStat stats: 2-3 cards. Card 0 is the primary stat — set glow=true and choose
+      the most impactful color (red for alarming, cyan for neutral, green for positive).
+      sublabel should add one line of context, e.g. "per 10-second video".
+      Only use numbers from the topic summary.
+
+    • LeaderboardRank items: 2-6 rows in rank order (rank 1 first). Mark exactly ONE as
+      highlight=true — the noteworthy result (not necessarily rank 1). metric_label names
+      the benchmark, e.g. "GPQA Diamond" or "throughput (tok/s)".
+
+    • BarComparison items: 2-5 bars. value MUST be a numeric string only (e.g. "382" not
+      "382 tok/s" — put the unit in the separate unit field). Highlight the standout bar.
+      Items are rendered top-to-bottom in the order provided.
+
+    • CodeDiff before/after: lines ≤ 50 chars each. Max 5 lines before, max 3 lines after.
+      Write realistic but simplified code — this is visual impact, not a tutorial.
+      before.label = "BEFORE", after.label = "AFTER" (or the actual API/function name).
+
+    • statement_lines (narration field): 2-3 punchy fragments for the insight visual.
+      Each line ≤ 35 chars. Line 0 is the sharpest — make it the number or verdict.
+      GOOD: ["$130 compute cost.", "$8 in revenue.", "Math doesn't close."]
+      BAD:  ["This is a structural problem with no fix", "very expensive"]
 
     ═══════════════════════════════════════════════════════
      CUE DEFINITIONS  (animation sync)
@@ -358,10 +490,28 @@ def _user_prompt(topic: dict) -> str:
         SUMMARY: {topic.get("summary", "").strip()}
 
         Generate a VideoPayload JSON for this topic.
-        Choose the layout_mode that best fits the content:
-          - "metric"     → one hero number defines the insight (e.g. "40 % dequant overhead")
-          - "comparison" → clear before/after or A-vs-B with measurable delta
-          - "pipeline"   → a process with 3-5 named sequential stages and one bottleneck
+        Choose the layout_mode that best fits the content — pick the MOST SPECIFIC match:
+
+          - "metric"      → one hero number defines the insight (e.g. "40% overhead")
+          - "comparison"  → TWO systems each described by 2-4 DIFFERENT metrics per side.
+                            ONLY use when BOTH sides have multiple distinct data points.
+                            Do NOT use for single-metric comparisons (use "bar" instead).
+          - "pipeline"    → a process with 3-5 named sequential stages and one bottleneck
+          - "timeline"    → a chronological narrative arc (3-5 dated milestones with metrics)
+          - "tristat"     → 2-3 fundamentally DIFFERENT measurements about ONE system
+                            (e.g. total params + active params + price — not comparable, but all important)
+          - "leaderboard" → ranked table of 3-6 models/items scored on ONE benchmark
+          - "bar"         → 2-5 items compared on ONE numeric metric where the bar gap IS the story.
+                            Use "bar" instead of "comparison" when each item has only one number.
+          - "codediff"    → before/after code for drop-in replacements or API migrations
+
+        DECISION GUIDE:
+          Single number per item, magnitude matters → "bar"
+          Multiple numbers per item, two sides → "comparison"
+          Different kinds of numbers about same thing → "tristat"
+          Ranked benchmark table → "leaderboard"
+          Dated milestones → "timeline"
+          Named stages with bottleneck → "pipeline"
 
         Only use numbers that appear in the SUMMARY above.
         Do NOT invent benchmarks, latency figures, or accuracy numbers.
@@ -515,12 +665,22 @@ _LAYOUT_TO_ANIMATE_IN = {
     "MetricFocus":     "spring_scale",
     "ComparisonSplit": "spring_in",
     "PipelineFlow":    "slide_up",
+    "TimelineFlow":    "slide_up",
+    "TriStat":         "spring_in",
+    "LeaderboardRank": "slide_up",
+    "BarComparison":   "spring_in",
+    "CodeDiff":        "fade",
 }
 
 _LAYOUT_TO_TEMPLATE = {
-    "MetricFocus":     "stats_grid",   # closest scene_planner hint
+    "MetricFocus":     "stats_grid",
     "ComparisonSplit": "comparison",
     "PipelineFlow":    "pipeline",
+    "TimelineFlow":    "pipeline",
+    "TriStat":         "stats_grid",
+    "LeaderboardRank": "comparison",
+    "BarComparison":   "stats_grid",
+    "CodeDiff":        "pipeline",
 }
 
 
@@ -536,8 +696,22 @@ def _build_script_json(payload: VideoPayload, topic: dict) -> dict:
         hook_visual = f"{ui.hero.value} {ui.hero.label}. {ui.context}"
     elif isinstance(ui, ComparisonUIContent):
         hook_visual = f"{ui.left.heading} vs {ui.right.heading}. {ui.section_label}."
-    else:  # PipelineFlow
+    elif isinstance(ui, PipelineUIContent):
         hook_visual = f"{ui.section_label}. {ui.steps[0].label} → … → {ui.steps[-1].label}."
+    elif isinstance(ui, TimelineUIContent):
+        hook_visual = f"{ui.section_label}. {' → '.join(item.label for item in ui.items[:3])}."
+    elif isinstance(ui, TriStatUIContent):
+        hook_visual = f"{ui.stats[0].value} {ui.stats[0].label}. {ui.section_label}."
+    elif isinstance(ui, LeaderboardUIContent):
+        hl = next((item for item in ui.items if item.highlight), ui.items[0])
+        hook_visual = f"#{hl.rank} {hl.name}: {hl.score}. {ui.metric_label}."
+    elif isinstance(ui, BarComparisonUIContent):
+        hl = next((item for item in ui.items if item.highlight), ui.items[0])
+        hook_visual = f"{hl.value}{' ' + hl.unit if hl.unit else ''} — {hl.label}. {ui.section_label}."
+    elif isinstance(ui, CodeDiffUIContent):
+        hook_visual = f"{ui.section_label}. {len(ui.before.lines)} lines → {len(ui.after.lines)}."
+    else:
+        hook_visual = ui.section_label
 
     # Map narration blocks → concept_bullets for narrator.py's bullet counter
     concept_bullets = [
@@ -578,9 +752,9 @@ def _build_params_json(payload: VideoPayload) -> dict:
     Produce params.json: { beat_N: ScenePayload } for Remotion's SceneRouter.
 
     Beat structure (always 4 beats for this 4-segment narration design):
-        beat_1: MetricFocus    ← hook — hero number teaser
-        beat_2: <layout_mode>  ← main concept visual
-        beat_3: KineticBridge  ← insight keywords — never a duplicate of beat_2
+        beat_1: MetricFocus    ← hook — hero number teaser (always)
+        beat_2: <layout_mode>  ← main concept visual (Comparison/Pipeline/Timeline/TriStat/DataGrid)
+        beat_3: StatementSlam  ← 2-3 punchy insight lines — never a duplicate of beat_2
         beat_4: TakeawayScene  ← outro
     """
     ui   = payload.ui_content
@@ -644,6 +818,64 @@ def _build_params_json(payload: VideoPayload) -> dict:
             "chips":         [s.label[:16] for s in ui.steps[:3]],
         }
         beat2_data = data
+    elif isinstance(ui, TimelineUIContent):
+        # beat_1: use highlighted milestone (or last) as hero
+        highlighted = next((item for item in ui.items if item.highlight), ui.items[-1])
+        hook_data = {
+            "layout":        "MetricFocus",
+            "section_label": hook_section,
+            "hero":          {"value": highlighted.value or highlighted.date[:8],
+                              "label": highlighted.label[:8], "color": "cyan"},
+            "context":       payload.narration.hook,
+            "chips":         [item.label[:16] for item in ui.items[:3]],
+        }
+        beat2_data = data
+    elif isinstance(ui, TriStatUIContent):
+        # beat_1: use primary stat as hero
+        first = ui.stats[0]
+        hook_data = {
+            "layout":        "MetricFocus",
+            "section_label": hook_section,
+            "hero":          {"value": first.value, "label": first.label[:8], "color": first.color},
+            "context":       payload.narration.hook,
+            "chips":         [s.label[:16] for s in ui.stats],
+        }
+        beat2_data = data
+    elif isinstance(ui, LeaderboardUIContent):
+        # beat_1: highlighted item's score as hero
+        hl = next((item for item in ui.items if item.highlight), ui.items[0])
+        hook_data = {
+            "layout":        "MetricFocus",
+            "section_label": hook_section,
+            "hero":          {"value": hl.score, "label": f"#{hl.rank} rank", "color": "cyan"},
+            "context":       payload.narration.hook,
+            "chips":         [item.name[:16] for item in ui.items[:3]],
+        }
+        beat2_data = data
+    elif isinstance(ui, BarComparisonUIContent):
+        # beat_1: highlighted bar value as hero
+        hl = next((item for item in ui.items if item.highlight), ui.items[0])
+        hero_val = f"{hl.value}{hl.unit or ''}"
+        hook_data = {
+            "layout":        "MetricFocus",
+            "section_label": hook_section,
+            "hero":          {"value": hero_val[:8], "label": hl.label[:8], "color": "cyan"},
+            "context":       payload.narration.hook,
+            "chips":         [item.label[:16] for item in ui.items[:3]],
+        }
+        beat2_data = data
+    elif isinstance(ui, CodeDiffUIContent):
+        # beat_1: line count reduction as hero
+        before_n = len(ui.before.lines)
+        after_n  = len(ui.after.lines)
+        hook_data = {
+            "layout":        "MetricFocus",
+            "section_label": hook_section,
+            "hero":          {"value": f"{before_n}→{after_n}", "label": "lines", "color": "green"},
+            "context":       payload.narration.hook,
+            "chips":         [ui.before.label[:16], ui.after.label[:16]],
+        }
+        beat2_data = data
     else:
         hook_data = {
             "layout":        "MetricFocus",
@@ -653,20 +885,6 @@ def _build_params_json(payload: VideoPayload) -> dict:
             "chips":         [ui.section_label[:16]],
         }
         beat2_data = data
-
-    # beat_3: KineticBridge — 3-4 meaningful keywords from the insight block.
-    # Prefer longer content words; skip stop words and very short tokens.
-    _stop = {"this", "that", "with", "from", "they", "their", "about", "which",
-             "will", "have", "been", "into", "your", "more", "also", "when",
-             "these", "than", "both", "just", "now"}
-    bridge_keywords = [
-        w.strip(".,;:?!\"'()") for w in payload.narration.insight.split()
-        if len(w.strip(".,;:?!\"'()")) >= 5
-        and w.strip(".,;:?!\"'()").lower() not in _stop
-    ][:4]
-    if len(bridge_keywords) < 2:
-        bridge_keywords = ["key insight", "think about it"]
-    bridge_keywords = [w[:20] for w in bridge_keywords]
 
     # TakeawayScene headline: first complete sentence, ≤ 16 words, no ellipsis.
     headline = payload.narration.takeaway
@@ -690,9 +908,9 @@ def _build_params_json(payload: VideoPayload) -> dict:
         "beat_3": {
             "animate_in": "fade",
             "data": {
-                "layout":        "KineticBridge",
+                "layout":        "StatementSlam",
                 "section_label": hook_section,
-                "keywords":      bridge_keywords,
+                "lines":         payload.narration.statement_lines,
                 "accent_color":  "cyan",
             },
         },

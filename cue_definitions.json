@@ -23,32 +23,32 @@
   ],
   "word_cues": [
     {
-      "label": "metric_reveal",
-      "trigger_word": "70%",
+      "label": "leaderboard_reveal",
+      "trigger_word": "wrong",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "context_explain",
-      "trigger_word": "PCA-based",
+      "label": "attention_show",
+      "trigger_word": "attention",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "split_enter",
-      "trigger_word": "20x",
-      "occurrence": 0,
-      "offset_frames": -12
-    },
-    {
-      "label": "insight_drop",
-      "trigger_word": "lossless",
+      "label": "multitoken_show",
+      "trigger_word": "multi-token",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "takeaway_flash",
-      "trigger_word": "overlooking",
+      "label": "local_deploy_flash",
+      "trigger_word": "locally",
+      "occurrence": 0,
+      "offset_frames": 0
+    },
+    {
+      "label": "takeaway_reframe",
+      "trigger_word": "anymore",
       "occurrence": 0,
       "offset_frames": 0
     }
