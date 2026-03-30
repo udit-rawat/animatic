@@ -29,10 +29,11 @@ VOICE_NAME = os.environ.get("TTS_VOICE", "Puck")   # Puck = fast-paced, energeti
 # Gemini 2.5 TTS reads this and physically alters pacing/delivery.
 # Change the style here to reshape the whole video's voice character.
 VOICE_DIRECTIVE = (
-    "Say this in the tone of a Senior ML Engineer talking to a colleague. "
-    "Dry, highly technical, slightly cynical, and matter-of-fact. "
-    "Do NOT overact. Speak at a steady, flat pace. "
-    "Do not sound like an announcer or a YouTuber. "
+    "Speak like a sharp, curious person explaining something genuinely interesting to a friend. "
+    "Clear and direct — no jargon without a quick explanation, no padding, no hype. "
+    "The listener might be a Python developer, a data analyst, or just a tech-curious person. "
+    "Energetic but grounded. Fast enough to feel urgent, slow enough to land each idea. "
+    "Do not sound like a lecturer or a YouTuber. "
 )
 
 
@@ -93,6 +94,28 @@ No markdown, no extra text.
 
 
 def generate_segmented_script(topic: dict, script: dict) -> dict:
+    # content_generator.py writes spoken_narration.json with the exact segment
+    # keys narrator needs for TTS. Only use it if the key set matches what the
+    # current script requires — stale files from a different pipeline mode or a
+    # different bullet count would cause a beat/timing mismatch downstream.
+    _spoken_path = os.path.join(os.path.dirname(__file__), "..", "output", "spoken_narration.json")
+    if os.path.exists(_spoken_path):
+        with open(_spoken_path) as _f:
+            _spoken = json.load(_f)
+        n_bullets = len(script.get("concept_bullets", []))
+        _expected_keys = set(
+            ["hook"] + [f"concept_{i+1}" for i in range(n_bullets)] + ["takeaway_cta"]
+        )
+        if set(_spoken.keys()) == _expected_keys:
+            print("[narrator] spoken_narration.json matches script — skipping LLM rewrite step.")
+            return _spoken
+        else:
+            print(
+                f"[narrator] spoken_narration.json key mismatch "
+                f"(have {sorted(_spoken.keys())}, need {sorted(_expected_keys)}) "
+                f"— falling through to LLM rewrite."
+            )
+
     import re as _re
     prompt = build_narration_prompt(topic, script)
     last_err = None
@@ -162,7 +185,19 @@ def call_tts(text: str, api_key: str) -> bytes:
     except (TimeoutError, OSError) as e:
         raise _TTSRateLimited() from e   # treat timeout as RPM — rotate to next key
 
-    audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+    candidate = data.get("candidates", [{}])[0]
+    if "content" not in candidate:
+        finish_reason = candidate.get("finishReason", "UNKNOWN")
+        # RECITATION / transient server hiccup → rotate key and retry
+        # SAFETY → also rotate (different key may succeed; TTS safety is rare for factual text)
+        print(f" [no content: finishReason={finish_reason}]", end="", flush=True)
+        raise _TTSRateLimited()
+    audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
+    try:
+        from pipeline import quota as _q
+        _q.record_call("narrator")
+    except Exception:
+        pass
     return base64.b64decode(audio_b64)
 
 

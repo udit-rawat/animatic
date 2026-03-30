@@ -157,11 +157,11 @@ def assemble_props(
 
     return {
         "beats":       scene_plan.get("beats", []),
-        "params":      params,
+        "scenes":      params,   # v3 ScenePayload format — routed by SceneRouter in Remotion
         "timing":      timing,
         "audioSrc":    "narration.wav",
         "totalFrames": total_frames,
-        "cues":        cue_map,           # {label: frameNumber} — consumed by useCue()
+        "cues":        cue_map,
     }
 
 
@@ -325,6 +325,21 @@ def main():
     beat_templates = [b["template"] for b in props["beats"]]
     print(f"Video duration: {total_dur:.1f}s  ({props['totalFrames']} frames @ {FPS}fps)")
     print(f"Scene plan:     {' → '.join(beat_templates)}")
+
+    # ── Beat / timing segment count validation ────────────────────────────────
+    # beats.length must equal timing.length: each narration segment needs a beat
+    # or the camera pan schedule fires at the wrong time and TakeawayScene shows
+    # as a black screen until its beatStartFrame is reached.
+    n_beats   = len(props["beats"])
+    n_timing  = len(timing)
+    if n_beats != n_timing:
+        print(
+            f"\n[animator] ⚠️  BEAT/TIMING MISMATCH: {n_beats} beats vs {n_timing} timing segments.\n"
+            f"  Timing keys:  {list(timing.keys())}\n"
+            f"  Beat count:   {n_beats}\n"
+            f"  The camera pan schedule will be misaligned — expect dead-air or early-cut on last beat.\n"
+            f"  Fix: scene_planner must emit exactly {n_timing} beats for {n_timing} narration segments."
+        )
 
     os.makedirs(os.path.dirname(PROPS_PATH), exist_ok=True)
     with open(PROPS_PATH, "w") as f:

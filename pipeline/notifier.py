@@ -4,6 +4,7 @@ import os
 
 from dotenv import load_dotenv
 from telegram import Bot
+from telegram.request import HTTPXRequest
 
 load_dotenv()
 
@@ -104,7 +105,7 @@ async def send_notification():
     with open(SCRIPT_PATH) as f:
         script = json.load(f)
 
-    bot = Bot(token=token)
+    bot = Bot(token=token, request=HTTPXRequest(read_timeout=120, write_timeout=120, connect_timeout=30))
     message = build_message(topic, script)
 
     print("Sending Telegram message...")
