@@ -134,7 +134,13 @@ export type LayoutKind =
   | "PipelineFlow"
   | "DataGrid"
   | "TakeawayScene"
-  | "KineticBridge";
+  | "KineticBridge"
+  | "StatementSlam"
+  | "TimelineFlow"
+  | "TriStat"
+  | "LeaderboardRank"
+  | "BarComparison"
+  | "CodeDiff";
 
 export interface MetricItem {
   label:  string;         // ≤ 8 chars — renders at 60px on phone
@@ -190,13 +196,121 @@ export interface TakeawaySceneData {
 }
 
 /**
- * KineticBridgeData — for conversational / narrative beats with no structured data.
- * 2–5 keywords pulse sequentially so the screen is never a black hole.
+ * KineticBridgeData — legacy; kept for backward compat with old params.json.
+ * New pipeline generates StatementSlam for beat_3.
  */
 export interface KineticBridgeData {
   layout:        "KineticBridge";
   section_label: string;
-  keywords:      string[];                      // 2–5 short phrases, ≤ 20 chars each
+  keywords:      string[];
+  accent_color?: "cyan" | "green" | "yellow";
+}
+
+/**
+ * StatementSlamData — 2-3 punchy insight lines that spring in sequentially.
+ * Replaces KineticBridge for beat_3.
+ */
+export interface StatementSlamData {
+  layout:        "StatementSlam";
+  section_label: string;
+  lines:         string[];                      // 2-3 lines, ≤ 35 chars each
+  accent_color?: "cyan" | "green" | "yellow";
+}
+
+/** One milestone in a TimelineFlow beat. */
+export interface TimelineItem {
+  date:       string;   // ≤ 12 chars, e.g. "Nov 2025"
+  label:      string;   // ≤ 20 chars, event name
+  value?:     string;   // ≤ 10 chars, optional metric
+  highlight?: boolean;  // accented milestone
+}
+
+/**
+ * TimelineFlowData — chronological sequence with 3-5 milestones.
+ * Use for topics with a clear narrative arc: launches, collapses, lifecycles.
+ */
+export interface TimelineFlowData {
+  layout:        "TimelineFlow";
+  section_label: string;
+  items:         TimelineItem[];
+  accent_color?: "cyan" | "green" | "yellow";
+}
+
+/** One stat card in a TriStat beat. */
+export interface TriStatItem {
+  value:     string;    // ≤ 10 chars, e.g. "$130"
+  label:     string;    // ≤ 20 chars, e.g. "compute/clip"
+  sublabel?: string;    // ≤ 32 chars, supporting detail
+  color?:    NodeColor;
+  glow?:     boolean;
+}
+
+/**
+ * TriStatData — 2-3 key numbers stacked as cards.
+ * Use when a topic has distinct metrics that don't fit a left-vs-right comparison.
+ */
+export interface TriStatData {
+  layout:        "TriStat";
+  section_label: string;
+  stats:         TriStatItem[];                 // 2-3 items
+  accent_color?: "cyan" | "green" | "yellow";
+}
+
+/** One row in a LeaderboardRank beat. */
+export interface LeaderboardRankItem {
+  rank:       number;
+  name:       string;   // ≤ 24 chars
+  score:      string;   // ≤ 10 chars, e.g. "86.9%"
+  highlight?: boolean;
+}
+
+/**
+ * LeaderboardRankData — ordered ranking table.
+ * Items should be provided rank-order (rank 1 first).
+ * Animation is reversed so the winner arrives last.
+ */
+export interface LeaderboardRankData {
+  layout:        "LeaderboardRank";
+  section_label: string;
+  metric_label:  string;   // what's being ranked, e.g. "GPQA Diamond"
+  items:         LeaderboardRankItem[];
+  accent_color?: "cyan" | "green" | "yellow";
+}
+
+/** One bar in a BarComparison beat. */
+export interface BarComparisonItem {
+  label:      string;   // ≤ 24 chars
+  value:      string;   // numeric string, e.g. "382"
+  unit?:      string;   // ≤ 8 chars, e.g. "tok/s"
+  highlight?: boolean;
+}
+
+/**
+ * BarComparisonData — horizontal bar chart for N items on one metric.
+ * Use when the SIZE of the gap between values is the story.
+ */
+export interface BarComparisonData {
+  layout:        "BarComparison";
+  section_label: string;
+  items:         BarComparisonItem[];
+  accent_color?: "cyan" | "green" | "yellow";
+}
+
+/** One code block (before or after) in a CodeDiff beat. */
+export interface CodeBlock {
+  label: string;    // ≤ 10 chars, e.g. "BEFORE"
+  lines: string[];  // code lines, ≤ 50 chars each
+}
+
+/**
+ * CodeDiffData — before/after code comparison.
+ * Use for drop-in replacements, API migrations, single-line fixes.
+ */
+export interface CodeDiffData {
+  layout:        "CodeDiff";
+  section_label: string;
+  before:        CodeBlock;
+  after:         CodeBlock;
   accent_color?: "cyan" | "green" | "yellow";
 }
 
@@ -206,7 +320,13 @@ export type SceneData =
   | PipelineFlowData
   | DataGridData
   | TakeawaySceneData
-  | KineticBridgeData;
+  | KineticBridgeData
+  | StatementSlamData
+  | TimelineFlowData
+  | TriStatData
+  | LeaderboardRankData
+  | BarComparisonData
+  | CodeDiffData;
 
 export interface ScenePayload {
   animate_in: AnimateIn;

@@ -10,9 +10,10 @@
  *   Entry: scale 0.7 → 1.0 + opacity 0 → 1 (spring, crisp).
  *   Hold:  resting scale with gentle ambient breath.
  *   Exit:  opacity 1 → 0 over last 10 frames of window.
- *   Next keyword fires immediately after exit.
+ *   Next keyword fires after the previous fully exits (no overlap).
  *
- * After all keywords cycle, loops back to the first — perpetual motion for the full beat duration.
+ * After all keywords play once, the last keyword holds at rest for the remainder
+ * of the beat — no looping, no black frames.
  */
 
 import React from "react";
@@ -25,9 +26,8 @@ const HOLD_FRAMES = 44; // full spring window per keyword @30fps
 const EXIT_FRAMES = 10; // fade-out duration at end of window
 const EXIT_START  = HOLD_FRAMES - EXIT_FRAMES; // 34
 
-// Each keyword starts exactly when the previous begins its exit — crossfade overlap,
-// zero dark gap between words. Total cycle = N × EXIT_START (34 frames each).
-const STEP = EXIT_START; // 34
+// Each keyword gets its own non-overlapping window — previous fully exits before next enters.
+const STEP = HOLD_FRAMES; // 44 — no overlap, no ghost
 
 export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) => {
   const frame   = useBeatFrame();
@@ -36,10 +36,14 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
   const kws     = data.keywords;
 
   const totalCycleFrames = kws.length * STEP;
-  const effectiveFrame   = frame % totalCycleFrames;
+
+  // After one full pass, freeze the clock at the last keyword's rest state
+  // (mid-hold, well past entry spring and before exit fade begins).
+  const lastKeywordRestFrame = (kws.length - 1) * STEP + Math.round(EXIT_START * 0.4);
+  const effectiveFrame = Math.min(frame, lastKeywordRestFrame);
 
   // Ambient drift on the active keyword (0.25 Hz breath, ±1.5% scale)
-  const breathScale = 1 + Math.sin((frame / fps) * Math.PI * 2 * 0.25) * 0.015;
+  const breathScale = 1 + Math.sin((effectiveFrame / fps) * Math.PI * 2 * 0.25) * 0.015;
 
   return (
     <div style={{
@@ -65,11 +69,10 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
         alignItems:     "center",
       }}>
         {kws.map((kw, i) => {
-          const windowStart = i * STEP;
-          const kwFrame     = effectiveFrame - windowStart;
-          // Window spans HOLD_FRAMES so the full spring + exit plays out,
-          // but the next keyword already enters at EXIT_START (crossfade overlap).
-          const inWindow    = kwFrame >= 0 && kwFrame < HOLD_FRAMES;
+          const firstStart = i * STEP;
+          const kwFrame    = effectiveFrame - firstStart;
+
+          const inWindow = kwFrame >= 0 && kwFrame < HOLD_FRAMES;
 
           if (!inWindow) return null;
 
@@ -103,8 +106,9 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
                 position:        "absolute",
                 left:            0,
                 right:           0,
+                top:             "50%",
                 opacity,
-                transform:       `scale(${scale})`,
+                transform:       `translateY(-50%) scale(${scale})`,
                 transformOrigin: "left center",
                 willChange:      "transform, opacity",
               }}

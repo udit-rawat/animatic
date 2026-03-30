@@ -63,17 +63,18 @@ const Panel: React.FC<{
 
   return (
     <div style={{
-      flex:          1,
-      display:       "flex",
-      flexDirection: "column",
-      gap:           20,
-      padding:       "32px 28px",
-      background:    `${color}07`,
-      border:        `1px solid ${color}22`,
-      borderRadius:  isLast ? "0 16px 16px 0" : "16px 0 0 16px",
-      opacity:       prog,
-      transform:     `translateX(${tx}px)`,
-      boxSizing:     "border-box",
+      flex:           1,
+      display:        "flex",
+      flexDirection:  "column",
+      justifyContent: "center",
+      gap:            20,
+      padding:        "32px 28px",
+      background:     `${color}07`,
+      border:         `1px solid ${color}22`,
+      borderRadius:   isLast ? "0 16px 16px 0" : "16px 0 0 16px",
+      opacity:        prog,
+      transform:      `translateX(${tx}px)`,
+      boxSizing:      "border-box",
     }}>
       <div style={{
         fontSize:      28, fontWeight: 600, color,

@@ -178,12 +178,12 @@ export const TakeawayScene: React.FC<{
 
       {/* ── Content layer ── */}
       <div style={{
-        position:      "relative",
+        position:      "absolute",
+        inset:         0,
         zIndex:        1,
         display:       "flex",
         flexDirection: "column",
         justifyContent:"center",
-        height:        "100%",
         padding:       60,
         boxSizing:     "border-box",
         gap:           36,
