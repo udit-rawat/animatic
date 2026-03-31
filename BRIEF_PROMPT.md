@@ -7,6 +7,46 @@ The video will be posted on Instagram Reels / YouTube Shorts.
 
 ---
 
+## WHAT ACTUALLY WORKS (learned from real performance data)
+
+**Hook structure that drives shares from engineers:**
+```
+[Specific number that breaks an assumption] + [The exact mechanism behind it] + [Why an engineer should care]
+```
+
+**Examples of hooks that got shared:**
+- "Mistral Small 4 has 119B parameters but only fires 6B per forward pass" → 18 shares, algorithm distributed it to 83% non-followers
+- "Flash Attention 2 never writes the full N×N matrix to HBM" → engineers forward this because it's immediately useful
+
+**Hook patterns that underperform for this audience:**
+- "What if AI could..." → awe hooks get follows but not shares or saves
+- "Why did X die" → business/drama hooks don't land with ML engineers
+- "This is groundbreaking" → vague, no number, no mechanism
+
+**The test for your hook:** Can an ML engineer forward this to their team Slack with zero added context? If yes, the hook is right.
+
+---
+
+## AVAILABLE ANIMATION TEMPLATES
+
+When you suggest topics (or when asked to suggest 3 topics), match each topic to the best template below. A topic that doesn't fit any template well is a weak topic choice.
+
+| Template | Best for | Example topic |
+|---|---|---|
+| `bar` | 2-5 models/tools on ONE metric (speed, cost, memory) | "Llama 3 vs Mistral vs Gemma inference speed" |
+| `comparison` | TWO systems each described by 2+ different metrics | "vLLM vs TGI: latency + throughput + memory per side" |
+| `tristat` | 2-3 fundamentally different measurements of ONE system | "Mistral Small 4: 119B total, 6B active, $0.10/1M tokens" |
+| `leaderboard` | Ranked benchmark results across 3-6 models | "MMLU leaderboard: top 5 open-weight models" |
+| `timeline` | Chronological arc with dated milestones + metrics | "Attention mechanism: 2017→2022→2024 efficiency gains" |
+| `pipeline` | Sequential process with a named bottleneck | "How speculative decoding works: draft → verify → accept" |
+| `codediff` | Before/after code change that changes behavior | "torch.compile: one line that cuts training time 30%" |
+| `metric` | Single hero number that defines the entire insight | "FlashAttention-3: 1.5 PFLOP/s on H100 — 75% utilization" |
+| `StatementSlam` | 2-3 punchy insight lines, no data needed | Used as beat_3 in every video automatically |
+
+**When asked to suggest 3 topics:** suggest one `bar`/`comparison`/`leaderboard` topic (data-rich), one `pipeline`/`codediff` topic (mechanism), and one `tristat`/`metric` topic (single insight). Variety across templates keeps the feed visually different.
+
+---
+
 ## YOUR TOPIC
 
 [REPLACE THIS LINE WITH YOUR TOPIC]

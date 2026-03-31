@@ -25,7 +25,10 @@ def build_audit_block() -> str:
     total  = report.get("total", {})
     has_tokens = report.get("has_token_counts", False)
 
-    lines = ["📊 Token Usage"]
+    gemini_stages      = report.get("gemini_stages", {})
+    gemini_total_calls = report.get("gemini_total_calls", 0)
+
+    lines = ["📊 Usage"]
     if has_tokens:
         lines.append("```")
         lines.append(f"{'Stage':<12} {'In':>7} {'Out':>7} {'Total':>8}")
@@ -38,6 +41,19 @@ def build_audit_block() -> str:
         lines.append(f"{'TOTAL':<12} {total['input_tokens']:>7,} {total['output_tokens']:>7,} {grand:>8,}")
         lines.append("```")
         lines.append(f"Cost: ${total['cost_usd']:.4f}")
+        if gemini_total_calls:
+            lines.append(f"Gemini: {gemini_total_calls} API calls")
+    elif gemini_stages:
+        # Gemini-native run — show per-stage call counts
+        lines.append("```")
+        lines.append(f"{'Stage':<14} {'Calls':>5}")
+        lines.append("-" * 22)
+        for stage, cnt in sorted(gemini_stages.items()):
+            lines.append(f"{stage:<14} {cnt:>5}")
+        lines.append("-" * 22)
+        lines.append(f"{'TOTAL':<14} {gemini_total_calls:>5}")
+        lines.append("```")
+        lines.append("(Gemini free tier — no token counts)")
     else:
         lines.append(f"Calls: {total.get('calls', 0)}  |  Cost: ${total['cost_usd']:.4f}")
 

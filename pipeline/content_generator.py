@@ -275,6 +275,19 @@ class NarrationScript(BaseModel):
         min_length=2,
         max_length=3,
     )
+    hashtags: list[str] = Field(
+        description=(
+            "4-6 topic-specific hashtags for Instagram/YouTube Shorts. "
+            "Include the exact technology name, the domain, and 1-2 broader reach tags. "
+            "Each tag starts with #. No spaces inside tags. "
+            "Example for Flash Attention: ['#FlashAttention', '#TransformerOptimization', "
+            "'#MLSystems', '#PyTorch', '#DeepLearning', '#AI']. "
+            "Do NOT use generic tags like #MachineLearning or #MLOps unless they are "
+            "genuinely the most specific fit for this specific topic."
+        ),
+        min_length=4,
+        max_length=6,
+    )
 
     @model_validator(mode="after")
     def enforce_word_budget(self) -> "NarrationScript":
@@ -730,7 +743,7 @@ def _build_script_json(payload: VideoPayload, topic: dict) -> dict:
             f"{payload.narration.hook} "
             f"{payload.narration.takeaway}"
         )[:280],
-        "hashtags": ["#MachineLearning", "#MLEngineering", "#AI", "#LLM", "#MLOps"],
+        "hashtags": payload.narration.hashtags,
     }
 
 

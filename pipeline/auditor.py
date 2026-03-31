@@ -13,10 +13,8 @@ OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "audit.jso
 
 def build_report() -> dict:
     log = claude_client.get_usage_log()
-    if not log:
-        return {"stages": {}, "total": {"cost_usd": 0.0, "calls": 0}, "has_token_counts": False}
 
-    has_tokens = "input_tokens" in log[0]
+    has_tokens = bool(log) and "input_tokens" in log[0]
     by_stage = defaultdict(lambda: {"cost_usd": 0.0, "calls": 0, "input_tokens": 0, "output_tokens": 0})
     total = {"cost_usd": 0.0, "calls": 0, "input_tokens": 0, "output_tokens": 0}
 
@@ -31,17 +29,48 @@ def build_report() -> dict:
         total["input_tokens"]        += entry.get("input_tokens", 0)
         total["output_tokens"]       += entry.get("output_tokens", 0)
 
+    # Merge Gemini quota data so Gemini-native runs show up in the audit
+    gemini_stages = {}
+    gemini_total_calls = 0
+    try:
+        from pipeline.quota import get_status
+        qs = get_status()
+        gemini_stages = qs.get("by_stage", {})
+        gemini_total_calls = qs.get("used", 0)
+    except Exception:
+        pass
+
+    if gemini_stages:
+        for stage, call_count in gemini_stages.items():
+            # Only add stages not already covered by claude_client log
+            if stage not in by_stage:
+                by_stage[stage]["calls"] = call_count
+            # Always store gemini call count separately for display
+        total["gemini_calls"] = gemini_total_calls
+        total["gemini_stages"] = gemini_stages
+
+    if not log and not gemini_stages:
+        return {"stages": {}, "total": {"cost_usd": 0.0, "calls": 0}, "has_token_counts": False}
+
     for s in by_stage:
         by_stage[s]["cost_usd"] = round(by_stage[s]["cost_usd"], 6)
     total["cost_usd"] = round(total["cost_usd"], 6)
 
-    return {"stages": dict(by_stage), "total": total, "has_token_counts": has_tokens}
+    return {
+        "stages":           dict(by_stage),
+        "total":            total,
+        "has_token_counts": has_tokens,
+        "gemini_stages":    gemini_stages,
+        "gemini_total_calls": gemini_total_calls,
+    }
 
 
 def print_report(report: dict):
-    has_tokens = report.get("has_token_counts", False)
-    stages     = report["stages"]
-    t          = report["total"]
+    has_tokens     = report.get("has_token_counts", False)
+    stages         = report["stages"]
+    t              = report["total"]
+    gemini_stages  = report.get("gemini_stages", {})
+    gemini_total   = report.get("gemini_total_calls", 0)
 
     if has_tokens:
         # ── box layout ──────────────────────────────────────────────────────
@@ -97,6 +126,41 @@ def print_report(report: dict):
         print(fmt_row(footer))
         print(sep_bot)
         print(f"  Total tokens burned: {grand_tok:,}  |  Total cost: ${t['cost_usd']:.4f}")
+        print()
+
+    elif gemini_stages:
+        # Gemini-native run — show per-stage call counts
+        cols   = ("Stage", "Gemini Calls")
+        rows   = [(s, str(c)) for s, c in sorted(gemini_stages.items())]
+        footer = ("TOTAL", str(gemini_total))
+
+        widths = [len(c) for c in cols]
+        for row in rows + [footer]:
+            for i, cell in enumerate(row):
+                widths[i] = max(widths[i], len(cell))
+
+        def fmt_row(row):
+            return "║ " + " ║ ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)) + " ║"
+
+        sep_top  = "╔═" + "═╦═".join("═" * w for w in widths) + "═╗"
+        sep_mid  = "╠═" + "═╬═".join("═" * w for w in widths) + "═╣"
+        sep_bot  = "╚═" + "═╩═".join("═" * w for w in widths) + "═╝"
+
+        title_width = len(sep_top) - 2
+        title_line  = "║" + " GEMINI USAGE AUDIT ".center(title_width) + "║"
+
+        print()
+        print(sep_top)
+        print(title_line)
+        print(sep_mid)
+        print(fmt_row(cols))
+        print(sep_mid)
+        for row in rows:
+            print(fmt_row(row))
+        print(sep_mid)
+        print(fmt_row(footer))
+        print(sep_bot)
+        print(f"  Gemini free tier — {gemini_total} API call(s) used today")
         print()
 
     else:
