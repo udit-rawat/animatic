@@ -197,6 +197,10 @@ def main():
     )
     parser.add_argument("--check-quota", action="store_true")
     parser.add_argument("--rca", action="store_true")
+    parser.add_argument("--log-stats",  action="store_true",
+                        help="Log performance stats for the last posted video.")
+    parser.add_argument("--analytics",  action="store_true",
+                        help="Print analytics summary table.")
 
     # ── Custom content path ───────────────────────────────────────────────────
     parser.add_argument(
@@ -251,6 +255,16 @@ def main():
         from pipeline.quota import print_status, print_rca
         print_status(verbose=True)
         print_rca()
+        return
+
+    if args.log_stats:
+        from pipeline.analytics import log_stats_interactive
+        log_stats_interactive()
+        return
+
+    if args.analytics:
+        from pipeline.analytics import print_summary
+        print_summary()
         return
 
     # ── Custom mode: validate + write topic.json ──────────────────────────────

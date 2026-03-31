@@ -52,8 +52,7 @@ STRICTLY AVOID:
 - Topics requiring more than 4 visual steps to explain clearly
 - Papers with no public abstract or open access
 - Topics that are purely mathematical with no intuitive visual hook
-{already_covered}
-CANDIDATES:
+{already_covered}{analytics_hint}CANDIDATES:
 {candidates}
 
 Select the single best candidate. Respond with ONLY valid JSON — no explanation outside the JSON:
@@ -121,6 +120,44 @@ def filter_candidates(candidates: list[dict], history: list[str]) -> list[dict]:
     return kept
 
 
+def _analytics_hint() -> str:
+    """
+    Return a soft hint for the ranker based on past video performance.
+    Only active once MIN_ENTRIES_FOR_SIGNAL entries exist in analytics.
+    Returns empty string when there is not enough data yet.
+    """
+    try:
+        from pipeline.analytics import get_layout_scores, get_topic_signals
+        layout_scores = get_layout_scores()
+        topic_signals = get_topic_signals()
+    except Exception:
+        return ""
+
+    if not layout_scores and not topic_signals:
+        return ""
+
+    lines = ["\nPERFORMANCE SIGNAL — from past videos on this account:"]
+
+    if layout_scores:
+        best_layout = max(layout_scores, key=layout_scores.get)
+        lines.append(
+            f"  Best-performing visual layout so far: {best_layout} "
+            f"(avg score {layout_scores[best_layout]}). "
+            f"Prefer topics that fit this layout when quality is equal."
+        )
+
+    if topic_signals:
+        top_kws = ", ".join(kw for kw, _ in topic_signals[:6])
+        lines.append(
+            f"  Keywords from top-performing past topics: {top_kws}. "
+            f"Topics related to these themes have historically performed well — "
+            f"give a slight preference when two candidates are otherwise equal."
+        )
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_prompt(candidates: list[dict], history: list[str]) -> str:
     lines = []
     for i, c in enumerate(candidates, 1):
@@ -138,9 +175,12 @@ def build_prompt(candidates: list[dict], history: list[str]) -> str:
     else:
         already_covered = ""
 
+    analytics_hint = _analytics_hint()
+
     return PROMPT_TEMPLATE.format(
         candidates="\n".join(lines),
         already_covered=already_covered,
+        analytics_hint=analytics_hint,
     )
 
 
