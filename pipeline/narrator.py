@@ -28,13 +28,24 @@ VOICE_NAME = os.environ.get("TTS_VOICE", "Puck")   # Puck = fast-paced, energeti
 # Directorial prompt prepended to every TTS segment.
 # Gemini 2.5 TTS reads this and physically alters pacing/delivery.
 # Change the style here to reshape the whole video's voice character.
-VOICE_DIRECTIVE = (
-    "Speak like a sharp, curious person explaining something genuinely interesting to a friend. "
-    "Clear and direct — no jargon without a quick explanation, no padding, no hype. "
-    "The listener might be a Python developer, a data analyst, or just a tech-curious person. "
-    "Energetic but grounded. Fast enough to feel urgent, slow enough to land each idea. "
-    "Do not sound like a lecturer or a YouTuber. "
+_DEFAULT_VOICE_DIRECTIVE = (
+    "You are a working ML engineer talking to another ML engineer. "
+    "They've seen hype. Skip it. Give them one thing they can use tomorrow. "
+    "Speak fast enough to feel urgent, slow enough that numbers land clearly. "
+    "Pause briefly after every specific number or technical term — let it register. "
+    "Short declarative sentences. No padding. No filler. "
+    "When you hit the takeaway, slow down slightly — that's the line they'll remember. "
+    "Do not sound like a YouTuber, a lecturer, or a podcast host. "
 )
+
+def _get_voice_directive() -> str:
+    """Return custom tone if --tone was passed via env, otherwise the default."""
+    override = os.environ.get("NARRATOR_TONE_OVERRIDE", "").strip()
+    if override:
+        return override + " "
+    return _DEFAULT_VOICE_DIRECTIVE
+
+VOICE_DIRECTIVE = _DEFAULT_VOICE_DIRECTIVE  # kept for backward compat imports
 
 
 # ── Step 1: LLM rewrites visual script → segmented narration ─────────────────
@@ -74,10 +85,14 @@ Write spoken narration in this structure:
     BAD:  "The mechanism involves setting environment variables that control memory allocation behavior."
 
   "takeaway_cta" (10-16 seconds):
-    Deliver the aha-moment — reframe what they just learned in one sharp sentence.
-    Then end on a provocation or open question that makes them think beyond this topic.
-    GOOD: "The allocator was eating your memory the whole time. The question isn't how to fix it — it's what else you're not measuring."
+    First sentence: the save-trigger — a specific rule, flag, number, or decision the
+    engineer can act on or reference next week. Make it cheat-sheet quality.
+    Second sentence (optional): a provocation that extends the thought.
+    The actionable line ALWAYS comes first. Never end on a question alone.
+    GOOD: "Set MALLOC_ARENA_MAX=2 before any PyTorch job. One env var, forty percent RSS drop. The question is what else your allocator is hiding."
+    GOOD: "Use evolutionary search when your objective is exact and cheap to evaluate. Matrix ops, compilers, schedulers — all qualify."
     BAD:  "In conclusion, these optimizations can significantly improve your training pipeline performance."
+    BAD:  "What else are you not measuring?" (question alone — no actionable anchor)
 
 RULES — non-negotiable:
 - Write for speaking, not reading. Use natural rhythm and breath pauses.
@@ -86,6 +101,14 @@ RULES — non-negotiable:
 - No news-anchor phrasing: "Today we look at...", "In this segment...", "As we can see..."
 - Use contractions naturally: "it's", "that's", "you're", "doesn't"
 - Each section must stand alone — it will be spliced independently
+- BANNED adjectives — use the actual number instead: "incredibly", "massive", "huge",
+  "enormous", "groundbreaking", "revolutionary", "mind-blowing", "next level", "powerful"
+- BANNED phrases: "This changes everything", "game changer", "at its core", "simply put"
+- Hook: stop-scroll in 3 seconds. No explanation, no setup. Two patterns:
+  Mechanism topics → broken assumption first: "Every 1-bit LLM kept embeddings at 16-bit. Bonsai closes it. 1.15 GB."
+  Capability topics → desire + proof number: "Private ChatGPT. Your iPhone. No internet. 1.15 GB. 44 tokens per second."
+  BAD: "Run your own ChatGPT on your iPhone." (command/feature pitch — no number, no surprise)
+  BAD: "Today we look at Bonsai 8B..." (news-anchor opener)
 
 Return ONLY valid JSON with EXACTLY these keys:
   "hook", {concept_keys}, "takeaway_cta"
@@ -149,7 +172,7 @@ class _TTSRateLimited(Exception):
 def call_tts(text: str, api_key: str) -> bytes:
     """Single TTS call — raises _TTSRateLimited on 429 so caller can rotate keys."""
     # Prepend directorial cue so the model shapes delivery, not just reads words.
-    directed_text = VOICE_DIRECTIVE + text
+    directed_text = _get_voice_directive() + text
     payload = json.dumps({
         "contents": [{"parts": [{"text": directed_text}]}],
         "generationConfig": {
