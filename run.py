@@ -149,6 +149,44 @@ def _intervention_checkpoint() -> bool:
     return ans == "y"
 
 
+def _apply_narration_override(narration_arg: str):
+    """
+    Write a custom spoken_narration.json from --narration argument.
+    Accepts a JSON string or a path to a .json file.
+    narrator.py detects this file and skips the LLM rewrite step entirely.
+    """
+    import json as _json
+
+    # Try as file path first, then as inline JSON string
+    if os.path.exists(narration_arg):
+        with open(narration_arg) as f:
+            narration = _json.load(f)
+        print(f"[narration] Loaded custom narration from file → {narration_arg}")
+    else:
+        try:
+            narration = _json.loads(narration_arg)
+            print("[narration] Loaded custom narration from inline JSON")
+        except _json.JSONDecodeError as e:
+            print(f"[ERROR] --narration value is not valid JSON and not a file path: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    required = {"hook", "concept_1", "takeaway_cta"}
+    missing  = required - set(narration.keys())
+    if missing:
+        print(f"[ERROR] --narration JSON missing required keys: {missing}", file=sys.stderr)
+        print('  Required: "hook", "concept_1", "concept_2" (optional), "takeaway_cta"', file=sys.stderr)
+        sys.exit(1)
+
+    spoken_path = os.path.join(OUTPUT_DIR, "spoken_narration.json")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(spoken_path, "w") as f:
+        _json.dump(narration, f, indent=2)
+
+    segments = list(narration.keys())
+    print(f"[narration] Written → {spoken_path}  segments={segments}")
+    print("[narration] Narrator LLM rewrite will be skipped — using your narration directly.")
+
+
 def run_stage(name: str):
     from pipeline.logger import get as get_log
     get_log().info(f"Stage START: {name}")
@@ -213,6 +251,28 @@ def main():
     parser.add_argument("--title",   default="", help="Topic title (required with --custom)")
     parser.add_argument("--summary", default="", help="Topic summary or context (used with --custom)")
 
+    # ── Custom narration + tone ───────────────────────────────────────────────
+    parser.add_argument(
+        "--narration",
+        default="",
+        help=(
+            "JSON string or path to a .json file with custom spoken narration. "
+            "Bypasses LLM narration rewrite. "
+            'Expected keys: "hook", "concept_1", "concept_2", "takeaway_cta". '
+            "See BRIEF_PROMPT_V2.md for the exact format."
+        ),
+    )
+    parser.add_argument(
+        "--tone",
+        default="",
+        help=(
+            "Custom voice delivery instruction for Gemini TTS. "
+            "Replaces the default VOICE_DIRECTIVE. "
+            'Example: --tone "deadpan and dry, like a skeptical senior engineer who has seen every hype cycle" '
+            "See BRIEF_PROMPT_V2.md for tone examples."
+        ),
+    )
+
     # ── Intervention checkpoint ───────────────────────────────────────────────
     parser.add_argument(
         "--checkpoint", action="store_true",
@@ -229,13 +289,16 @@ def main():
             print("[ERROR] --gemini requires GEMINI_API_KEY or GEMINI_API_KEYS in .env", file=sys.stderr)
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "gemini"
-        os.environ.setdefault("GEMINI_MODEL_RANKER",          "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_SCRIPTER",        "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_VERIFIER",         "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_SCENE_PLANNER",   "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_NARRATOR",        "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_PARAM_EXTRACTOR", "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_ANIMATOR",        "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_RANKER",             "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCRIPTER",           "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_VERIFIER",           "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCENE_PLANNER",     "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_NARRATOR",           "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_PARAM_EXTRACTOR",   "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_ANIMATOR",           "gemini-2.5-flash-lite")
+        # content_generator intentionally stays on gemini-2.5-flash — flash-lite
+        # cannot reliably follow the word budget + field constraints simultaneously.
+        os.environ.setdefault("GEMINI_MODEL_CONTENT_GENERATOR", "gemini-2.5-flash")
 
     if args.provider:
         apply_provider(args.provider, args.model)
@@ -266,6 +329,11 @@ def main():
         from pipeline.analytics import print_summary
         print_summary()
         return
+
+    # ── Tone override: set env var before narrator stage ─────────────────────
+    if args.tone:
+        os.environ["NARRATOR_TONE_OVERRIDE"] = args.tone
+        print(f"[tone] Custom tone set → \"{args.tone[:80]}\"")
 
     # ── Custom mode: validate + write topic.json ──────────────────────────────
     if args.custom:
@@ -337,6 +405,25 @@ def main():
                         pass
                 return
 
+        # ── Narration override: write spoken_narration.json after content stage ─
+        if args.narration and stage == "content_generator":
+            try:
+                run_stage(stage)
+            except Exception as e:
+                failed_stage = stage
+                from pipeline.logger import get as get_log
+                get_log().error(f"Stage FAILED: {stage} — {e}", exc_info=True)
+                print(f"\n[ERROR] Stage '{stage}' failed: {e}", file=sys.stderr)
+                if run_id is not None:
+                    try:
+                        from pipeline.quota import end_run
+                        end_run(run_id, outcome="failed", failed_stage=stage)
+                    except Exception:
+                        pass
+                sys.exit(1)
+            _apply_narration_override(args.narration)
+            continue
+
         try:
             run_stage(stage)
         except Exception as e:
@@ -367,6 +454,12 @@ def main():
             save_report(report)
         except Exception as e:
             print(f"[WARN] Audit failed: {e}", file=sys.stderr)
+
+        try:
+            from pipeline.analytics import create_skeleton
+            create_skeleton()
+        except Exception as e:
+            print(f"[WARN] Analytics skeleton failed: {e}", file=sys.stderr)
 
     print("\n✅ Pipeline complete.")
 
