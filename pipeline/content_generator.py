@@ -325,6 +325,9 @@ class NarrationScript(BaseModel):
 
     @model_validator(mode="after")
     def enforce_word_budget(self) -> "NarrationScript":
+        # Skip when --narration override is active — LLM-generated script is replaced anyway
+        if os.environ.get("NARRATION_OVERRIDE") == "1":
+            return self
         full = f"{self.hook} {self.context} {self.insight} {self.takeaway}"
         total = len(full.split())
         if not (130 <= total <= 145):
