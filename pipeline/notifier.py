@@ -94,20 +94,23 @@ def build_run_stats() -> str:
 
 
 def build_message(topic: dict, script: dict) -> str:
-    hashtags    = " ".join(script["hashtags"])
     audit_block = build_audit_block()
     run_stats   = build_run_stats()
     msg = (
         f"\u2705 Today's video is ready\n\n"
-        f"\U0001f4cc Topic: {topic['title']}\n\n"
-        f"\U0001f4dd Caption:\n{script['caption']}\n\n"
-        f"#\ufe0f\u20e3 Hashtags: {hashtags}"
+        f"\U0001f4cc Topic: {topic['title']}"
     )
     if run_stats:
         msg += f"\n\n{run_stats}"
     if audit_block:
         msg += f"\n\n{audit_block}"
     return msg
+
+
+def build_caption_message(script: dict) -> str:
+    """Standalone copy-paste message with just caption + hashtags for Instagram."""
+    hashtags = " ".join(script["hashtags"])
+    return f"{script['caption']}\n\n{hashtags}"
 
 
 async def send_notification():
@@ -122,15 +125,17 @@ async def send_notification():
         script = json.load(f)
 
     bot = Bot(token=token, request=HTTPXRequest(read_timeout=120, write_timeout=120, connect_timeout=30))
-    message = build_message(topic, script)
 
     print("Sending Telegram message...")
-    await bot.send_message(chat_id=chat_id, text=message)
+    await bot.send_message(chat_id=chat_id, text=build_message(topic, script))
 
     video_path = VIDEO_PATH
     print(f"Sending video ({os.path.basename(video_path)})...")
     with open(video_path, "rb") as video_file:
         await bot.send_video(chat_id=chat_id, video=video_file)
+
+    print("Sending caption + hashtags...")
+    await bot.send_message(chat_id=chat_id, text=build_caption_message(script))
 
     print("Notification sent successfully.")
 

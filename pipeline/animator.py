@@ -233,11 +233,9 @@ def run_remotion(props_path: str, output_path: str) -> tuple[bool, str]:
     Execute: npx remotion render src/index.ts VideoComposition <output> --props <props>
     cwd = remotion/ so that src/index.ts resolves correctly.
     """
-    # Check npx is available
     if not shutil.which("npx"):
         return False, "npx not found — install Node.js 18+ (https://nodejs.org)"
 
-    # Check node_modules are installed
     if not os.path.isdir(os.path.join(REMOTION_DIR, "node_modules", "remotion")):
         return False, (
             "remotion/node_modules not found. "
@@ -255,6 +253,50 @@ def run_remotion(props_path: str, output_path: str) -> tuple[bool, str]:
     ]
 
     with Spinner("Remotion rendering"):
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=REMOTION_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=RENDER_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            return False, f"Remotion timed out after {RENDER_TIMEOUT}s"
+
+    output = result.stdout or ""
+    if result.returncode != 0:
+        return False, output[-3000:]
+    return True, output
+
+
+def run_remotion_custom(compositor_file: str, output_path: str) -> tuple[bool, str]:
+    """
+    Copy compositor-generated CustomVideo.tsx into remotion/src/ and render
+    the CustomVideo composition (no props needed — all data is hardcoded in the file).
+    """
+    if not shutil.which("npx"):
+        return False, "npx not found — install Node.js 18+ (https://nodejs.org)"
+
+    if not os.path.isdir(os.path.join(REMOTION_DIR, "node_modules", "remotion")):
+        return False, "remotion/node_modules not found. Run: cd remotion && npm install"
+
+    # Copy custom file into remotion/src/
+    dest = os.path.join(REMOTION_DIR, "src", "CustomVideo.tsx")
+    shutil.copy2(compositor_file, dest)
+    print(f"✓ CustomVideo.tsx → {dest}")
+
+    cmd = [
+        "npx", "remotion", "render",
+        "src/index.ts",
+        "CustomVideo",
+        os.path.abspath(output_path),
+        "--concurrency=4",
+        "--log=verbose",
+    ]
+
+    with Spinner("Remotion rendering (custom compositor)"):
         try:
             result = subprocess.run(
                 cmd,
@@ -346,15 +388,20 @@ def main():
         json.dump(props, f, indent=2)
     print(f"✓ Props written → {PROPS_PATH}")
 
-    # ── Render — local or Lambda ──────────────────────────────────────────────
+    # ── Render — compositor / local / Lambda ─────────────────────────────────
     os.makedirs(os.path.dirname(OUTPUT_VIDEO), exist_ok=True)
 
-    use_lambda = os.environ.get("USE_REMOTION_LAMBDA", "").strip() == "1"
-    if use_lambda:
-        print("[animator] USE_REMOTION_LAMBDA=1 — using @remotion/lambda")
-        success, log = run_remotion_lambda(PROPS_PATH, OUTPUT_VIDEO)
+    compositor_file = os.environ.get("COMPOSITOR_FILE", "").strip()
+    if compositor_file and os.path.exists(compositor_file):
+        print(f"[animator] Compositor mode — rendering CustomVideo from {compositor_file}")
+        success, log = run_remotion_custom(compositor_file, OUTPUT_VIDEO)
     else:
-        success, log = run_remotion(PROPS_PATH, OUTPUT_VIDEO)
+        use_lambda = os.environ.get("USE_REMOTION_LAMBDA", "").strip() == "1"
+        if use_lambda:
+            print("[animator] USE_REMOTION_LAMBDA=1 — using @remotion/lambda")
+            success, log = run_remotion_lambda(PROPS_PATH, OUTPUT_VIDEO)
+        else:
+            success, log = run_remotion(PROPS_PATH, OUTPUT_VIDEO)
 
     if not success:
         raise RuntimeError(f"Remotion render failed:\n{log}")

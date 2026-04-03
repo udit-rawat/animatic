@@ -3,6 +3,7 @@ import { Composition, staticFile } from "remotion";
 import { getAudioDurationInSeconds } from "@remotion/media-utils";
 import { VideoComposition } from "./VideoComposition";
 import { LayoutRenderer } from "./LayoutRenderer";
+import { CustomVideo, CustomVideoConfig } from "./CustomVideo";
 import type { RemotionProps, BeatLayout, LayoutNode } from "./types";
 
 const FPS     = 30;
@@ -183,6 +184,16 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         width={1080}
         height={1920}
+      />
+
+      {/* Custom generated video — one-off per topic */}
+      <Composition
+        id="CustomVideo"
+        component={CustomVideo}
+        durationInFrames={CustomVideoConfig.durationInFrames}
+        fps={CustomVideoConfig.fps}
+        width={CustomVideoConfig.width}
+        height={CustomVideoConfig.height}
       />
 
       {/* Phase 2 gate — 4-beat video, inspect spring camera pans between beats */}

@@ -241,9 +241,25 @@ class NarrationScript(BaseModel):
     """
     hook: str = Field(
         description=(
-            "State the broken assumption or surprising metric. ONE concrete number. "
-            "Use 'you' / 'your'. End with the implicit question, not the answer. "
-            "≤ 28 words."
+            "Stop-scroll in 3 seconds. No explanation. No setup. Just the fact that makes them stay. "
+            "Choose the pattern that fits the topic energy — do NOT force one pattern onto every topic:\n\n"
+            "PATTERN A — Mechanism / contradiction topics: "
+            "[what was previously assumed true] → [what this breaks] → [the number]. "
+            "Use when the topic IS the mechanism. "
+            "GOOD: 'Every 1-bit LLM kept embeddings at 16-bit. Bonsai closes that. 1.15 GB.' "
+            "GOOD: '119B parameters. Only 6B fire per pass. That's not a bug — that's the architecture.' "
+            "\n\n"
+            "PATTERN B — Capability / product / desire topics: "
+            "[the desire engineers have always had] → [it now exists] → [the proof number]. "
+            "Short declarative sentences. No filler. Punchy. "
+            "Use when the topic IS the capability — what it enables, not how it works. "
+            "GOOD: 'Private ChatGPT. Your iPhone. No internet. 1.15 GB. 44 tokens per second.' "
+            "GOOD: 'Your own LLM. Runs offline. Fits in 1.15 gigs. No cloud ever.' "
+            "\n\n"
+            "RULES for both patterns: "
+            "ONE concrete number minimum. No adjectives (use the number instead). "
+            "No 'Imagine', no 'What if', no commands like 'Run your own...'. "
+            "≤ 28 words. Every word earns its place or gets cut."
         ),
     )
     context: str = Field(
@@ -254,23 +270,41 @@ class NarrationScript(BaseModel):
     )
     insight: str = Field(
         description=(
-            "The non-obvious implication. What this changes about how engineers should "
-            "build or measure. Mix short punchy sentences with one medium sentence. ≤ 45 words."
+            "Name the mechanism at the code or architecture level — the specific variable, "
+            "layer, flag, operation, or design decision. Then state the non-obvious implication: "
+            "what specifically changes about how engineers build or measure. "
+            "GOOD: 'MALLOC_ARENA_MAX caps arena count. Default is 8. Set it to 2. "
+            "RSS drops immediately — no model changes required.' "
+            "GOOD: 'The fitness function must be exact and automatable. "
+            "That constraint is also the unlock — any verifiable objective qualifies.' "
+            "BAD: 'Memory management affects training in subtle ways.' "
+            "Mix short punchy sentences with one medium sentence for rhythm. ≤ 45 words."
         ),
     )
     takeaway: str = Field(
         description=(
-            "One sharp sentence restating what they now know. "
-            "End with a provocation that makes them think beyond this topic. ≤ 28 words."
+            "Two sentences, ≤ 28 words total. "
+            "Sentence 1 — the save-trigger: state a specific rule, number, or decision "
+            "the engineer can act on or reference next week. Make it feel like a cheat-sheet line. "
+            "GOOD: 'Set MALLOC_ARENA_MAX=2 before any PyTorch job. One env var, 40% RSS drop.' "
+            "GOOD: 'Use evolutionary search when your objective is exact and cheap to evaluate.' "
+            "BAD: 'This changes how we think about memory.' "
+            "Sentence 2 (optional) — a provocation or open question that extends the thought. "
+            "The actionable line ALWAYS comes first. Never end on a question alone."
         ),
     )
     statement_lines: list[str] = Field(
         description=(
             "2-3 punchy display lines for the StatementSlam beat_3 visual. "
             "Each line ≤ 35 chars — must fit on one screen line at 80px bold. "
-            "Distil the insight into short declarative fragments or sentences. "
-            "Line 0 should be the sharpest / most surprising. "
-            "Example: ['$130 compute cost.', '$8 in revenue.', \"Math doesn't close.\"]"
+            "Line 0: the sharpest number or verdict — the line an engineer would screenshot. "
+            "Line 1: the mechanism or condition in one fragment. "
+            "Line 2 (optional): the implication or rule. "
+            "These three lines together should work as a reference card — "
+            "someone should be able to save the screenshot and remember the lesson. "
+            "GOOD: ['MALLOC_ARENA_MAX=2', 'Default is 8. Cut it.', '40% RSS. No code change.'] "
+            "GOOD: ['56-year record. Broken.', 'AI rewrote the algorithm.', 'Verifiable = evolvable.'] "
+            "BAD: ['This is very impressive', 'Major breakthrough achieved', 'Changes everything']"
         ),
         min_length=2,
         max_length=3,
@@ -291,6 +325,9 @@ class NarrationScript(BaseModel):
 
     @model_validator(mode="after")
     def enforce_word_budget(self) -> "NarrationScript":
+        # Skip when --narration override is active — LLM-generated script is replaced anyway
+        if os.environ.get("NARRATION_OVERRIDE") == "1":
+            return self
         full = f"{self.hook} {self.context} {self.insight} {self.takeaway}"
         total = len(full.split())
         if not (130 <= total <= 145):
@@ -426,6 +463,11 @@ SYSTEM_PROMPT = textwrap.dedent("""
     "In conclusion"             "As we can see"
     "It's worth noting"         "Interestingly"
     "Needless to say"           "Simply put"
+    "This changes everything"   "Game changer"
+    "Revolutionary"             "Groundbreaking"
+    "Incredibly"                "Mind-blowing"
+    "Massive" (use the number)  "Huge" (use the number)
+    "Next level"                "Powerful" (unless quoting a benchmark)
 
     ═══════════════════════════════════════════════════════
      ON-SCREEN TEXT RULES  (ui_content field)
@@ -553,6 +595,14 @@ def generate(topic: dict, max_retries: int = 3) -> VideoPayload:
 
 # ── Gemini path (instructor) ───────────────────────────────────────────────────
 
+def _get_all_gemini_keys() -> list[str]:
+    multi = os.environ.get("GEMINI_API_KEYS", "")
+    if multi:
+        return [k.strip() for k in multi.split(",") if k.strip()]
+    single = os.environ.get("GEMINI_API_KEY", "")
+    return [single.strip()] if single.strip() else []
+
+
 def _generate_gemini(topic: dict, max_retries: int) -> VideoPayload:
     try:
         import instructor
@@ -562,33 +612,48 @@ def _generate_gemini(topic: dict, max_retries: int) -> VideoPayload:
             "Gemini path requires: pip install instructor google-generativeai"
         )
 
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEYS", "").split(",")[0]
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not set.")
+    keys = _get_all_gemini_keys()
+    if not keys:
+        raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS not set.")
 
-    genai.configure(api_key=api_key.strip())
+    # content_generator uses the full flash model — flash-lite lacks the instruction
+    # following capacity to reliably hit the word budget + field constraints simultaneously.
     model_name = os.environ.get("GEMINI_MODEL_CONTENT_GENERATOR", "gemini-2.5-flash")
+    print(f"[content_generator] Gemini  model={model_name}  keys={len(keys)}  max_retries={max_retries}")
 
-    client = instructor.from_gemini(
-        client=genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=SYSTEM_PROMPT,
-        ),
-        mode=instructor.Mode.GEMINI_JSON,
-    )
+    last_err = None
+    for key in keys:
+        try:
+            genai.configure(api_key=key)
+            client = instructor.from_gemini(
+                client=genai.GenerativeModel(
+                    model_name=model_name,
+                    system_instruction=SYSTEM_PROMPT,
+                ),
+                mode=instructor.Mode.GEMINI_JSON,
+            )
+            payload, _ = client.chat.completions.create_with_completion(
+                messages=[{"role": "user", "content": _user_prompt(topic)}],
+                response_model=VideoPayload,
+                max_retries=max_retries,
+            )
+            try:
+                from pipeline import quota as _q
+                _q.record_call("content_generator")
+            except Exception:
+                pass
+            return payload
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "quota" in err_str.lower() or "exhausted" in err_str.lower():
+                print(f"  [key rotation] key ...{key[-8:]} exhausted — trying next key")
+                last_err = e
+                continue
+            raise  # non-quota error: re-raise immediately
 
-    print(f"[content_generator] Gemini  model={model_name}  max_retries={max_retries}")
-    payload, _ = client.chat.completions.create_with_completion(
-        messages=[{"role": "user", "content": _user_prompt(topic)}],
-        response_model=VideoPayload,
-        max_retries=max_retries,
+    raise RuntimeError(
+        f"content_generator: all {len(keys)} Gemini keys exhausted. Last error: {last_err}"
     )
-    try:
-        from pipeline import quota as _q
-        _q.record_call("content_generator")
-    except Exception:
-        pass
-    return payload
 
 
 # ── Anthropic path (instructor) ───────────────────────────────────────────────
