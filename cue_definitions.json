@@ -23,34 +23,22 @@
   ],
   "word_cues": [
     {
-      "label": "leaderboard_reveal",
-      "trigger_word": "wrong",
+      "label": "metric_reveal",
+      "trigger_word": "downloads",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "attention_show",
-      "trigger_word": "attention",
+      "label": "insight_drop",
+      "trigger_word": "applications",
       "occurrence": 0,
-      "offset_frames": 0
+      "offset_frames": -8
     },
     {
-      "label": "multitoken_show",
-      "trigger_word": "multi-token",
+      "label": "takeaway_flash",
+      "trigger_word": "free",
       "occurrence": 0,
-      "offset_frames": 0
-    },
-    {
-      "label": "local_deploy_flash",
-      "trigger_word": "locally",
-      "occurrence": 0,
-      "offset_frames": 0
-    },
-    {
-      "label": "takeaway_reframe",
-      "trigger_word": "anymore",
-      "occurrence": 0,
-      "offset_frames": 0
+      "offset_frames": -8
     }
   ]
 }
