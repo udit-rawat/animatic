@@ -149,6 +149,120 @@ def _intervention_checkpoint() -> bool:
     return ans == "y"
 
 
+def _narration_preview_pause():
+    """
+    Show the final spoken_narration.json that will go to TTS.
+    User must confirm before narrator runs. Abort = Ctrl+C.
+    """
+    narration_path = os.path.join(OUTPUT_DIR, "spoken_narration.json")
+    if not os.path.exists(narration_path):
+        return
+
+    with open(narration_path) as f:
+        narration = json.load(f)
+
+    print("\n" + "═" * 70)
+    print("  📢  NARRATION REVIEW  —  this is the exact script going to TTS")
+    print("═" * 70)
+    for seg in ["hook", "concept_1", "concept_2", "takeaway_cta"]:
+        text = narration.get(seg, "")
+        if text:
+            print(f"\n  [{seg}]")
+            print(f"  \"{text}\"")
+    print("\n" + "═" * 70)
+    print("  Review the script above. If it looks good, press Enter to continue.")
+    print("  To abort and edit, press Ctrl+C.\n")
+
+    try:
+        input("  Continue to TTS → ")
+    except (EOFError, KeyboardInterrupt):
+        print("\n[narration] Aborted — edit spoken_narration.json and re-run with --stage narrator")
+        sys.exit(0)
+
+
+def _compositor_pause() -> str:
+    """
+    Pause pipeline before animator. Print all context file paths so the user
+    can feed them to Claude and generate a custom CustomVideo.tsx.
+    Returns the path where the file must be dropped.
+    """
+    import re as _re
+    from datetime import date as _date
+
+    # Build slug from topic title
+    topic_title = "video"
+    if os.path.exists(TOPIC_PATH):
+        with open(TOPIC_PATH) as f:
+            topic_title = json.load(f).get("title", "video")
+    slug = _re.sub(r"[^a-z0-9]+", "-", topic_title.lower()).strip("-")[:40]
+    today = _date.today().isoformat()
+    comp_dir  = os.path.join(OUTPUT_DIR, "compositions", f"{today}_{slug}")
+    drop_path = os.path.join(comp_dir, "CustomVideo.tsx")
+    os.makedirs(comp_dir, exist_ok=True)
+
+    # ── Load narration + timing for inline display ───────────────────────────
+    narration_path = os.path.join(OUTPUT_DIR, "spoken_narration.json")
+    timing_path    = os.path.join(OUTPUT_DIR, "narration_timing.json")
+    narration_data = {}
+    timing_data    = {}
+    if os.path.exists(narration_path):
+        with open(narration_path) as f:
+            narration_data = json.load(f)
+    if os.path.exists(timing_path):
+        with open(timing_path) as f:
+            timing_data = json.load(f)
+
+    total_dur = max(
+        (v.get("end", 0) for v in timing_data.values()), default=0
+    ) if timing_data else 0
+
+    print("\n" + "═" * 70)
+    print("  ⏸  COMPOSITOR PAUSE  —  generate a custom CustomVideo.tsx")
+    print("═" * 70)
+    print(f"\n  TOPIC: {topic_title}")
+    print(f"  DURATION: {total_dur:.1f}s\n")
+
+    if narration_data:
+        print("  NARRATION + TIMING")
+        print("  ─────────────────────────────────────────────────────────────")
+        segment_order = ["hook", "concept_1", "concept_2", "takeaway_cta"]
+        for seg in segment_order:
+            text   = narration_data.get(seg, "")
+            timing = timing_data.get(seg, {})
+            if not text:
+                continue
+            start  = timing.get("start", 0)
+            end    = timing.get("end", start + timing.get("duration", 0))
+            s_from = round(start * 30)
+            s_to   = round(end   * 30)
+            print(f"\n  [{seg}]  frames {s_from}–{s_to}  ({start:.1f}s – {end:.1f}s)")
+            print(f"  \"{text}\"")
+        print()
+
+    print("  ─────────────────────────────────────────────────────────────")
+    print("  Prompt Claude with the TOPIC + NARRATION above to generate")
+    print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
+    print(f"\n  Drop the file here when ready:")
+    print(f"\n    {drop_path}\n")
+    print("═" * 70)
+
+    try:
+        input("  Press Enter when the file is ready → ")
+    except (EOFError, KeyboardInterrupt):
+        print("\n[compositor] Aborted.")
+        sys.exit(0)
+
+    if not os.path.exists(drop_path):
+        print(f"\n[ERROR] File not found at {drop_path}", file=sys.stderr)
+        print("  Drop the file there and re-run with --stage animator", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\n  ✅ Found CustomVideo.tsx — continuing to render.\n")
+    print("═" * 60 + "\n")
+    os.environ["COMPOSITOR_FILE"] = drop_path
+    return drop_path
+
+
 def _apply_narration_override(narration_arg: str):
     """
     Write a custom spoken_narration.json from --narration argument.
@@ -163,8 +277,10 @@ def _apply_narration_override(narration_arg: str):
             narration = _json.load(f)
         print(f"[narration] Loaded custom narration from file → {narration_arg}")
     else:
+        # Strip literal newlines/tabs that get embedded when pasting multiline shell commands
+        cleaned = narration_arg.replace("\n", " ").replace("\r", " ").replace("\t", " ")
         try:
-            narration = _json.loads(narration_arg)
+            narration = _json.loads(cleaned)
             print("[narration] Loaded custom narration from inline JSON")
         except _json.JSONDecodeError as e:
             print(f"[ERROR] --narration value is not valid JSON and not a file path: {e}", file=sys.stderr)
@@ -273,6 +389,15 @@ def main():
         ),
     )
 
+    # ── Compositor ───────────────────────────────────────────────────────────
+    parser.add_argument(
+        "--compositor", action="store_true",
+        help=(
+            "Pause after narrator, print context file paths + drop directory, "
+            "wait for you to paste a custom CustomVideo.tsx, then continue to render."
+        ),
+    )
+
     # ── Intervention checkpoint ───────────────────────────────────────────────
     parser.add_argument(
         "--checkpoint", action="store_true",
@@ -334,6 +459,10 @@ def main():
     if args.tone:
         os.environ["NARRATOR_TONE_OVERRIDE"] = args.tone
         print(f"[tone] Custom tone set → \"{args.tone[:80]}\"")
+
+    # ── Narration override: signal content_generator to skip word-count check ─
+    if args.narration:
+        os.environ["NARRATION_OVERRIDE"] = "1"
 
     # ── Custom mode: validate + write topic.json ──────────────────────────────
     if args.custom:
@@ -405,6 +534,10 @@ def main():
                         pass
                 return
 
+        # ── Compositor pause: wait for custom CustomVideo.tsx before animator ──
+        if getattr(args, "compositor", False) and stage == "animator":
+            _compositor_pause()
+
         # ── Narration override: write spoken_narration.json after content stage ─
         if args.narration and stage == "content_generator":
             try:
@@ -422,6 +555,8 @@ def main():
                         pass
                 sys.exit(1)
             _apply_narration_override(args.narration)
+            # ── Narration preview: show final script before TTS ───────────────
+            _narration_preview_pause()
             continue
 
         try:
