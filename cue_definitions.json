@@ -24,19 +24,25 @@
   "word_cues": [
     {
       "label": "metric_reveal",
-      "trigger_word": "downloads",
+      "trigger_word": "Zero",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "insight_drop",
-      "trigger_word": "applications",
+      "label": "stat_show_2",
+      "trigger_word": "Molmo",
+      "occurrence": 0,
+      "offset_frames": -8
+    },
+    {
+      "label": "stat_show_3",
+      "trigger_word": "locally",
       "occurrence": 0,
       "offset_frames": -8
     },
     {
       "label": "takeaway_flash",
-      "trigger_word": "free",
+      "trigger_word": "Ditch",
       "occurrence": 0,
       "offset_frames": -8
     }

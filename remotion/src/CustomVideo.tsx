@@ -1,557 +1,438 @@
 /**
- * CustomVideo.tsx — Gemma 4 by Google
- * 1108 frames · 30fps · 36.9s
+ * CustomVideo.tsx — MolmoWeb: "You Pay for Web Agents. This Open Source One Beats Them Locally"
+ * 937 frames · 30fps · 31.2s
  *
- * [hook]       frames   0–206   6.9s
- * [concept_1]  frames 206–567  12.0s
- * [concept_2]  frames 567–807   8.0s
- * [takeaway]   frames 807–1108 10.0s
- *
- * Theme: #0A0A0A · white · #FBBC04 yellow
+ * [hook]      frames   0–216   7.2s  Custom browser + MolmoWeb logo entrance + FREE slam
+ * [concept_1] frames 216–512   9.9s  BarComparison — 4 web agent benchmark scores
+ * [concept_2] frames 512–731   7.3s  MetricFocus   — $0 hero metric
+ * [takeaway]  frames 731–937   6.8s  TakeawayScene — word reveal + CTA
  */
+
 import React from "react";
 import {
-  useCurrentFrame,
-  useVideoConfig,
+  AbsoluteFill,
+  Audio,
+  Sequence,
   interpolate,
   spring,
-  Audio,
   staticFile,
-  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
 } from "remotion";
 
-// ── Timing ────────────────────────────────────────────────────────────────────
-const T = {
-  hook: { start: 0,   end: 206  },
-  c1:   { start: 206, end: 567  },
-  c2:   { start: 567, end: 807  },
-  cta:  { start: 807, end: 1108 },
-};
-const TOTAL_FRAMES = 1108;
+import { BeatFrameContext } from "./hooks/useBeatFrame";
+import { BarComparison } from "./layouts/BarComparison";
+import { MetricFocus } from "./layouts/MetricFocus";
+import { TakeawayScene } from "./layouts/TakeawayScene";
+import {
+  COLOR,
+  FONT,
+  ParticleBackground,
+  TelemetryFrame,
+} from "./layouts/_shared";
+import { SPRING_HEAVY, SPRING_MEDIUM } from "./utils/springIn";
 
-const BG     = "#0A0A0A";
-const WHITE  = "#FFFFFF";
-const YELLOW = "#FBBC04";
+// ── Frame budgets ─────────────────────────────────────────────────────────────
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const clamp = (v: number, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
+const HOOK_F     = 216;
+const CONCEPT1_F = 296;   // 512 - 216
+const CONCEPT2_F = 219;   // 731 - 512
+const TAKEAWAY_F = 206;   // 937 - 731
 
-const fi = (lf: number, from: number, dur = 14) =>
-  clamp((lf - from) / dur);
+// ── Beat context wrapper ──────────────────────────────────────────────────────
 
-const fo = (lf: number, from: number, dur = 14) =>
-  clamp(1 - (lf - from) / dur);
+const Beat: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
+    {children}
+  </BeatFrameContext.Provider>
+);
 
-// Deterministic particle positions (no Math.random)
-const particles = Array.from({ length: 60 }, (_, i) => {
-  const s1 = Math.sin(i * 127.1) * 43758.5453;
-  const s2 = Math.sin(i * 311.7 + 99) * 43758.5453;
-  const s3 = Math.sin(i * 74.3  + 33) * 43758.5453;
-  const s4 = Math.sin(i * 210.9 + 17) * 43758.5453;
-  const frac = (v: number) => v - Math.floor(v);
-  return {
-    x:  frac(s1) * 1080,
-    y:  frac(s2) * 1920,
-    vx: (frac(s3) - 0.5) * 0.6,
-    vy: (frac(s4) - 0.5) * 0.6,
-    r:  1.5 + frac(Math.sin(i * 53.1) * 9999) * 2,
-  };
-});
+// ── Design tokens ─────────────────────────────────────────────────────────────
 
-// Character-by-character reveal: returns visible char count
-const charReveal = (lf: number, from: number, framesPerChar = 4) =>
-  Math.floor(clamp((lf - from) / framesPerChar, 0, 999));
+const PINK   = "#F472B6";
+const CYAN   = COLOR.cyan;
+const YELLOW = COLOR.yellow;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// HOOK  frames 0–206
-// ═══════════════════════════════════════════════════════════════════════════════
-const HookSection: React.FC<{ lf: number; fps: number }> = ({ lf, fps }) => {
-  // ── Line draw (0–40) ──────────────────────────────────────────────────────
-  const lineW = interpolate(lf, [0, 40], [0, 540], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
+// ── Loading spinner ───────────────────────────────────────────────────────────
+
+const Spinner: React.FC<{ frame: number; size: number; color: string }> = ({ frame, size, color }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" style={{ overflow: "visible" }}>
+    {Array.from({ length: 8 }, (_, i) => {
+      const angle   = (i / 8) * Math.PI * 2;
+      const phase   = ((frame * 0.12) + i / 8) % 1;
+      const x1 = 20 + Math.cos(angle) * 11;
+      const y1 = 20 + Math.sin(angle) * 11;
+      const x2 = 20 + Math.cos(angle) * 17;
+      const y2 = 20 + Math.sin(angle) * 17;
+      return (
+        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+          stroke={color} strokeWidth={2.5} strokeLinecap="round" opacity={0.15 + phase * 0.85} />
+      );
+    })}
+  </svg>
+);
+
+// ── Geometric network node ────────────────────────────────────────────────────
+
+const NetworkNode: React.FC<{ frame: number; size: number }> = ({ frame, size }) => {
+  const rot      = frame * 0.6;
+  const glowPulse = Math.sin((frame / 30) * Math.PI * 2 * 0.4) * 0.5 + 0.5;
+  const glow      = 12 + glowPulse * 16;
+
+  const pts = Array.from({ length: 6 }, (_, i) => {
+    const a = (i / 6) * Math.PI * 2 + (rot * Math.PI) / 180;
+    return { x: Math.cos(a) * 0.65, y: Math.sin(a) * 0.65 };
   });
 
-  // ── Line explosion (40–55): line expands to full screen height ────────────
-  const explodeH = interpolate(lf, [40, 52], [2, 1920], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-  const explodeO = interpolate(lf, [40, 55], [1, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-  const showLine    = lf < 55;
-  const showContent = lf >= 55;
-
-  // ── GEMMA 4 drop (60–90) ──────────────────────────────────────────────────
-  const gemmaY = lf >= 60
-    ? interpolate(
-        spring({ frame: lf - 60, fps, config: { damping: 11, stiffness: 160, mass: 0.9 } }),
-        [0, 1], [-280, 0]
-      )
-    : -280;
-  const gemmaO = fi(lf, 60, 8);
-
-  // ── FREE. drop (78–108) ───────────────────────────────────────────────────
-  const freeY = lf >= 78
-    ? interpolate(
-        spring({ frame: lf - 78, fps, config: { damping: 11, stiffness: 160, mass: 0.9 } }),
-        [0, 1], [-180, 0]
-      )
-    : -180;
-  const freeO = fi(lf, 78, 8);
-
-  // ── Particles (alive from frame 100) ─────────────────────────────────────
-  const particleO = fi(lf, 100, 20);
-
-  // ── Char reveals ─────────────────────────────────────────────────────────
-  const lines = [
-    { text: "No paywall.",    from: 118 },
-    { text: "Runs offline.",  from: 142 },
-    { text: "Just download.", from: 166 },
-  ];
+  const edges: [number, number][] = [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,3],[1,4],[2,5]];
 
   return (
-    <AbsoluteFill style={{ background: BG, overflow: "hidden" }}>
-
-      {/* ── Line draw → explosion ── */}
-      {showLine && (
-        <div style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width:  lf < 40 ? lineW * 2 : 1080,
-          height: lf < 40 ? 2 : explodeH,
-          background: WHITE,
-          opacity: lf < 40 ? 1 : explodeO,
-        }} />
-      )}
-
-      {/* ── Particles ── */}
-      {showContent && (
-        <div style={{ position: "absolute", inset: 0, opacity: particleO, pointerEvents: "none" }}>
-          {particles.map((p, i) => (
-            <div key={i} style={{
-              position: "absolute",
-              left: (p.x + p.vx * lf + 1080) % 1080,
-              top:  (p.y + p.vy * lf + 1920) % 1920,
-              width:  p.r * 2,
-              height: p.r * 2,
-              borderRadius: "50%",
-              background: WHITE,
-              opacity: 0.07,
-            }} />
-          ))}
-        </div>
-      )}
-
-      {/* ── GEMMA 4 ── */}
-      {showContent && (
-        <div style={{
-          position: "absolute",
-          top: "28%",
-          width: "100%",
-          textAlign: "center",
-          opacity: gemmaO,
-          transform: `translateY(${gemmaY}px)`,
-        }}>
-          <div style={{
-            fontSize: 148,
-            fontWeight: 900,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            lineHeight: 1,
-            letterSpacing: "-0.03em",
-          }}>GEMMA</div>
-        </div>
-      )}
-
-      {/* ── FREE. (yellow, drops after GEMMA) ── */}
-      {showContent && (
-        <div style={{
-          position: "absolute",
-          top: "50%",
-          width: "100%",
-          textAlign: "center",
-          opacity: freeO,
-          transform: `translateY(${freeY}px)`,
-        }}>
-          <div style={{
-            fontSize: 200,
-            fontWeight: 900,
-            color: YELLOW,
-            fontFamily: "Inter, system-ui, sans-serif",
-            lineHeight: 0.85,
-            letterSpacing: "-0.04em",
-            textShadow: `0 0 80px rgba(251,188,4,0.5)`,
-          }}>4</div>
-        </div>
-      )}
-
-      {/* ── Char-reveal detail lines ── */}
-      {showContent && (
-        <div style={{
-          position: "absolute",
-          bottom: 175,
-          width: "100%",
-          textAlign: "center",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 10,
-        }}>
-          {lines.map((l, i) => {
-            const visible = charReveal(lf, l.from, 3);
-            const text    = l.text.slice(0, visible);
-            const opa     = fi(lf, l.from, 6);
-            if (opa <= 0) return null;
-            return (
-              <div key={i} style={{
-                fontSize: 30,
-                fontWeight: 500,
-                color: WHITE,
-                fontFamily: "Inter, 'Courier New', monospace",
-                opacity: Math.min(1, opa + 0.1),
-                letterSpacing: "0.02em",
-              }}>{text}</div>
-            );
-          })}
-        </div>
-      )}
-    </AbsoluteFill>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONCEPT 1  frames 206–567
-// Directional sentence entrances → counter to 400M
-// ═══════════════════════════════════════════════════════════════════════════════
-const Concept1Section: React.FC<{ lf: number; fps: number }> = ({ lf, fps }) => {
-  // 4-frame flash
-  const flashO = interpolate(lf, [0, 4], [1, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  // ── Three directional sentences (lf 4–300) ────────────────────────────────
-  type Dir = "left" | "right" | "top";
-  const sentences: { text: string; dir: Dir; arriveAt: number; stackY: number }[] = [
-    { text: "Complex reasoning.", dir: "left",  arriveAt: 10,  stackY: -100 },
-    { text: "Planning.",          dir: "right", arriveAt: 55,  stackY:    0 },
-    { text: "Building agents.",   dir: "top",   arriveAt: 100, stackY:  100 },
-  ];
-
-  // Each sentence: slides in to center, holds full opacity, then dims + moves to stack pos
-  // Stack exit starts at lf 200
-  const showSentences = lf < 300;
-  const showStat      = lf >= 290;
-
-  // "Gemma 4 handles all of it." (lf 200–270)
-  const handlesO = lf >= 200
-    ? clamp(fi(lf, 200, 16) * fo(lf, 250, 20))
-    : 0;
-
-  // Counter 0→400 (lf 300–380)
-  const counterVal = Math.round(
-    interpolate(lf, [300, 390], [0, 400], {
-      extrapolateLeft: "clamp", extrapolateRight: "clamp",
-    })
-  );
-  const counterO = fi(lf, 300, 10);
-
-  // "million" slides up (lf 390–420)
-  const millionO = fi(lf, 390, 16);
-  const millionY = interpolate(lf, [390, 415], [30, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  // "This one is stronger." (lf 430–567)
-  const strongerO = fi(lf, 430, 20);
-
-  return (
-    <AbsoluteFill style={{ background: BG, overflow: "hidden" }}>
-      {/* flash */}
-      <AbsoluteFill style={{ background: WHITE, opacity: flashO, pointerEvents: "none" }} />
-
-      {/* ── Directional sentences ── */}
-      {showSentences && sentences.map((s, i) => {
-        const arrived = lf >= s.arriveAt;
-        if (!arrived) return null;
-
-        const progress = spring({
-          frame: lf - s.arriveAt,
-          fps,
-          config: { damping: 18, stiffness: 140, mass: 0.8 },
-        });
-
-        // Slide from direction → center
-        const offX = s.dir === "left" ? -700 : s.dir === "right" ? 700 : 0;
-        const offY = s.dir === "top"  ? -500 : 0;
-        const cx   = interpolate(progress, [0, 1], [offX, 0]);
-        const cy   = interpolate(progress, [0, 1], [offY, 0]);
-
-        // After lf 200: drift to stack position + dim
-        const exitProgress = clamp((lf - 200) / 40);
-        const stackX = interpolate(exitProgress, [0, 1], [0, 0]);
-        const stackY = interpolate(exitProgress, [0, 1], [0, s.stackY]);
-        const dimO   = interpolate(exitProgress, [0, 1], [1, 0.28]);
-        const scaleE = interpolate(exitProgress, [0, 1], [1, 0.72]);
-
-        return (
-          <div key={i} style={{
-            position: "absolute",
-            top: "50%",
-            width: "100%",
-            textAlign: "center",
-            transform: `translate(${cx + stackX}px, calc(-50% + ${cy + stackY}px)) scale(${scaleE})`,
-            opacity: dimO,
-          }}>
-            <div style={{
-              fontSize: 68,
-              fontWeight: 900,
-              color: WHITE,
-              fontFamily: "Inter, system-ui, sans-serif",
-              letterSpacing: "-0.02em",
-            }}>{s.text}</div>
-          </div>
-        );
-      })}
-
-      {/* "Gemma 4 handles all of it." */}
-      {lf >= 200 && lf < 300 && (
-        <div style={{
-          position: "absolute",
-          bottom: 220,
-          width: "100%",
-          textAlign: "center",
-          opacity: handlesO,
-        }}>
-          <div style={{
-            fontSize: 36,
-            fontWeight: 500,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            fontStyle: "italic",
-          }}>Gemma 4 handles all of it.</div>
-        </div>
-      )}
-
-      {/* ── 400M counter ── */}
-      {showStat && (
-        <div style={{
-          position: "absolute",
-          top: "42%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          textAlign: "center",
-        }}>
-          <div style={{
-            fontSize: 220,
-            fontWeight: 900,
-            color: YELLOW,
-            fontFamily: "Inter, system-ui, sans-serif",
-            lineHeight: 0.85,
-            letterSpacing: "-0.05em",
-            opacity: counterO,
-            textShadow: `0 0 100px rgba(251,188,4,0.45)`,
-          }}>{counterVal}</div>
-
-          <div style={{
-            fontSize: 72,
-            fontWeight: 700,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            opacity: millionO,
-            transform: `translateY(${millionY}px)`,
-            marginTop: 4,
-          }}>million.</div>
-
-          <div style={{
-            fontSize: 38,
-            fontWeight: 500,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            fontStyle: "italic",
-            opacity: strongerO,
-            marginTop: 30,
-          }}>This one is stronger.</div>
-        </div>
-      )}
-    </AbsoluteFill>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONCEPT 2  frames 567–807
-// ═══════════════════════════════════════════════════════════════════════════════
-const Concept2Section: React.FC<{ lf: number }> = ({ lf }) => {
-  const flashO = interpolate(lf, [0, 4], [1, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  const mkLine = (from: number) => ({
-    o: fi(lf, from, 10),
-    y: interpolate(lf, [from, from + 22], [36, 0], {
-      extrapolateLeft: "clamp", extrapolateRight: "clamp",
-    }),
-  });
-
-  const l1 = mkLine(10);
-  const l2 = mkLine(52);
-  const l3 = mkLine(90);
-  const fasterO = fi(lf, 155, 16);
-
-  return (
-    <AbsoluteFill style={{ background: BG }}>
-      <AbsoluteFill style={{ background: WHITE, opacity: flashO, pointerEvents: "none" }} />
-
-      <div style={{
-        position: "absolute",
-        top: "35%",
-        width: "100%",
-        textAlign: "center",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 20,
-      }}>
-        {[
-          { label: "Your laptop.",  ...l1 },
-          { label: "No cloud.",     ...l2 },
-          { label: "No fees.",      ...l3 },
-        ].map((item, i) => (
-          <div key={i} style={{
-            fontSize: 74,
-            fontWeight: 900,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            letterSpacing: "-0.025em",
-            opacity: item.o,
-            transform: `translateY(${item.y}px)`,
-          }}>{item.label}</div>
+    <div style={{ width: size, height: size, filter: `drop-shadow(0 0 ${glow}px ${PINK}80)` }}>
+      <svg width={size} height={size} viewBox="-1 -1 2 2">
+        <circle cx={0} cy={0} r={0.92} fill={`${PINK}22`} stroke={PINK} strokeWidth={0.04} />
+        {edges.map(([a, b], i) => (
+          <line key={i} x1={pts[a].x} y1={pts[a].y} x2={pts[b].x} y2={pts[b].y}
+            stroke={PINK} strokeWidth={0.03} opacity={0.5} />
         ))}
-      </div>
-
-      <div style={{
-        position: "absolute",
-        bottom: 190,
-        width: "100%",
-        textAlign: "center",
-        opacity: fasterO,
-      }}>
-        <div style={{
-          fontSize: 52,
-          fontWeight: 700,
-          color: YELLOW,
-          fontFamily: "Inter, system-ui, sans-serif",
-        }}>Faster than ever.</div>
-      </div>
-    </AbsoluteFill>
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={0.055} fill={PINK} opacity={0.85} />
+        ))}
+        <circle cx={0} cy={0} r={0.08} fill={PINK} opacity={0.9} />
+      </svg>
+    </div>
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAKEAWAY  frames 807–1108
-// ═══════════════════════════════════════════════════════════════════════════════
-const TakeawaySection: React.FC<{ lf: number }> = ({ lf }) => {
-  const flashO  = interpolate(lf, [0, 4], [1, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-  const ruleO   = fi(lf, 6, 10);
-  const textO   = fi(lf, 20, 22);
-  const textY   = interpolate(lf, [20, 44], [22, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-  const liveO   = fi(lf, 130, 14);
-  const saveO   = fi(lf, 196, 14);
-  const arrowP  = interpolate(lf % 30, [0, 15, 30], [0.35, 1, 0.35], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
+// ── Bidirectional pulse arrow ─────────────────────────────────────────────────
+
+const PulseArrow: React.FC<{ frame: number; width: number }> = ({ frame, width }) => {
+  const cycle   = 60;
+  const t       = (frame % cycle) / cycle;
+  const goRight = Math.floor(frame / cycle) % 2 === 0;
+  const pos     = (goRight ? t : 1 - t) * width;
 
   return (
-    <AbsoluteFill style={{ background: BG }}>
-      <AbsoluteFill style={{ background: WHITE, opacity: flashO, pointerEvents: "none" }} />
-
+    <div style={{ position: "relative", width, height: 20, display: "flex", alignItems: "center" }}>
       <div style={{
-        position: "absolute", top: 158, width: "100%", textAlign: "center",
-        opacity: ruleO,
-      }}>
-        <div style={{
-          fontSize: 20, fontWeight: 700, color: YELLOW,
-          fontFamily: "Inter, system-ui, sans-serif",
-          letterSpacing: "0.5em", textTransform: "uppercase",
-        }}>● RULE</div>
-      </div>
-
+        position: "absolute", left: 0, right: 0, height: 1,
+        background: `linear-gradient(90deg, ${PINK}30, ${PINK}70, ${PINK}30)`,
+      }} />
       <div style={{
-        position: "absolute", top: 250, left: 68, right: 68,
-        opacity: textO, transform: `translateY(${textY}px)`,
+        position: "absolute", left: -4,
+        width: 0, height: 0,
+        borderTop: "5px solid transparent", borderBottom: "5px solid transparent",
+        borderRight: `7px solid ${PINK}70`,
+      }} />
+      <div style={{
+        position: "absolute", right: -4,
+        width: 0, height: 0,
+        borderTop: "5px solid transparent", borderBottom: "5px solid transparent",
+        borderLeft: `7px solid ${PINK}70`,
+      }} />
+      <div style={{
+        position:     "absolute",
+        left:         pos - 4,
+        width:        8, height: 8,
+        borderRadius: "50%",
+        background:   PINK,
+        boxShadow:    `0 0 10px ${PINK}`,
+      }} />
+    </div>
+  );
+};
+
+// ── Browser window ────────────────────────────────────────────────────────────
+
+const BrowserWindow: React.FC<{ frame: number; fps: number; progress: number }> = ({ frame, fps, progress }) => {
+  const fullText   = "✦ MolmoWeb";
+  const charCount  = Math.floor(
+    interpolate(progress, [0.15, 0.65], [0, fullText.length], { extrapolateRight: "clamp" })
+  );
+  const displayText = fullText.slice(0, charCount);
+
+  const elemProgress = spring({ frame: Math.max(0, frame - 14), fps, config: SPRING_MEDIUM });
+  const elemOpacity  = interpolate(elemProgress, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
+  const elemScale    = interpolate(elemProgress, [0, 1], [0.7, 1]);
+
+  const urlGlow     = Math.sin((frame / fps) * Math.PI * 2 * 0.4) * 0.3 + 0.5;
+  const browserOpacity = interpolate(progress, [0, 0.12], [0, 1], { extrapolateRight: "clamp" });
+  const browserY       = interpolate(progress, [0, 1], [-60, 0]);
+
+  return (
+    <div style={{ opacity: browserOpacity, transform: `translateY(${browserY}px)`, width: 640 }}>
+      {/* Chrome bar */}
+      <div style={{
+        background:   "rgba(255,255,255,0.04)",
+        border:       `1px solid ${CYAN}40`,
+        borderBottom: "none",
+        borderRadius: "16px 16px 0 0",
+        padding:      "14px 18px",
+        display:      "flex",
+        alignItems:   "center",
+        gap:          10,
       }}>
+        {["#FF5F57", "#FFBD2E", "#28C840"].map((c, i) => (
+          <div key={i} style={{ width: 12, height: 12, borderRadius: "50%", background: c, opacity: 0.7 }} />
+        ))}
         <div style={{
-          fontSize: 54, fontWeight: 800, color: WHITE,
-          fontFamily: "Inter, system-ui, sans-serif",
-          lineHeight: 1.28, textAlign: "center",
+          flex:         1,
+          marginLeft:   8,
+          background:   `rgba(0,229,255,${urlGlow * 0.06})`,
+          border:       `1px solid ${CYAN}30`,
+          borderRadius: 6,
+          padding:      "4px 12px",
+          fontSize:     17,
+          color:        "rgba(255,255,255,0.35)",
+          fontFamily:   FONT,
         }}>
-          When Google open-sources{" "}
-          <span style={{ color: YELLOW }}>their strongest model</span>
-          {" "}— you move immediately.
+          localhost:7860/molmoweb
         </div>
       </div>
 
+      {/* Body */}
       <div style={{
-        position: "absolute", top: "60%", width: "100%", textAlign: "center",
-        opacity: liveO,
+        background:   "rgba(10,10,10,0.92)",
+        border:       `1px solid ${CYAN}35`,
+        borderTop:    `1px solid ${CYAN}18`,
+        borderRadius: "0 0 16px 16px",
+        padding:      "36px 40px 44px",
+        position:     "relative",
+        overflow:     "hidden",
+        boxShadow:    `0 0 60px ${CYAN}08`,
       }}>
+        {/* MolmoWeb logo type-in */}
         <div style={{
-          fontSize: 64, fontWeight: 800, color: YELLOW,
-          fontFamily: "Inter, system-ui, sans-serif",
-        }}>Gemma 4 is live.</div>
-      </div>
-
-      <div style={{
-        position: "absolute", bottom: 155, width: "100%", textAlign: "center",
-        opacity: saveO,
-      }}>
-        <div style={{
-          fontSize: 44, fontWeight: 900, color: WHITE,
-          fontFamily: "Inter, system-ui, sans-serif",
-          letterSpacing: "0.04em",
+          fontSize:      52,
+          fontWeight:    700,
+          color:         PINK,
+          fontFamily:    FONT,
+          letterSpacing: "-0.02em",
+          marginBottom:  36,
+          minHeight:     64,
+          display:       "flex",
+          alignItems:    "center",
         }}>
-          SAVE THIS <span style={{ opacity: arrowP }}>↓</span>
+          {displayText}
+          {charCount < fullText.length && (
+            <span style={{
+              display:      "inline-block",
+              width:        3, height: "0.85em",
+              background:   PINK,
+              marginLeft:   2,
+              opacity:      Math.floor(frame / 8) % 2 === 0 ? 1 : 0,
+              verticalAlign:"middle",
+            }} />
+          )}
+        </div>
+
+        {/* Cursor + arrow + node */}
+        <div style={{
+          display:         "flex",
+          alignItems:      "center",
+          opacity:         elemOpacity,
+          transform:       `scale(${elemScale})`,
+          transformOrigin: "left center",
+        }}>
+          <div style={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
+            <div style={{ position: "absolute", top: 0, left: 0 }}>
+              <Spinner frame={frame} size={60} color={CYAN} />
+            </div>
+            <svg width={38} height={38} viewBox="0 0 24 24"
+              style={{ position: "absolute", bottom: 0, right: 0 }}>
+              <path d="M4 4 L4 20 L8 16 L11 22 L13 21 L10 15 L16 15 Z"
+                fill="none" stroke={CYAN} strokeWidth="1.5" strokeLinejoin="round" />
+            </svg>
+          </div>
+
+          <PulseArrow frame={frame} width={120} />
+          <NetworkNode frame={frame} size={80} />
         </div>
       </div>
-    </AbsoluteFill>
+    </div>
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ROOT
-// ═══════════════════════════════════════════════════════════════════════════════
-export const CustomVideo = () => {
-  const frame      = useCurrentFrame();
-  const { fps }    = useVideoConfig();
-  const lf = (k: keyof typeof T) => frame - T[k].start;
+// ── Hook Beat ─────────────────────────────────────────────────────────────────
+
+const HookBeat: React.FC = () => {
+  const frame   = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  const progress     = spring({ frame: Math.max(0, frame), fps, config: SPRING_HEAVY });
+  const freeProgress = spring({ frame: Math.max(0, frame - 28), fps, config: SPRING_HEAVY });
+  const line1Progress = spring({ frame: Math.max(0, frame - 6), fps, config: SPRING_MEDIUM });
+  const line2Progress = spring({ frame: Math.max(0, frame - 36), fps, config: SPRING_MEDIUM });
+
+  const freeScale   = interpolate(freeProgress, [0, 1], [0.5, 1]);
+  const freeOpacity = interpolate(freeProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+  const freeGlow    = 30 + (Math.sin((frame / fps) * Math.PI * 2 * 0.4) * 0.5 + 0.5) * 40;
 
   return (
-    <AbsoluteFill>
-      <Audio src={staticFile("narration.wav")} />
-      {frame >= T.hook.start && frame < T.hook.end && (
-        <HookSection lf={lf("hook")} fps={fps} />
-      )}
-      {frame >= T.c1.start && frame < T.c1.end && (
-        <Concept1Section lf={lf("c1")} fps={fps} />
-      )}
-      {frame >= T.c2.start && frame < T.c2.end && (
-        <Concept2Section lf={lf("c2")} />
-      )}
-      {frame >= T.cta.start && frame <= T.cta.end && (
-        <TakeawaySection lf={lf("cta")} />
-      )}
+    <AbsoluteFill style={{
+      background:     "radial-gradient(ellipse at 50% 40%, #111 0%, #0A0A0A 70%)",
+      display:        "flex",
+      flexDirection:  "column",
+      alignItems:     "center",
+      justifyContent: "center",
+      fontFamily:     FONT,
+      position:       "relative",
+      overflow:       "hidden",
+      padding:        60,
+      boxSizing:      "border-box",
+    }}>
+      <ParticleBackground frame={frame} />
+
+      <div style={{
+        position:       "relative",
+        zIndex:         1,
+        display:        "flex",
+        flexDirection:  "column",
+        alignItems:     "center",
+        gap:            36,
+        width:          "100%",
+      }}>
+        {/* Top eyebrow */}
+        <div style={{
+          fontSize:      28,
+          fontWeight:    500,
+          color:         "rgba(255,255,255,0.4)",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          opacity:       interpolate(line1Progress, [0, 0.3], [0, 1], { extrapolateRight: "clamp" }),
+          transform:     `translateY(${interpolate(line1Progress, [0, 1], [20, 0])}px)`,
+        }}>
+          AllenAI · Open Source
+        </div>
+
+        <BrowserWindow frame={frame} fps={fps} progress={progress} />
+
+        {/* FREE slam */}
+        <div style={{
+          display:         "flex",
+          alignItems:      "baseline",
+          gap:             20,
+          opacity:         freeOpacity,
+          transform:       `scale(${freeScale})`,
+          transformOrigin: "center bottom",
+        }}>
+          <div style={{
+            fontSize:      44,
+            fontWeight:    400,
+            color:         "rgba(255,255,255,0.4)",
+            fontFamily:    FONT,
+            letterSpacing: "0.02em",
+          }}>
+            Runs locally.
+          </div>
+          <div style={{
+            fontSize:      100,
+            fontWeight:    900,
+            color:         YELLOW,
+            fontFamily:    FONT,
+            letterSpacing: "-0.04em",
+            lineHeight:    1,
+            textShadow:    `0 0 ${freeGlow}px ${YELLOW}60, 0 0 ${freeGlow * 2}px ${YELLOW}20`,
+          }}>
+            FREE.
+          </div>
+        </div>
+
+        {/* Hook line */}
+        <div style={{
+          fontSize:      26,
+          fontWeight:    400,
+          color:         "rgba(255,255,255,0.28)",
+          letterSpacing: "0.02em",
+          opacity:       interpolate(line2Progress, [0, 0.3], [0, 1], { extrapolateRight: "clamp" }),
+          transform:     `translateY(${interpolate(line2Progress, [0, 1], [16, 0])}px)`,
+          textAlign:     "center",
+          maxWidth:      680,
+        }}>
+          You pay monthly for web agents that break.
+        </div>
+      </div>
+
+      <TelemetryFrame frame={frame} />
     </AbsoluteFill>
   );
 };
+
+// ── Beat data ─────────────────────────────────────────────────────────────────
+
+const barData = {
+  section_label: "Web Agent Benchmarks",
+  accent_color:  "cyan" as const,
+  items: [
+    { label: "MolmoWeb 8B",    value: "67.8", highlight: true  },
+    { label: "GPT-4V",         value: "59.1", highlight: false },
+    { label: "Claude 3.5",     value: "57.3", highlight: false },
+    { label: "Gemini 1.5 Pro", value: "52.4", highlight: false },
+  ],
+};
+
+const metricData = {
+  section_label: "Monthly API Cost",
+  hero: {
+    value: "$0",
+    label: "After switching to MolmoWeb",
+    color: "cyan" as const,
+  },
+  context: "No API costs. No data leaving your machine. Your automation runs fully local.",
+  chips: ["Open Source", "Private", "Zero Cost"],
+};
+
+const takeawayData = {
+  section_label: "Takeaway",
+  accent_color:  "cyan" as const,
+  headline:      "When a top lab open sources an agent this capable — ship with it the same day.",
+  cta:           "MolmoWeb is live. Go build.",
+};
+
+// ── Composition config (consumed by Root.tsx) ─────────────────────────────────
 
 export const CustomVideoConfig = {
-  width:            1080,
-  height:           1920,
-  fps:              30,
-  durationInFrames: TOTAL_FRAMES,
+  durationInFrames: HOOK_F + CONCEPT1_F + CONCEPT2_F + TAKEAWAY_F,
+  fps:    30,
+  width:  1080,
+  height: 1920,
+};
+
+// ── Root composition ──────────────────────────────────────────────────────────
+
+export const CustomVideo: React.FC = () => {
+  const start2 = HOOK_F;
+  const start3 = start2 + CONCEPT1_F;
+  const start4 = start3 + CONCEPT2_F;
+
+  return (
+    <AbsoluteFill style={{ background: "#0A0A0A" }}>
+
+      <Audio src={staticFile("narration.wav")} />
+
+      <Sequence from={0} durationInFrames={HOOK_F}>
+        <Beat><HookBeat /></Beat>
+      </Sequence>
+
+      <Sequence from={start2} durationInFrames={CONCEPT1_F}>
+        <Beat>
+          <AbsoluteFill><BarComparison data={barData} /></AbsoluteFill>
+        </Beat>
+      </Sequence>
+
+      <Sequence from={start3} durationInFrames={CONCEPT2_F}>
+        <Beat>
+          <AbsoluteFill><MetricFocus data={metricData} /></AbsoluteFill>
+        </Beat>
+      </Sequence>
+
+      <Sequence from={start4} durationInFrames={TAKEAWAY_F}>
+        <Beat>
+          <AbsoluteFill>
+            <TakeawayScene data={takeawayData} durationFrames={TAKEAWAY_F} />
+          </AbsoluteFill>
+        </Beat>
+      </Sequence>
+
+    </AbsoluteFill>
+  );
 };
