@@ -1,9 +1,11 @@
 /**
  * PipelineFlow — sequential step-by-step architecture layout.
  *
- * Best for: data pipelines, inference stages, training loops, system architecture.
- * Step states: idle (dim) | active (indigo) | bottleneck (red + label).
- * Motion: each node pops in with stagger; connectors fade after preceding node.
+ * Motion upgrades (design pass):
+ *   • MEDIUM spring tier for node entrances
+ *   • Active/bottleneck nodes: continuous border glow pulse after entry
+ *   • Connector lines: animated dashed flow after nodes settle
+ *   • ParticleBackground + TelemetryFrame
  */
 
 import React from "react";
@@ -11,29 +13,36 @@ import { interpolate, useVideoConfig } from "remotion";
 import type { PipelineFlowData, PipelineStep } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
 import { springIn, staggerDelay } from "../utils/springIn";
-import { FONT, SectionLabelRow } from "./_shared";
+import { FONT, SectionLabelRow, ParticleBackground, TelemetryFrame } from "./_shared";
 
 // ── State styles ──────────────────────────────────────────────────────────────
 
 const STATE = {
   idle:       { border: "rgba(255,255,255,0.12)", text: "rgba(255,255,255,0.35)", bg: "rgba(255,255,255,0.02)", glow: "transparent" },
-  active:     { border: "#6366F178",              text: "#6366F1",                bg: "rgba(99,102,241,0.08)",  glow: "#6366F118"    },
-  bottleneck: { border: "#EF444478",              text: "#EF4444",                bg: "rgba(239,68,68,0.08)",   glow: "#EF444414"    },
+  active:     { border: "#6366F178",              text: "#6366F1",                bg: "rgba(99,102,241,0.08)",  glow: "#6366F1"    },
+  bottleneck: { border: "#EF444478",              text: "#EF4444",                bg: "rgba(239,68,68,0.08)",   glow: "#EF4444"    },
 } as const;
 
 // ── Step node ─────────────────────────────────────────────────────────────────
 
 const StepNode: React.FC<{
-  step:  PipelineStep;
-  frame: number;
-  fps:   number;
-  delay: number;
+  step:    PipelineStep;
+  frame:   number;
+  fps:     number;
+  delay:   number;
   isHoriz: boolean;
 }> = ({ step, frame, fps, delay, isHoriz }) => {
   const s        = STATE[step.state] ?? STATE.idle;
-  const progress = springIn(frame, fps, delay, "crisp");
+  const progress = springIn(frame, fps, delay, "medium");
   const opacity  = interpolate(progress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
   const scale    = interpolate(progress, [0, 1], [0.78, 1]);
+
+  // Glow pulse on active/bottleneck nodes after entry
+  const glowFrame = Math.max(0, frame - delay - 12);
+  const glowPulse = step.state !== "idle" && glowFrame > 0
+    ? Math.sin((glowFrame / fps) * Math.PI * 2 * 0.4) * 0.5 + 0.5
+    : 0;
+  const glowRadius = step.state !== "idle" ? 14 + glowPulse * 20 : 0;
 
   return (
     <div style={{
@@ -52,7 +61,7 @@ const StepNode: React.FC<{
       minWidth:      isHoriz ? 80 : 0,
       flex:          isHoriz ? "1 1 0" : 1,
       overflow:      "hidden",
-      boxShadow:     step.state !== "idle" ? `0 0 28px ${s.glow}` : undefined,
+      boxShadow:     step.state !== "idle" ? `0 0 ${glowRadius}px ${s.glow}30` : undefined,
       boxSizing:     "border-box",
     }}>
       <div style={{ fontSize: 26, fontWeight: 600, color: s.text, fontFamily: FONT,
@@ -124,44 +133,54 @@ export const PipelineFlow: React.FC<{ data: PipelineFlowData }> = ({ data }) => 
       gap:           32,
       height:        "100%",
       boxSizing:     "border-box",
+      background:    "radial-gradient(ellipse at 50% 50%, #111 0%, #0A0A0A 70%)",
+      position:      "relative",
+      overflow:      "hidden",
     }}>
-      <SectionLabelRow text={data.section_label} color="yellow" />
 
-      <div style={{
-        flex:           1,
-        display:        "flex",
-        flexDirection:  isHoriz ? "row" : "column",
-        alignItems:     "center",
-        justifyContent: "center",
-        gap:            0,
-      }}>
-        {data.steps.map((step, i) => (
-          <React.Fragment key={i}>
-            <StepNode
-              step={step} frame={frame} fps={fps} isHoriz={isHoriz}
-              delay={staggerDelay(i, stepCount, 22, 0)}
-            />
-            {i < stepCount - 1 && (
-              <Connector
-                frame={frame} fps={fps} isHoriz={isHoriz}
-                delay={staggerDelay(i, stepCount, 22, 10)}
+      <ParticleBackground frame={frame} />
+
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 32, flex: 1 }}>
+        <SectionLabelRow text={data.section_label} color="yellow" />
+
+        <div style={{
+          flex:           1,
+          display:        "flex",
+          flexDirection:  isHoriz ? "row" : "column",
+          alignItems:     "center",
+          justifyContent: "center",
+          gap:            0,
+        }}>
+          {data.steps.map((step, i) => (
+            <React.Fragment key={i}>
+              <StepNode
+                step={step} frame={frame} fps={fps} isHoriz={isHoriz}
+                delay={staggerDelay(i, stepCount, 22, 0)}
               />
-            )}
-          </React.Fragment>
-        ))}
+              {i < stepCount - 1 && (
+                <Connector
+                  frame={frame} fps={fps} isHoriz={isHoriz}
+                  delay={staggerDelay(i, stepCount, 22, 10)}
+                />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {data.bottleneck_label && (
+          <div style={{
+            fontSize: 26, color: "#EF4444", fontFamily: FONT,
+            opacity: interpolate(
+              springIn(frame, fps, staggerDelay(stepCount, stepCount, 22, 12), "crisp"),
+              [0, 0.3], [0, 1], { extrapolateRight: "clamp" },
+            ),
+          }}>
+            ⚠ {data.bottleneck_label}
+          </div>
+        )}
       </div>
 
-      {data.bottleneck_label && (
-        <div style={{
-          fontSize: 26, color: "#EF4444", fontFamily: FONT,
-          opacity: interpolate(
-            springIn(frame, fps, staggerDelay(stepCount, stepCount, 22, 12), "crisp"),
-            [0, 0.3], [0, 1], { extrapolateRight: "clamp" },
-          ),
-        }}>
-          ⚠ {data.bottleneck_label}
-        </div>
-      )}
+      <TelemetryFrame frame={frame} />
     </div>
   );
 };
