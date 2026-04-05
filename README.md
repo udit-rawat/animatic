@@ -1,190 +1,188 @@
 # adamax-content-engine
 
-Automated daily pipeline that wakes up, finds the best ML engineering topic posted in the last 24 hours, writes a punchy 60-second explainer script, generates a narrated React/Remotion video with audio-synced animations, and delivers it to Telegram — zero manual steps.
+Automated daily pipeline that finds the best AI/ML topic from the last 24 hours, writes a punchy 30–45 second explainer script, generates a narrated Remotion video with audio-synced animations, and delivers it to Telegram — zero manual steps.
+
+Supports a fully custom animation path (`--compositor`) where the pipeline pauses before rendering, you approve an animation brief, and a bespoke per-topic `CustomVideo.tsx` is dropped in before render.
 
 ---
 
-## What it is
+## What it does
 
-One `python run.py --gemini` call drives the entire loop:
+One command drives the entire loop:
+
+```bash
+python run.py --gemini
+```
 
 1. **Scrape** — hits 7 ML subreddits + arXiv, collects ~21 fresh candidates
-2. **Rank** — LLM scores on visual richness, engineer value, freshness, focus; picks one winner; keyword-deduplicates against 30-post history so the same story never repeats
-3. **Script** — writes on-screen text: hook / 3 concept bullets / takeaway
-4. **Verify** — NLI entailment pass checks every hard claim against the source summary; CONTRADICTED claims trigger a scripter rewrite (max 2 retries)
-5. **Plan** — classifies each concept bullet into a layout template (pipeline / comparison / stats_grid)
-6. **Extract** — LLM generates a typed `ScenePayload` JSON per beat for the Remotion renderer
-7. **Narrate** — LLM rewrites visual copy into spoken segments; Gemini TTS renders each segment separately; PCM chunks are stitched into a single WAV with per-segment timecodes
-8. **Align** — optional Whisper word-alignment produces frame-accurate cue triggers
-9. **Render** — Remotion reads the props JSON and renders a 1080×1920 MP4; animations spring-in synced to audio cues
-10. **Deliver** — Telegram receives the video + caption + token audit; topic committed to history only on confirmed delivery
-
-**Alternatively**, `--single-shot` collapses steps 3–6 into a single Pydantic-validated LLM call via `content_generator.py`.
+2. **Rank** — LLM scores on visual richness, engineer value, freshness; keyword-deduplicates against 30-post history
+3. **Generate** — single Pydantic-validated LLM call outputs script, narration, layout params, scene plan in one shot (`content_generator.py`)
+4. **Verify** — NLI entailment pass checks hard claims against source; CONTRADICTED claims trigger a scripter rewrite (max 2 retries)
+5. **Narrate** — Gemini TTS renders each segment separately; PCM chunks stitched into WAV with per-segment timecodes
+6. **Align** — optional Whisper word-alignment produces frame-accurate cue triggers
+7. **Render** — Remotion reads props JSON and renders 1080×1920 MP4 with spring-synced animations
+8. **Deliver** — Telegram receives video + caption + hashtags as separate messages; topic committed to history on confirmed delivery
 
 ---
 
-## How it works
-
-### Pipeline modes
+## Pipeline modes
 
 ```
 Standard (default):
-  scraper → ranker → scripter → verifier → scene_planner → param_extractor
-          → narrator → word_aligner → animator → notifier
-
-Single-shot (--single-shot):
   scraper → ranker → content_generator
           → narrator → word_aligner → animator → notifier
+
+With compositor pause (custom animation):
+  scraper → ranker → content_generator
+          → [narration review pause] → narrator → word_aligner
+          → [compositor pause: animation brief + file drop] → animator → notifier
 ```
 
-`content_generator` is a single Pydantic-validated call that outputs all four files the downstream stages need (`script.json`, `spoken_narration.json`, `params.json`, `scene_plan.json`) in one shot. When `spoken_narration.json` is present, `narrator.py` skips its own LLM rewrite step and goes straight to TTS.
+### Custom topic (skip scraper + ranker)
 
-### Visual layer (Remotion)
+```bash
+python run.py --gemini --custom --title "..." --summary "..."
+```
 
-The render engine lives in `remotion/src/`. Every beat maps to one of six layout components dispatched by `SceneRouter`:
+### Custom narration (bypass LLM rewrite, go straight to TTS)
 
-| Layout | Used for |
-|---|---|
-| `MetricFocus` | Hero metric + supporting context + chips |
-| `ComparisonSplit` | Side-by-side A vs B panels |
-| `PipelineFlow` | Step-by-step process with bottleneck annotation |
-| `DataGrid` | 2–4 metric cards in a CSS grid |
-| `TakeawayScene` | Outro — word-reveal headline + progress border + CTA chip |
-| `KineticBridge` | Gap beats — pulses 2–5 keywords sequentially, never a black screen |
+```bash
+python run.py --gemini --custom --narration '{"hook":"...","concept_1":"...","concept_2":"...","takeaway_cta":"..."}'
+```
 
-The camera is an infinite canvas: all beats are stacked vertically at `y = index × 1920px`. A spring-damped camera pans between them on narration segment boundaries. Beat-local animations start from `frame 0` relative to when the camera arrives.
+When `--narration` is set:
+- Pipeline pauses and shows the exact script before TTS — you confirm or Ctrl+C to edit
+- Word-count validation in `content_generator` is skipped (narration gets replaced anyway)
 
-### Anti-dead-air
+### Custom tone (replaces default voice directive)
 
-- **Sequence persistence** — if a beat has no content, `ghostContent()` walks backward and renders the nearest valid beat at `opacity: 0.22 + blur(3px)` instead of showing black
-- **KineticBridge** — explicit bridge beats get pulsing keyword animation
-- **Beat/timing guard** — `animator.py` warns loudly if `beats.length ≠ timing segments`, which causes the camera pan schedule to misfire
+```bash
+python run.py --gemini --custom --tone "Machine-gun pace. No pauses. Numbers hit hard."
+```
 
-### LLM layer
+### Compositor (bespoke animation per video)
 
-All calls route through `pipeline/claude_client.py`. Provider is set by `FORCE_PROVIDER` env var or CLI flag.
+```bash
+python run.py --gemini --custom --compositor --title "..." --narration '{...}'
+```
 
-| Provider | Set via | Notes |
-|---|---|---|
-| Gemini | `GEMINI_API_KEYS` | Up to 4 keys rotate on 429/500; daily quota tracked in `gemini_quota.json` |
-| Anthropic SDK | `ANTHROPIC_API_KEY` | Good for CI/CD |
-| Claude CLI | *(default)* | Runs inside a Claude Code session — no key needed |
-| OpenRouter | `OPENROUTER_API_KEY` | Per-stage model routing via `OPENROUTER_MODEL_RANKER` etc. |
-| Handoff | `--hop` flag | Pauses at animator, writes prompt to file, waits for manual paste |
+Pipeline pauses before animator and prints full narration + frame timings per segment. You share the context with Claude to get an animation concept brief, approve it, then Claude writes `CustomVideo.tsx`. Drop the file in the printed path, press Enter, pipeline renders via `CustomVideo` composition instead of the template system.
+
+To resume from a specific stage after a compositor pause:
+
+```bash
+python run.py --gemini --compositor --stage animator
+```
 
 ---
 
-## Features
+## Visual layer (Remotion)
 
-- **Keyword-based topic dedup** — history matching uses per-title keyword overlap (≥2 significant words), not exact title comparison. Four TurboQuant variants in candidates → all filtered if TurboQuant is in history. Topic committed to history immediately on pick, not only after delivery.
-- **NLI fact-checker** — `verifier.py` extracts 3–5 hard claims, classifies each as SUPPORTED / CONTRADICTED / UNVERIFIABLE against the source summary. CONTRADICTED injects a correction directive back into the scripter.
-- **Pydantic-validated single-shot generation** — `content_generator.py` enforces 130–145 word hard budget, 18 banned phrases, 10-second rule, and layout/content agreement in one call. Anti-bloat by schema, not by instructions alone.
-- **Audio-reactive animation cues** — `word_aligner.py` (Whisper) produces word-level timestamps; `animator.py` builds a `{label: frame}` cue map; Remotion components use `useCue("label")` to fire animations precisely when the word is spoken.
-- **Beat/timing alignment guard** — `scene_planner.py` enforces that beat count equals concept bullet count + 2 (hook + takeaway). Prevents the camera pan schedule from misfiring and showing a dead screen before the TakeawayScene animates.
-- **Dynamic video duration** — Remotion's `calculateMetadata` reads the actual audio file duration at render time. No hardcoded frame counts.
-- **Gemini quota RCA** — `python run.py --rca` prints a day-level run table with per-stage call breakdown, failed-run waste, and animator retry cost.
-- **Token audit** — every run outputs `output/audit.json` and prints a cost table at the end.
+The render engine lives in `remotion/src/`. Every beat maps to one of 12 layout templates dispatched by `SceneRouter`:
+
+| Template | Used for |
+|---|---|
+| `MetricFocus` | Single hero stat — huge number + supporting label + context + chips |
+| `DataGrid` | 2–4 metric cards in a CSS grid |
+| `TriStat` | Three metrics stacked with left accent bars |
+| `BarComparison` | Horizontal bar chart, bars animate to width, one highlighted |
+| `ComparisonSplit` | Side-by-side A vs B panels, slides in from edges |
+| `KineticBridge` | 2–5 keywords pop in sequentially — never a static screen |
+| `StatementSlam` | 2–3 punchy statement lines spring in with stagger |
+| `PipelineFlow` | Step-by-step architecture nodes with connectors |
+| `CodeDiff` | Before/after code blocks, after block springs in per-line |
+| `TimelineFlow` | Chronological milestones with vertical spine |
+| `LeaderboardRank` | Ranked table, rows animate in reverse (winner lands last) |
+| `TakeawayScene` | Outro — floating ambient dots + word-reveal headline + CTA chip + progress border |
+
+### Camera system
+
+All beats are stacked vertically on an infinite canvas at `y = index × 1920px`. A spring-damped camera pans between them on narration segment boundaries. Beat-local animations always start from `frame 0` relative to when the camera arrives.
+
+### Anti-dead-air
+
+- **Sequence persistence** — if a beat has no content, the nearest valid beat renders at `opacity: 0.22 + blur(3px)` instead of black
+- **KineticBridge** — explicit bridge beats pulse keywords continuously
+- **Beat/timing guard** — `animator.py` warns if `beats.length ≠ timing segments`, which misfires the camera pan schedule
+
+### Shared motion primitives (`_shared.tsx`, `springIn.ts`)
+
+```
+Spring presets:   CRISP (28, 220) · HERO (28, 180) · SNAP (40, 300)
+Animation utils:  slideUp · scaleIn · popIn · staggerDelay
+Continuous motion: useBreath (0.25 Hz, ±1.2% scale) · useAudioMetrics (FFT bass/mid/high)
+```
+
+---
+
+## Content strategy (BRIEF_PROMPT_V3.md)
+
+Three content formats that outperform generic AI news:
+
+| Format | Hook pattern | Best for |
+|---|---|---|
+| **Cheat Code** | "Most devs don't know you can do X with Y" | Free alternatives to paid tools |
+| **Hidden Cost Reveal** | "You're paying $X/month. This does the same for $0." | Open-source model releases |
+| **Reframe** | "Everyone is talking about X. Nobody is saying what it means for builders." | Non-obvious implications |
+
+Target audience: **indie developers, technical creators, builders** — not general tech curious.
+Video length: **30–45 seconds hard limit** (75–86 word narration budget).
+
+See `BRIEF_PROMPT_V3.md` for the full prompt to paste into any LLM to generate a ready-to-run command.
+
+---
+
+## Analytics
+
+The pipeline auto-captures a skeleton analytics entry after every run. Fill in actual Instagram performance numbers manually:
+
+```bash
+python run.py --log-stats     # interactive: fill views, saves, watch time for pending videos
+python run.py --analytics     # print performance table + pending skeletons
+```
+
+Analytics feed back into the ranker as soft priors — layouts and topic types that performed well get a mild signal boost.
 
 ---
 
 ## Terminal examples
 
-### Full pipeline runs
+### Full pipeline
 
 ```bash
-# Recommended daily driver — Gemini for all LLM stages + TTS
+# Daily driver — Gemini for all stages
 python run.py --gemini
 
-# Single-shot mode — anti-bloat Pydantic schema replaces 4 stages
-python run.py --gemini --single-shot
-
-# Claude CLI (no keys needed — must be inside an active Claude Code session)
-python run.py
-
-# Anthropic SDK
-ANTHROPIC_API_KEY=sk-... python run.py --provider anthropic
-
-# OpenRouter with a specific model for all stages
-python run.py --provider openrouter --model deepseek/deepseek-r1:free
+# Custom topic, custom narration, compositor pause for bespoke animation
+python run.py --gemini --custom --compositor \
+  --title "Google Just Killed Your AI API Bill" \
+  --summary "Gemma 4 released, 27B params, Apache 2.0, runs locally, matches GPT-4o" \
+  --tone "Machine-gun pace. Numbers hit like punches." \
+  --narration '{"hook":"...","concept_1":"...","concept_2":"...","takeaway_cta":"..."}'
 ```
 
-### Run a single stage
+### Resume from a stage
 
 ```bash
-# Re-scrape candidates
-python run.py --stage scraper
-
-# Re-rank from existing candidates (useful after editing picked_history.json)
-python run.py --stage ranker
-
-# Rewrite script from existing topic.json
-python run.py --gemini --stage scripter
-
-# Re-run NLI fact-checker on current script.json
-python run.py --gemini --stage verifier
-
-# Re-run single-shot generator (replaces scripter+verifier+scene_planner+param_extractor)
-python run.py --gemini --stage content_generator
-
-# Regenerate scene plan from existing script
-python run.py --gemini --stage scene_planner
-
-# Regenerate ScenePayload JSON from existing script + scene plan
-python run.py --gemini --stage param_extractor
-
-# Re-run TTS only (reads script.json → narration.wav + narration_timing.json)
-python run.py --stage narrator
-
-# Re-run Whisper word alignment (requires: pip install openai-whisper)
-python run.py --stage word_aligner
-
-# Re-render video from existing params + audio (no LLM call)
-python run.py --stage animator
-
-# Re-deliver existing video.mp4 to Telegram
+python run.py --gemini --stage narrator
+python run.py --gemini --compositor --stage animator
 python run.py --stage notifier
-```
-
-### Remotion render directly
-
-```bash
-cd remotion
-
-# Full video using current remotion_props.json
-npx remotion render src/index.ts VideoComposition ../output/video.mp4 \
-  --props=../output/remotion_props.json --concurrency=4
-
-# Gate test composition (no props file needed — uses defaultProps)
-npx remotion render src/index.ts Phase2Test /tmp/gate_test.mp4 --concurrency=2
-
-# Live preview in browser
-npx remotion studio
 ```
 
 ### Quota and diagnostics
 
 ```bash
-# Check today's Gemini quota before running
-python run.py --check-quota
+python run.py --check-quota   # today's Gemini quota status
+python run.py --rca           # day-level RCA: per-stage cost, failed runs, retry cost
+```
 
-# Full day-level RCA — per-stage cost, failed runs, animator retry cost
-python run.py --rca
+### Remotion
 
-# Check beat/timing alignment for current run
-python -c "
-import json
-beats  = json.load(open('output/scene_plan.json'))['beats']
-timing = json.load(open('output/narration_timing.json'))
-print(f'beats: {len(beats)}  timing: {len(timing)}  match: {len(beats)==len(timing)}')
-print('templates:', [b[\"template\"] for b in beats])
-print('segments: ', list(timing.keys()))
-"
-
-# Print last 5 picked topics
-python -c "
-import json
-[print(t) for t in json.load(open('output/picked_history.json'))[:5]]
-"
+```bash
+cd remotion
+npx remotion studio                          # live preview in browser
+npx remotion render src/index.ts VideoComposition ../output/video.mp4 \
+  --props=../output/remotion_props.json --concurrency=4
 ```
 
 ---
@@ -192,26 +190,25 @@ import json
 ## Setup
 
 ```bash
-# 1. Clone and install Python deps
+# 1. Python deps
 pip install -r requirements.txt
+pip install instructor google-generativeai   # for --gemini mode
 
-# 2. Install Remotion deps
+# 2. Remotion deps
 cd remotion && npm install && cd ..
 
-# 3. Configure env
+# 3. Env
 cp .env.example .env
-# Required: GEMINI_API_KEYS (or GEMINI_API_KEY), TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
-# Optional: OPENROUTER_API_KEY, ANTHROPIC_API_KEY, SUBREDDITS
+# Required: GEMINI_API_KEYS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# Optional: OPENROUTER_API_KEY, ANTHROPIC_API_KEY, SUBREDDITS, CRT_ABERRATION
 
 # 4. Run
 python run.py --gemini
 ```
 
-For `content_generator` (single-shot mode), also install:
+Optional — Whisper word alignment (higher-quality animation cues):
 ```bash
-pip install instructor
-pip install google-generativeai   # if using --gemini
-pip install anthropic             # if using --provider anthropic
+pip install openai-whisper
 ```
 
 ---
@@ -223,20 +220,24 @@ output/
 ├── candidates.json         scraped topic pool (~21 candidates)
 ├── topic.json              selected topic + why_picked reasoning
 ├── script.json             hook, concept_bullets, takeaway, caption, hashtags
-├── spoken_narration.json   spoken audio text per segment (written by content_generator)
-├── verify_report.json      NLI fact-check audit: claims, verdicts, retry count
+├── spoken_narration.json   spoken audio text per segment
+├── verify_report.json      NLI fact-check: claims, verdicts, retry count
 ├── scene_plan.json         beat list with template hint per beat
 ├── params.json             ScenePayload JSON per beat (input to Remotion)
-├── narration_timing.json   per-segment timecodes {start, end, duration, text}
+├── narration_timing.json   per-segment timecodes {start, end, duration}
 ├── narration.wav           stitched TTS audio (24 kHz 16-bit mono PCM)
-├── word_timings.json       Whisper word-level timestamps (optional, for cues)
+├── word_timings.json       Whisper word-level timestamps (optional)
 ├── remotion_props.json     merged props passed to Remotion --props
 ├── video.mp4               final rendered video
-├── picked_history.json     last 30 delivered topics (keyword dedup guard)
+├── analytics.json          per-video performance log (views, saves, watch time)
+├── picked_history.json     last 30 delivered topics (dedup guard)
 ├── audit.json              token usage and cost per stage
-├── gemini_quota.json       daily Gemini quota state + run-level audit log
-├── animator_retries.json   animator attempt count (surfaced in Telegram message)
+├── gemini_quota.json       daily Gemini quota state + run-level log
 └── pipeline.log            full debug log
+
+output/compositions/
+└── YYYY-MM-DD_slug/
+    └── CustomVideo.tsx     compositor drop target for bespoke animation
 ```
 
 ---
@@ -247,36 +248,41 @@ output/
 adamax-content-engine/
 ├── run.py                        pipeline runner + CLI entry point
 ├── cue_definitions.json          animation trigger map (segment + word cues)
+├── BRIEF_PROMPT_V3.md            LLM prompt for generating pipeline-ready commands
+├── GEMINI_DESIGN_BRAINSTORM.md   full template audit for motion design research
 ├── pipeline/
 │   ├── claude_client.py          unified LLM call layer (all providers)
 │   ├── scraper.py                Reddit + arXiv fetcher
-│   ├── ranker.py                 LLM topic selector + keyword dedup
-│   ├── scripter.py               on-screen text writer (visual script)
-│   ├── verifier.py               NLI entailment fact-checker
-│   ├── scene_planner.py          beat layout classifier
-│   ├── param_extractor.py        ScenePayload JSON generator per beat
-│   ├── content_generator.py      single-shot replacement for the above 4 stages
+│   ├── ranker.py                 LLM topic selector + analytics priors
+│   ├── content_generator.py      single-shot Pydantic-validated script + layout generator
 │   ├── narrator.py               segmented narration rewriter + Gemini TTS stitcher
 │   ├── word_aligner.py           Whisper word-level timestamp extractor
-│   ├── animator.py               Remotion props assembler + render runner
-│   ├── notifier.py               Telegram delivery + history commit
+│   ├── animator.py               Remotion props assembler + render runner (+ compositor routing)
+│   ├── notifier.py               Telegram delivery (video + caption + hashtags)
+│   ├── analytics.py              performance tracker + ranker feedback loop
 │   ├── auditor.py                token usage tracker
 │   ├── quota.py                  Gemini daily quota tracker + RCA reporter
 │   └── logger.py                 structured logging
 └── remotion/
     ├── src/
-    │   ├── Root.tsx               Remotion composition registry
-    │   ├── VideoComposition.tsx   main beat loop + spring camera system
-    │   ├── SceneRouter.tsx        layout dispatcher (6 layout components)
-    │   ├── LayoutRenderer.tsx     legacy LayoutNode tree renderer (v2 fallback)
+    │   ├── Root.tsx               composition registry (VideoComposition + CustomVideo)
+    │   ├── VideoComposition.tsx   beat loop + spring camera system
+    │   ├── SceneRouter.tsx        dispatches 12 layout templates
     │   ├── CameraViewport.tsx     infinite canvas + BeatZone + spring camera
+    │   ├── CustomVideo.tsx        bespoke per-topic animation scaffold
     │   ├── layouts/
     │   │   ├── MetricFocus.tsx
-    │   │   ├── ComparisonSplit.tsx
-    │   │   ├── PipelineFlow.tsx
     │   │   ├── DataGrid.tsx
-    │   │   ├── TakeawayScene.tsx
+    │   │   ├── TriStat.tsx
+    │   │   ├── BarComparison.tsx
+    │   │   ├── ComparisonSplit.tsx
     │   │   ├── KineticBridge.tsx
+    │   │   ├── StatementSlam.tsx
+    │   │   ├── PipelineFlow.tsx
+    │   │   ├── CodeDiff.tsx
+    │   │   ├── TimelineFlow.tsx
+    │   │   ├── LeaderboardRank.tsx
+    │   │   ├── TakeawayScene.tsx
     │   │   └── _shared.tsx        COLOR tokens, FONT, SectionLabelRow, useBreath
     │   ├── hooks/
     │   │   ├── useCameraY.ts      spring-damped infinite-canvas camera
@@ -284,7 +290,7 @@ adamax-content-engine/
     │   │   ├── useCue.ts          word-cue animation trigger
     │   │   └── useAudioMetrics.ts FFT-based audio reactivity
     │   └── utils/
-    │       └── springIn.ts        slideUp / scaleIn presets (CRISP / HERO)
+    │       └── springIn.ts        slideUp / scaleIn / popIn + stagger utils
     └── public/
         └── narration.wav          copied here by animator.py before render
 ```

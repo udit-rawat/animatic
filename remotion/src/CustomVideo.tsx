@@ -1,557 +1,355 @@
 /**
- * CustomVideo.tsx — Gemma 4 by Google
- * 1108 frames · 30fps · 36.9s
+ * CustomVideo.tsx — Unsloth Studio: "You No Longer Need to Pay for Cloud GPUs to Fine-Tune Models"
+ * 1149 frames · 30fps · 38.3s
  *
- * [hook]       frames   0–206   6.9s
- * [concept_1]  frames 206–567  12.0s
- * [concept_2]  frames 567–807   8.0s
- * [takeaway]   frames 807–1108 10.0s
- *
- * Theme: #0A0A0A · white · #FBBC04 yellow
+ * [hook]      frames   0–214   7.1s  Cloud invoice knocked off by Unsloth + FREE slam
+ * [concept_1] frames 214–562  11.6s  ComparisonSplit — Cloud vs Unsloth
+ * [concept_2] frames 562–889  10.9s  TriStat — Your Data / Your Hardware / Your Speed
+ * [takeaway]  frames 889–1149  8.7s  TakeawayScene — word reveal
  */
+
 import React from "react";
 import {
-  useCurrentFrame,
-  useVideoConfig,
+  AbsoluteFill,
+  Audio,
+  Sequence,
   interpolate,
   spring,
-  Audio,
   staticFile,
-  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
 } from "remotion";
 
-// ── Timing ────────────────────────────────────────────────────────────────────
-const T = {
-  hook: { start: 0,   end: 206  },
-  c1:   { start: 206, end: 567  },
-  c2:   { start: 567, end: 807  },
-  cta:  { start: 807, end: 1108 },
-};
-const TOTAL_FRAMES = 1108;
+import { BeatFrameContext } from "./hooks/useBeatFrame";
+import { ComparisonSplit } from "./layouts/ComparisonSplit";
+import { TriStat } from "./layouts/TriStat";
+import { TakeawayScene } from "./layouts/TakeawayScene";
+import { COLOR, FONT, ParticleBackground, TelemetryFrame } from "./layouts/_shared";
+import { SPRING_HEAVY, SPRING_MEDIUM } from "./utils/springIn";
 
-const BG     = "#0A0A0A";
-const WHITE  = "#FFFFFF";
-const YELLOW = "#FBBC04";
+// ── Frame budgets ─────────────────────────────────────────────────────────────
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const clamp = (v: number, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
-
-const fi = (lf: number, from: number, dur = 14) =>
-  clamp((lf - from) / dur);
-
-const fo = (lf: number, from: number, dur = 14) =>
-  clamp(1 - (lf - from) / dur);
-
-// Deterministic particle positions (no Math.random)
-const particles = Array.from({ length: 60 }, (_, i) => {
-  const s1 = Math.sin(i * 127.1) * 43758.5453;
-  const s2 = Math.sin(i * 311.7 + 99) * 43758.5453;
-  const s3 = Math.sin(i * 74.3  + 33) * 43758.5453;
-  const s4 = Math.sin(i * 210.9 + 17) * 43758.5453;
-  const frac = (v: number) => v - Math.floor(v);
-  return {
-    x:  frac(s1) * 1080,
-    y:  frac(s2) * 1920,
-    vx: (frac(s3) - 0.5) * 0.6,
-    vy: (frac(s4) - 0.5) * 0.6,
-    r:  1.5 + frac(Math.sin(i * 53.1) * 9999) * 2,
-  };
-});
-
-// Character-by-character reveal: returns visible char count
-const charReveal = (lf: number, from: number, framesPerChar = 4) =>
-  Math.floor(clamp((lf - from) / framesPerChar, 0, 999));
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// HOOK  frames 0–206
-// ═══════════════════════════════════════════════════════════════════════════════
-const HookSection: React.FC<{ lf: number; fps: number }> = ({ lf, fps }) => {
-  // ── Line draw (0–40) ──────────────────────────────────────────────────────
-  const lineW = interpolate(lf, [0, 40], [0, 540], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  // ── Line explosion (40–55): line expands to full screen height ────────────
-  const explodeH = interpolate(lf, [40, 52], [2, 1920], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-  const explodeO = interpolate(lf, [40, 55], [1, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-  const showLine    = lf < 55;
-  const showContent = lf >= 55;
-
-  // ── GEMMA 4 drop (60–90) ──────────────────────────────────────────────────
-  const gemmaY = lf >= 60
-    ? interpolate(
-        spring({ frame: lf - 60, fps, config: { damping: 11, stiffness: 160, mass: 0.9 } }),
-        [0, 1], [-280, 0]
-      )
-    : -280;
-  const gemmaO = fi(lf, 60, 8);
-
-  // ── FREE. drop (78–108) ───────────────────────────────────────────────────
-  const freeY = lf >= 78
-    ? interpolate(
-        spring({ frame: lf - 78, fps, config: { damping: 11, stiffness: 160, mass: 0.9 } }),
-        [0, 1], [-180, 0]
-      )
-    : -180;
-  const freeO = fi(lf, 78, 8);
-
-  // ── Particles (alive from frame 100) ─────────────────────────────────────
-  const particleO = fi(lf, 100, 20);
-
-  // ── Char reveals ─────────────────────────────────────────────────────────
-  const lines = [
-    { text: "No paywall.",    from: 118 },
-    { text: "Runs offline.",  from: 142 },
-    { text: "Just download.", from: 166 },
-  ];
-
-  return (
-    <AbsoluteFill style={{ background: BG, overflow: "hidden" }}>
-
-      {/* ── Line draw → explosion ── */}
-      {showLine && (
-        <div style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width:  lf < 40 ? lineW * 2 : 1080,
-          height: lf < 40 ? 2 : explodeH,
-          background: WHITE,
-          opacity: lf < 40 ? 1 : explodeO,
-        }} />
-      )}
-
-      {/* ── Particles ── */}
-      {showContent && (
-        <div style={{ position: "absolute", inset: 0, opacity: particleO, pointerEvents: "none" }}>
-          {particles.map((p, i) => (
-            <div key={i} style={{
-              position: "absolute",
-              left: (p.x + p.vx * lf + 1080) % 1080,
-              top:  (p.y + p.vy * lf + 1920) % 1920,
-              width:  p.r * 2,
-              height: p.r * 2,
-              borderRadius: "50%",
-              background: WHITE,
-              opacity: 0.07,
-            }} />
-          ))}
-        </div>
-      )}
-
-      {/* ── GEMMA 4 ── */}
-      {showContent && (
-        <div style={{
-          position: "absolute",
-          top: "28%",
-          width: "100%",
-          textAlign: "center",
-          opacity: gemmaO,
-          transform: `translateY(${gemmaY}px)`,
-        }}>
-          <div style={{
-            fontSize: 148,
-            fontWeight: 900,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            lineHeight: 1,
-            letterSpacing: "-0.03em",
-          }}>GEMMA</div>
-        </div>
-      )}
-
-      {/* ── FREE. (yellow, drops after GEMMA) ── */}
-      {showContent && (
-        <div style={{
-          position: "absolute",
-          top: "50%",
-          width: "100%",
-          textAlign: "center",
-          opacity: freeO,
-          transform: `translateY(${freeY}px)`,
-        }}>
-          <div style={{
-            fontSize: 200,
-            fontWeight: 900,
-            color: YELLOW,
-            fontFamily: "Inter, system-ui, sans-serif",
-            lineHeight: 0.85,
-            letterSpacing: "-0.04em",
-            textShadow: `0 0 80px rgba(251,188,4,0.5)`,
-          }}>4</div>
-        </div>
-      )}
-
-      {/* ── Char-reveal detail lines ── */}
-      {showContent && (
-        <div style={{
-          position: "absolute",
-          bottom: 175,
-          width: "100%",
-          textAlign: "center",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 10,
-        }}>
-          {lines.map((l, i) => {
-            const visible = charReveal(lf, l.from, 3);
-            const text    = l.text.slice(0, visible);
-            const opa     = fi(lf, l.from, 6);
-            if (opa <= 0) return null;
-            return (
-              <div key={i} style={{
-                fontSize: 30,
-                fontWeight: 500,
-                color: WHITE,
-                fontFamily: "Inter, 'Courier New', monospace",
-                opacity: Math.min(1, opa + 0.1),
-                letterSpacing: "0.02em",
-              }}>{text}</div>
-            );
-          })}
-        </div>
-      )}
-    </AbsoluteFill>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONCEPT 1  frames 206–567
-// Directional sentence entrances → counter to 400M
-// ═══════════════════════════════════════════════════════════════════════════════
-const Concept1Section: React.FC<{ lf: number; fps: number }> = ({ lf, fps }) => {
-  // 4-frame flash
-  const flashO = interpolate(lf, [0, 4], [1, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  // ── Three directional sentences (lf 4–300) ────────────────────────────────
-  type Dir = "left" | "right" | "top";
-  const sentences: { text: string; dir: Dir; arriveAt: number; stackY: number }[] = [
-    { text: "Complex reasoning.", dir: "left",  arriveAt: 10,  stackY: -100 },
-    { text: "Planning.",          dir: "right", arriveAt: 55,  stackY:    0 },
-    { text: "Building agents.",   dir: "top",   arriveAt: 100, stackY:  100 },
-  ];
-
-  // Each sentence: slides in to center, holds full opacity, then dims + moves to stack pos
-  // Stack exit starts at lf 200
-  const showSentences = lf < 300;
-  const showStat      = lf >= 290;
-
-  // "Gemma 4 handles all of it." (lf 200–270)
-  const handlesO = lf >= 200
-    ? clamp(fi(lf, 200, 16) * fo(lf, 250, 20))
-    : 0;
-
-  // Counter 0→400 (lf 300–380)
-  const counterVal = Math.round(
-    interpolate(lf, [300, 390], [0, 400], {
-      extrapolateLeft: "clamp", extrapolateRight: "clamp",
-    })
-  );
-  const counterO = fi(lf, 300, 10);
-
-  // "million" slides up (lf 390–420)
-  const millionO = fi(lf, 390, 16);
-  const millionY = interpolate(lf, [390, 415], [30, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  // "This one is stronger." (lf 430–567)
-  const strongerO = fi(lf, 430, 20);
-
-  return (
-    <AbsoluteFill style={{ background: BG, overflow: "hidden" }}>
-      {/* flash */}
-      <AbsoluteFill style={{ background: WHITE, opacity: flashO, pointerEvents: "none" }} />
-
-      {/* ── Directional sentences ── */}
-      {showSentences && sentences.map((s, i) => {
-        const arrived = lf >= s.arriveAt;
-        if (!arrived) return null;
-
-        const progress = spring({
-          frame: lf - s.arriveAt,
-          fps,
-          config: { damping: 18, stiffness: 140, mass: 0.8 },
-        });
-
-        // Slide from direction → center
-        const offX = s.dir === "left" ? -700 : s.dir === "right" ? 700 : 0;
-        const offY = s.dir === "top"  ? -500 : 0;
-        const cx   = interpolate(progress, [0, 1], [offX, 0]);
-        const cy   = interpolate(progress, [0, 1], [offY, 0]);
-
-        // After lf 200: drift to stack position + dim
-        const exitProgress = clamp((lf - 200) / 40);
-        const stackX = interpolate(exitProgress, [0, 1], [0, 0]);
-        const stackY = interpolate(exitProgress, [0, 1], [0, s.stackY]);
-        const dimO   = interpolate(exitProgress, [0, 1], [1, 0.28]);
-        const scaleE = interpolate(exitProgress, [0, 1], [1, 0.72]);
-
-        return (
-          <div key={i} style={{
-            position: "absolute",
-            top: "50%",
-            width: "100%",
-            textAlign: "center",
-            transform: `translate(${cx + stackX}px, calc(-50% + ${cy + stackY}px)) scale(${scaleE})`,
-            opacity: dimO,
-          }}>
-            <div style={{
-              fontSize: 68,
-              fontWeight: 900,
-              color: WHITE,
-              fontFamily: "Inter, system-ui, sans-serif",
-              letterSpacing: "-0.02em",
-            }}>{s.text}</div>
-          </div>
-        );
-      })}
-
-      {/* "Gemma 4 handles all of it." */}
-      {lf >= 200 && lf < 300 && (
-        <div style={{
-          position: "absolute",
-          bottom: 220,
-          width: "100%",
-          textAlign: "center",
-          opacity: handlesO,
-        }}>
-          <div style={{
-            fontSize: 36,
-            fontWeight: 500,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            fontStyle: "italic",
-          }}>Gemma 4 handles all of it.</div>
-        </div>
-      )}
-
-      {/* ── 400M counter ── */}
-      {showStat && (
-        <div style={{
-          position: "absolute",
-          top: "42%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          textAlign: "center",
-        }}>
-          <div style={{
-            fontSize: 220,
-            fontWeight: 900,
-            color: YELLOW,
-            fontFamily: "Inter, system-ui, sans-serif",
-            lineHeight: 0.85,
-            letterSpacing: "-0.05em",
-            opacity: counterO,
-            textShadow: `0 0 100px rgba(251,188,4,0.45)`,
-          }}>{counterVal}</div>
-
-          <div style={{
-            fontSize: 72,
-            fontWeight: 700,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            opacity: millionO,
-            transform: `translateY(${millionY}px)`,
-            marginTop: 4,
-          }}>million.</div>
-
-          <div style={{
-            fontSize: 38,
-            fontWeight: 500,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            fontStyle: "italic",
-            opacity: strongerO,
-            marginTop: 30,
-          }}>This one is stronger.</div>
-        </div>
-      )}
-    </AbsoluteFill>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONCEPT 2  frames 567–807
-// ═══════════════════════════════════════════════════════════════════════════════
-const Concept2Section: React.FC<{ lf: number }> = ({ lf }) => {
-  const flashO = interpolate(lf, [0, 4], [1, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  const mkLine = (from: number) => ({
-    o: fi(lf, from, 10),
-    y: interpolate(lf, [from, from + 22], [36, 0], {
-      extrapolateLeft: "clamp", extrapolateRight: "clamp",
-    }),
-  });
-
-  const l1 = mkLine(10);
-  const l2 = mkLine(52);
-  const l3 = mkLine(90);
-  const fasterO = fi(lf, 155, 16);
-
-  return (
-    <AbsoluteFill style={{ background: BG }}>
-      <AbsoluteFill style={{ background: WHITE, opacity: flashO, pointerEvents: "none" }} />
-
-      <div style={{
-        position: "absolute",
-        top: "35%",
-        width: "100%",
-        textAlign: "center",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 20,
-      }}>
-        {[
-          { label: "Your laptop.",  ...l1 },
-          { label: "No cloud.",     ...l2 },
-          { label: "No fees.",      ...l3 },
-        ].map((item, i) => (
-          <div key={i} style={{
-            fontSize: 74,
-            fontWeight: 900,
-            color: WHITE,
-            fontFamily: "Inter, system-ui, sans-serif",
-            letterSpacing: "-0.025em",
-            opacity: item.o,
-            transform: `translateY(${item.y}px)`,
-          }}>{item.label}</div>
-        ))}
-      </div>
-
-      <div style={{
-        position: "absolute",
-        bottom: 190,
-        width: "100%",
-        textAlign: "center",
-        opacity: fasterO,
-      }}>
-        <div style={{
-          fontSize: 52,
-          fontWeight: 700,
-          color: YELLOW,
-          fontFamily: "Inter, system-ui, sans-serif",
-        }}>Faster than ever.</div>
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAKEAWAY  frames 807–1108
-// ═══════════════════════════════════════════════════════════════════════════════
-const TakeawaySection: React.FC<{ lf: number }> = ({ lf }) => {
-  const flashO  = interpolate(lf, [0, 4], [1, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-  const ruleO   = fi(lf, 6, 10);
-  const textO   = fi(lf, 20, 22);
-  const textY   = interpolate(lf, [20, 44], [22, 0], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-  const liveO   = fi(lf, 130, 14);
-  const saveO   = fi(lf, 196, 14);
-  const arrowP  = interpolate(lf % 30, [0, 15, 30], [0.35, 1, 0.35], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  return (
-    <AbsoluteFill style={{ background: BG }}>
-      <AbsoluteFill style={{ background: WHITE, opacity: flashO, pointerEvents: "none" }} />
-
-      <div style={{
-        position: "absolute", top: 158, width: "100%", textAlign: "center",
-        opacity: ruleO,
-      }}>
-        <div style={{
-          fontSize: 20, fontWeight: 700, color: YELLOW,
-          fontFamily: "Inter, system-ui, sans-serif",
-          letterSpacing: "0.5em", textTransform: "uppercase",
-        }}>● RULE</div>
-      </div>
-
-      <div style={{
-        position: "absolute", top: 250, left: 68, right: 68,
-        opacity: textO, transform: `translateY(${textY}px)`,
-      }}>
-        <div style={{
-          fontSize: 54, fontWeight: 800, color: WHITE,
-          fontFamily: "Inter, system-ui, sans-serif",
-          lineHeight: 1.28, textAlign: "center",
-        }}>
-          When Google open-sources{" "}
-          <span style={{ color: YELLOW }}>their strongest model</span>
-          {" "}— you move immediately.
-        </div>
-      </div>
-
-      <div style={{
-        position: "absolute", top: "60%", width: "100%", textAlign: "center",
-        opacity: liveO,
-      }}>
-        <div style={{
-          fontSize: 64, fontWeight: 800, color: YELLOW,
-          fontFamily: "Inter, system-ui, sans-serif",
-        }}>Gemma 4 is live.</div>
-      </div>
-
-      <div style={{
-        position: "absolute", bottom: 155, width: "100%", textAlign: "center",
-        opacity: saveO,
-      }}>
-        <div style={{
-          fontSize: 44, fontWeight: 900, color: WHITE,
-          fontFamily: "Inter, system-ui, sans-serif",
-          letterSpacing: "0.04em",
-        }}>
-          SAVE THIS <span style={{ opacity: arrowP }}>↓</span>
-        </div>
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ROOT
-// ═══════════════════════════════════════════════════════════════════════════════
-export const CustomVideo = () => {
-  const frame      = useCurrentFrame();
-  const { fps }    = useVideoConfig();
-  const lf = (k: keyof typeof T) => frame - T[k].start;
-
-  return (
-    <AbsoluteFill>
-      <Audio src={staticFile("narration.wav")} />
-      {frame >= T.hook.start && frame < T.hook.end && (
-        <HookSection lf={lf("hook")} fps={fps} />
-      )}
-      {frame >= T.c1.start && frame < T.c1.end && (
-        <Concept1Section lf={lf("c1")} fps={fps} />
-      )}
-      {frame >= T.c2.start && frame < T.c2.end && (
-        <Concept2Section lf={lf("c2")} />
-      )}
-      {frame >= T.cta.start && frame <= T.cta.end && (
-        <TakeawaySection lf={lf("cta")} />
-      )}
-    </AbsoluteFill>
-  );
-};
+const HOOK_F     = 214;
+const CONCEPT1_F = 348;  // 562 - 214
+const CONCEPT2_F = 327;  // 889 - 562
+const TAKEAWAY_F = 260;  // 1149 - 889
 
 export const CustomVideoConfig = {
-  width:            1080,
-  height:           1920,
-  fps:              30,
-  durationInFrames: TOTAL_FRAMES,
+  durationInFrames: HOOK_F + CONCEPT1_F + CONCEPT2_F + TAKEAWAY_F,
+  fps:    30,
+  width:  1080,
+  height: 1920,
+};
+
+// ── Beat wrapper ──────────────────────────────────────────────────────────────
+
+const Beat: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
+    {children}
+  </BeatFrameContext.Provider>
+);
+
+// ── Design tokens ─────────────────────────────────────────────────────────────
+
+const TEAL   = "#1BC8A0";   // Unsloth brand teal
+const RED    = "#FF3366";   // Radium Red — cloud cost pain
+const YELLOW = COLOR.yellow;
+const CYAN   = COLOR.cyan;
+
+// ── Invoice line item ─────────────────────────────────────────────────────────
+
+const InvoiceLine: React.FC<{
+  label:   string;
+  amount:  string;
+  frame:   number;
+  fps:     number;
+  delay:   number;
+}> = ({ label, amount, frame, fps, delay }) => {
+  const prog = spring({ frame: Math.max(0, frame - delay), fps, config: SPRING_MEDIUM });
+  const opacity  = interpolate(prog, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
+  const translateX = interpolate(prog, [0, 1], [-40, 0], { extrapolateRight: "clamp" });
+
+  return (
+    <div style={{
+      display:       "flex",
+      justifyContent:"space-between",
+      alignItems:    "center",
+      opacity,
+      transform:     `translateX(${translateX}px)`,
+      padding:       "10px 0",
+      borderBottom:  "1px solid rgba(255,100,100,0.15)",
+    }}>
+      <div style={{ fontSize: 26, color: "rgba(255,255,255,0.55)", fontFamily: FONT }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 600, color: RED, fontFamily: FONT }}>{amount}</div>
+    </div>
+  );
+};
+
+// ── Unsloth logo (TSX — no white background issue) ────────────────────────────
+
+const UnslothLogo: React.FC<{ size: number; frame: number }> = ({ size, frame }) => {
+  const glowPulse = Math.sin((frame / 30) * Math.PI * 2 * 0.4) * 0.5 + 0.5;
+  const glow      = 16 + glowPulse * 20;
+
+  return (
+    <div style={{
+      display:    "flex",
+      alignItems: "center",
+      gap:        16,
+      filter:     `drop-shadow(0 0 ${glow}px ${TEAL}80)`,
+    }}>
+      {/* Teal circle with sloth face — simplified TSX */}
+      <div style={{
+        width:        size,
+        height:       size,
+        borderRadius: "50%",
+        background:   `radial-gradient(circle at 40% 35%, ${TEAL}EE, #0D9A77)`,
+        display:      "flex",
+        alignItems:   "center",
+        justifyContent:"center",
+        border:       `2px solid ${TEAL}`,
+        boxShadow:    `0 0 ${glow}px ${TEAL}60`,
+        flexShrink:   0,
+        position:     "relative",
+        overflow:     "hidden",
+      }}>
+        {/* Sloth face simplified */}
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 60 60">
+          {/* Face */}
+          <ellipse cx="30" cy="32" rx="22" ry="20" fill="#F5DEB3" />
+          {/* Eye patches */}
+          <ellipse cx="20" cy="28" rx="8" ry="8" fill="#5C3A1E" opacity="0.85" />
+          <ellipse cx="40" cy="28" rx="8" ry="8" fill="#5C3A1E" opacity="0.85" />
+          {/* Eyes */}
+          <circle cx="20" cy="28" r="4.5" fill="white" />
+          <circle cx="40" cy="28" r="4.5" fill="white" />
+          <circle cx="21" cy="27" r="2.5" fill="#1a5c3a" />
+          <circle cx="41" cy="27" r="2.5" fill="#1a5c3a" />
+          <circle cx="22" cy="26" r="1" fill="white" />
+          <circle cx="42" cy="26" r="1" fill="white" />
+          {/* Nose */}
+          <ellipse cx="30" cy="36" rx="4" ry="3" fill="#C68642" opacity="0.7" />
+          {/* Smile */}
+          <path d="M 22 42 Q 30 48 38 42" stroke="#8B5E3C" strokeWidth="2" fill="none" strokeLinecap="round" />
+        </svg>
+      </div>
+      {/* Wordmark */}
+      <div style={{
+        fontSize:      size * 0.75,
+        fontWeight:    800,
+        color:         "#FFFFFF",
+        fontFamily:    FONT,
+        letterSpacing: "-0.03em",
+        lineHeight:    1,
+      }}>
+        unsloth
+      </div>
+    </div>
+  );
+};
+
+// ── Hook Beat ─────────────────────────────────────────────────────────────────
+
+const HookBeat: React.FC = () => {
+  const frame   = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Invoice slides in from top
+  const invoiceProgress = spring({ frame: Math.max(0, frame), fps, config: SPRING_HEAVY });
+  const invoiceY  = interpolate(invoiceProgress, [0, 1], [-120, 0]);
+  const invoiceOp = interpolate(invoiceProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+
+  // Invoice exits — slides left and fades at frame 90
+  const exitProgress = spring({ frame: Math.max(0, frame - 90), fps, config: SPRING_HEAVY });
+  const invoiceExitX = interpolate(exitProgress, [0, 1], [0, -800]);
+  const invoiceExitOp = interpolate(exitProgress, [0, 0.4], [1, 0], { extrapolateRight: "clamp" });
+
+  // Unsloth logo crashes in from below at frame 80
+  const logoProgress = spring({ frame: Math.max(0, frame - 80), fps, config: SPRING_HEAVY });
+  const logoY  = interpolate(logoProgress, [0, 1], [200, 0]);
+  const logoOp = interpolate(logoProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+
+  // FREE slams in at frame 110
+  const freeProgress = spring({ frame: Math.max(0, frame - 110), fps, config: SPRING_HEAVY });
+  const freeScale = interpolate(freeProgress, [0, 1], [0.4, 1]);
+  const freeOp    = interpolate(freeProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+  const freeGlow  = 30 + (Math.sin((frame / fps) * Math.PI * 2 * 0.4) * 0.5 + 0.5) * 50;
+
+  // Hook text fades in at frame 130
+  const textProgress = spring({ frame: Math.max(0, frame - 130), fps, config: SPRING_MEDIUM });
+  const textOp = interpolate(textProgress, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
+  const textY  = interpolate(textProgress, [0, 1], [20, 0]);
+
+  return (
+    <AbsoluteFill style={{
+      background:     "radial-gradient(ellipse at 50% 40%, #111 0%, #0A0A0A 70%)",
+      display:        "flex",
+      flexDirection:  "column",
+      alignItems:     "center",
+      justifyContent: "center",
+      fontFamily:     FONT,
+      position:       "relative",
+      overflow:       "hidden",
+      padding:        60,
+      boxSizing:      "border-box",
+      gap:            40,
+    }}>
+      <ParticleBackground frame={frame} />
+
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 40, width: "100%" }}>
+
+        {/* Cloud invoice card */}
+        <div style={{
+          opacity:   invoiceOp * invoiceExitOp,
+          transform: `translateY(${invoiceY}px) translateX(${invoiceExitX}px)`,
+          width:     "100%",
+          background:"rgba(255,50,80,0.06)",
+          border:    `1px solid ${RED}30`,
+          borderRadius: 16,
+          padding:   "28px 32px",
+        }}>
+          <div style={{
+            fontSize: 22, fontWeight: 600, color: "rgba(255,255,255,0.4)",
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            fontFamily: FONT, marginBottom: 16,
+          }}>
+            Cloud GPU Invoice — April 2026
+          </div>
+          <InvoiceLine label="GPU compute (A100 · 40h)" amount="$47.20" frame={frame} fps={fps} delay={4} />
+          <InvoiceLine label="Training runs"            amount="$23.80" frame={frame} fps={fps} delay={10} />
+          <InvoiceLine label="Storage + egress"         amount="$8.40"  frame={frame} fps={fps} delay={16} />
+          <div style={{
+            display: "flex", justifyContent: "space-between",
+            marginTop: 16, paddingTop: 16,
+            borderTop: `1px solid ${RED}40`,
+          }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.7)", fontFamily: FONT }}>Total this month</div>
+            <div style={{ fontSize: 36, fontWeight: 900, color: RED, fontFamily: FONT, letterSpacing: "-0.02em",
+              textShadow: `0 0 20px ${RED}50` }}>$79.40</div>
+          </div>
+        </div>
+
+        {/* Unsloth logo crashes in */}
+        <div style={{
+          opacity:   logoOp,
+          transform: `translateY(${logoY}px)`,
+        }}>
+          <UnslothLogo size={72} frame={frame} />
+        </div>
+
+        {/* FREE */}
+        <div style={{
+          opacity:         freeOp,
+          transform:       `scale(${freeScale})`,
+          transformOrigin: "center center",
+          fontSize:        140,
+          fontWeight:      900,
+          color:           YELLOW,
+          fontFamily:      FONT,
+          letterSpacing:   "-0.05em",
+          lineHeight:      1,
+          textShadow:      `0 0 ${freeGlow}px ${YELLOW}60, 0 0 ${freeGlow * 2}px ${YELLOW}20`,
+        }}>
+          FREE.
+        </div>
+
+        {/* Hook line */}
+        <div style={{
+          opacity:   textOp,
+          transform: `translateY(${textY}px)`,
+          fontSize:  28,
+          color:     "rgba(255,255,255,0.35)",
+          fontFamily: FONT,
+          textAlign: "center",
+          maxWidth:  700,
+          lineHeight: 1.5,
+        }}>
+          You are still paying for cloud GPUs every month to fine-tune your own models.
+        </div>
+      </div>
+
+      <TelemetryFrame frame={frame} />
+    </AbsoluteFill>
+  );
+};
+
+// ── Beat data ─────────────────────────────────────────────────────────────────
+
+const comparisonData = {
+  section_label: "Cloud vs Local",
+  left: {
+    heading: "Cloud GPU",
+    color:   "red" as const,
+    metrics: [
+      { label: "Monthly cost",  value: "$47–80",  color: "red"  as const },
+      { label: "Memory needed", value: "Full",    color: "red"  as const },
+      { label: "Data control",  value: "None",    color: "red"  as const },
+    ],
+  },
+  right: {
+    heading: "Unsloth",
+    color:   "green" as const,
+    metrics: [
+      { label: "Monthly cost",  value: "$0",   color: "green" as const, glow: true },
+      { label: "Memory saved",  value: "70%",  color: "green" as const, glow: true },
+      { label: "Data control",  value: "Full", color: "green" as const },
+    ],
+  },
+};
+
+const triStatData = {
+  section_label: "What you keep",
+  accent_color:  "cyan" as const,
+  stats: [
+    { value: "100%",  label: "Data Privacy",   sublabel: "Nothing leaves your machine", color: "cyan",  glow: true },
+    { value: "$0",    label: "Monthly Bill",    sublabel: "Fine-tune on your own GPU",   color: "green", glow: false },
+    { value: "500+",  label: "Models",          sublabel: "All open source, no waitlist",color: "cyan",  glow: false },
+  ],
+};
+
+const takeawayData = {
+  section_label: "Takeaway",
+  accent_color:  "cyan" as const,
+  headline:      "Free local fine-tuning at seventy percent less memory means the cloud GPU bill is now optional.",
+  cta:           "Unsloth Studio. Download and run locally.",
+};
+
+// ── Root composition ──────────────────────────────────────────────────────────
+
+export const CustomVideo: React.FC = () => {
+  const start2 = HOOK_F;
+  const start3 = start2 + CONCEPT1_F;
+  const start4 = start3 + CONCEPT2_F;
+
+  return (
+    <AbsoluteFill style={{ background: "#0A0A0A" }}>
+
+      <Audio src={staticFile("narration.wav")} />
+
+      <Sequence from={0} durationInFrames={HOOK_F}>
+        <Beat><HookBeat /></Beat>
+      </Sequence>
+
+      <Sequence from={start2} durationInFrames={CONCEPT1_F}>
+        <Beat>
+          <AbsoluteFill><ComparisonSplit data={comparisonData} /></AbsoluteFill>
+        </Beat>
+      </Sequence>
+
+      <Sequence from={start3} durationInFrames={CONCEPT2_F}>
+        <Beat>
+          <AbsoluteFill><TriStat data={triStatData} /></AbsoluteFill>
+        </Beat>
+      </Sequence>
+
+      <Sequence from={start4} durationInFrames={TAKEAWAY_F}>
+        <Beat>
+          <AbsoluteFill>
+            <TakeawayScene data={takeawayData} durationFrames={TAKEAWAY_F} />
+          </AbsoluteFill>
+        </Beat>
+      </Sequence>
+
+    </AbsoluteFill>
+  );
 };

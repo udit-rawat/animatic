@@ -1,61 +1,90 @@
 /**
- * springIn.ts — shared spring animation utility
+ * springIn.ts — motion tier system + shared animation utilities.
  *
- * Single source of truth for spring config and the Math.max(0, frame - delay)
- * guard. All animated primitives call springIn() instead of spring() directly.
+ * THREE TIERS (Gemini design pass — overshootClamping removed on Heavy + Medium):
  *
- * Motion contrast principle:
- *   - Structural chrome (backgrounds, borders, containers) → cut in at frame 0
- *   - Data values, metric numbers, key visuals → springIn()
- *   - Exit animations → never; cut to next beat cleanly
+ *   HEAVY   stiffness 150, damping 12, mass 1.2, overshoot ON
+ *           → Hook hero text, TakeawayScene card. Visible bounce, carries weight.
+ *           → Entrance distance: 80px from below.
+ *
+ *   MEDIUM  stiffness 220, damping 18, mass 1,   overshoot ON
+ *           → Concept beat cards, data bars, ComparisonSplit panels.
+ *           → Single-frame overshoot. Fast but organic.
+ *           → Entrance distance: 40px.
+ *
+ *   SOFT    stiffness 250, damping 25, mass 1,   overshoot OFF
+ *           → Secondary text, labels, chips. Clean, sharp landing.
+ *           → Entrance distance: 15px.
+ *
+ * Legacy presets (CRISP, HERO, SNAP) kept for backward compatibility.
  */
 
 import { spring, interpolate } from "remotion";
 
-// ── Spring presets ─────────────────────────────────────────────────────────────
+// ── Spring configs ─────────────────────────────────────────────────────────────
 
 interface SpringConfig {
-  damping: number;
-  stiffness: number;
+  damping:           number;
+  stiffness:         number;
+  mass?:             number;
   overshootClamping: boolean;
 }
 
-/** Crisp entry for metric cards and data elements (default) */
+// ── New motion tiers ──────────────────────────────────────────────────────────
+
+/** HEAVY — hook hero + takeaway. Visible overshoot, carries mass. */
+export const SPRING_HEAVY: SpringConfig = {
+  damping: 12, stiffness: 150, mass: 1.2, overshootClamping: false,
+};
+
+/** MEDIUM — concept beat cards, data bars. One-frame overshoot, organic. */
+export const SPRING_MEDIUM: SpringConfig = {
+  damping: 18, stiffness: 220, mass: 1, overshootClamping: false,
+};
+
+/** SOFT — secondary text, labels, chips. Clean landing. */
+export const SPRING_SOFT: SpringConfig = {
+  damping: 25, stiffness: 250, mass: 1, overshootClamping: true,
+};
+
+// ── Legacy presets (backward compat) ─────────────────────────────────────────
+
 const SPRING_CRISP: SpringConfig = { damping: 28, stiffness: 220, overshootClamping: true };
-
-/** Slower reveal for hero numbers — more gravitas */
 const SPRING_HERO:  SpringConfig = { damping: 28, stiffness: 180, overshootClamping: true };
-
-/** Fast snap for structural elements that do need a hint of motion */
 const SPRING_SNAP:  SpringConfig = { damping: 40, stiffness: 300, overshootClamping: true };
 
-export type SpringPreset = "crisp" | "hero" | "snap";
+export type SpringPreset = "crisp" | "hero" | "snap" | "heavy" | "medium" | "soft";
 
 const PRESET_MAP: Record<SpringPreset, SpringConfig> = {
-  crisp: SPRING_CRISP,
-  hero:  SPRING_HERO,
-  snap:  SPRING_SNAP,
+  crisp:  SPRING_CRISP,
+  hero:   SPRING_HERO,
+  snap:   SPRING_SNAP,
+  heavy:  SPRING_HEAVY,
+  medium: SPRING_MEDIUM,
+  soft:   SPRING_SOFT,
+};
+
+// ── Entrance distances per tier ───────────────────────────────────────────────
+
+const ENTER_DIST: Record<SpringPreset, number> = {
+  heavy:  80,
+  medium: 40,
+  soft:   15,
+  crisp:  16,
+  hero:   16,
+  snap:   8,
 };
 
 // ── Core utility ──────────────────────────────────────────────────────────────
 
-/**
- * springIn — compute spring progress with delay guard.
- *
- * @param frame  - current beat-local frame (from useBeatFrame)
- * @param fps    - from useVideoConfig().fps
- * @param delay  - frame offset before spring starts (stagger)
- * @param preset - spring character: "crisp" | "hero" | "snap"
- * @returns      - spring progress 0→1
- */
 export function springIn(
   frame: number,
   fps: number,
   delay: number = 0,
-  preset: SpringPreset = "crisp",
+  preset: SpringPreset = "medium",
 ): number {
   return spring({
-    frame: Math.max(0, frame - delay),
+    frame:  Math.max(0, frame - delay),
     fps,
     config: PRESET_MAP[preset],
   });
@@ -68,42 +97,37 @@ export interface SlideUpValues {
   translateY: number;
 }
 
-/**
- * slideUp — standard card entrance: fade in + translate up 16px → 0.
- * Used by MetricCard, LabelValueCard, and any staggered list item.
- */
 export function slideUp(
   frame: number,
   fps: number,
   delay: number = 0,
-  preset: SpringPreset = "crisp",
+  preset: SpringPreset = "medium",
 ): SlideUpValues {
   const progress = springIn(frame, fps, delay, preset);
+  const dist     = ENTER_DIST[preset];
   return {
     opacity:    interpolate(progress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" }),
-    translateY: interpolate(progress, [0, 1],    [16, 0]),
+    translateY: interpolate(progress, [0, 1],    [dist, 0]),
   };
 }
 
 export interface ScaleInValues {
-  opacity: number;
-  scale:   number;
+  opacity:  number;
+  scale:    number;
+  progress: number;
 }
 
-/**
- * scaleIn — hero metric entrance: fade + scale 0.75 → 1.0.
- * Used by NumberCounter.
- */
 export function scaleIn(
   frame: number,
   fps: number,
   delay: number = 0,
-  preset: SpringPreset = "hero",
+  preset: SpringPreset = "heavy",
 ): ScaleInValues {
   const progress = springIn(frame, fps, delay, preset);
   return {
-    opacity: interpolate(progress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" }),
-    scale:   interpolate(progress, [0, 1],    [0.75, 1.0]),
+    opacity:  interpolate(progress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" }),
+    scale:    interpolate(progress, [0, 1],    [0.72, 1.0]),
+    progress,
   };
 }
 
@@ -112,16 +136,12 @@ export interface PopInValues {
   scale:   number;
 }
 
-/**
- * popIn — GPU node entrance: scale 0.85 → 1.0 with stagger.
- * Used by GPUNode.
- */
 export function popIn(
   frame: number,
   fps: number,
   delay: number = 0,
 ): PopInValues {
-  const progress = springIn(frame, fps, delay, "crisp");
+  const progress = springIn(frame, fps, delay, "medium");
   return {
     opacity: interpolate(progress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" }),
     scale:   interpolate(progress, [0, 1],   [0.85, 1.0]),
@@ -130,17 +150,6 @@ export function popIn(
 
 // ── Stagger utility ───────────────────────────────────────────────────────────
 
-/**
- * staggerDelay — normalize stagger across any array size.
- *
- * Always produces the same total sweep duration regardless of item count.
- * With STAGGER_BUDGET=24: 2 items → delays [0, 12]; 8 items → [0,3,6,9,12,15,18,21]
- *
- * @param index         - 0-based item index
- * @param total         - total number of items
- * @param budgetFrames  - total frames for the whole sweep (default 24 = 0.8s)
- * @param baseDelay     - additional base offset applied to all items
- */
 export function staggerDelay(
   index: number,
   total: number,

@@ -1,22 +1,19 @@
 /**
  * TakeawayScene — kinetic outro layout. Kills the "dead air" problem.
  *
- * Anti-dead-air mechanisms:
- *   1. AmbientDots     — 3 deterministic floating glow orbs (no Math.random)
- *   2. BeatBreath      — continuous 0.25 Hz scale/opacity pulse on the card
- *   3. WordReveal      — headline splits into words, each springs in independently
- *   4. ProgressBorder  — glowing bar fills the full beat duration → forward momentum
- *   5. CTAChip         — pops in after headline completes (spring-scale, overshoot)
- *
- * Usage: wire in VideoComposition when scenePayload.data.layout === "TakeawayScene".
- * durationFrames must be passed from VideoComposition (Math.round(entry.duration * fps)).
+ * Motion upgrades (design pass):
+ *   • HEAVY spring for card entrance (carries mass, overshoot ON)
+ *   • ParticleBackground + TelemetryFrame
+ *   • Card inner shimmer sweep after headline completes
+ *   • Existing: AmbientDots, BeatBreath, WordReveal, ProgressBorder, CTAChip
  */
 
 import React from "react";
 import { interpolate, spring, useVideoConfig } from "remotion";
 import type { TakeawaySceneData } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
-import { COLOR, FONT } from "./_shared";
+import { SPRING_HEAVY } from "../utils/springIn";
+import { COLOR, FONT, ParticleBackground, TelemetryFrame } from "./_shared";
 
 // ── Deterministic floating glow dot ──────────────────────────────────────────
 
@@ -60,37 +57,29 @@ const WordReveal: React.FC<{
   fontSize:  number;
   color:     string;
 }> = ({ text, frame, fps, baseDelay, fontSize, color }) => {
-  // trim() + split(/\s+/) guards against leading/trailing spaces and multi-space
-  // runs that would produce empty "" tokens and invisible gap-eating spans.
   const words = text.trim().split(/\s+/);
 
   return (
-    // BUG FIX: do NOT use gap/columnGap with "em" units on the container — em
-    // resolves against the container's own font-size (typically 16px default),
-    // NOT the span's font-size (68px here). At 16px, 0.28em ≈ 4.5px: invisible.
-    // Fix: paddingRight on each span, where em resolves against the span's own
-    // fontSize — so 0.3em at fontSize:68 = ~20px, correct word spacing.
     <div style={{ display: "flex", flexWrap: "wrap", lineHeight: 1.3 }}>
       {words.map((word, i) => {
-        const delay    = baseDelay + i * 3;  // tighter stagger for Reels pace
+        const delay    = baseDelay + i * 3;
         const progress = spring({
-          frame: Math.max(0, frame - delay),
+          frame:  Math.max(0, frame - delay),
           fps,
           config: { damping: 22, stiffness: 280, overshootClamping: true },
         });
         const isLast = i === words.length - 1;
         return (
           <span key={i} style={{
-            display:     "inline-block",
-            opacity:     interpolate(progress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" }),
-            transform:   `translateY(${interpolate(progress, [0, 1], [120, 0])}px)`,
+            display:       "inline-block",
+            opacity:       interpolate(progress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" }),
+            transform:     `translateY(${interpolate(progress, [0, 1], [120, 0])}px)`,
             fontSize,
-            fontWeight:  700,
+            fontWeight:    700,
             color,
-            fontFamily:  FONT,
+            fontFamily:    FONT,
             letterSpacing: "-0.02em",
-            // Correct word spacing: em resolves against THIS span's fontSize.
-            paddingRight: isLast ? 0 : "0.3em",
+            paddingRight:  isLast ? 0 : "0.3em",
           }}>
             {word}
           </span>
@@ -137,22 +126,21 @@ export const TakeawayScene: React.FC<{
 }> = ({ data, durationFrames }) => {
   const frame   = useBeatFrame();
   const { fps } = useVideoConfig();
-  const accent  = ACCENT[data.accent_color ?? "cyan"];
+  const accent  = ACCENT[data.accent_color ?? "cyan"] ?? COLOR.cyan;
 
-  // ── Card entrance (spring slide-up) ─────────────────────────────────────────
-  const cardEntry = spring({ frame: Math.max(0, frame), fps,
-    config: { damping: 32, stiffness: 220, overshootClamping: true } });
+  // Card entrance: HEAVY spring for physical weight
+  const cardEntry = spring({ frame: Math.max(0, frame), fps, config: SPRING_HEAVY });
   const cardOpacity    = interpolate(cardEntry, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
-  const cardTranslateY = interpolate(cardEntry, [0, 1], [44, 0]);
+  const cardTranslateY = interpolate(cardEntry, [0, 1], [80, 0]);
 
-  // ── Continuous breath after entrance (kicks in at ~frame 20) ───────────────
+  // Continuous breath after entrance settles (~frame 22)
   const breathPhase = (frame / fps) * Math.PI * 2 * 0.25;
-  const breathScale = 1 + Math.sin(breathPhase) * 0.011;
+  const breathScale = frame > 22 ? 1 + Math.sin(breathPhase) * 0.011 : 1;
 
-  // ── Section label fade ──────────────────────────────────────────────────────
+  // Section label fade
   const labelOpacity = interpolate(cardEntry, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
 
-  // ── CTA pop-in (after last word lands) ─────────────────────────────────────
+  // CTA pop-in after last word lands
   const wordCount = data.headline.split(" ").length;
   const ctaDelay  = 12 + wordCount * 5 + 18;
   const ctaEntry  = spring({ frame: Math.max(0, frame - ctaDelay), fps,
@@ -160,27 +148,38 @@ export const TakeawayScene: React.FC<{
   const ctaScale   = interpolate(ctaEntry, [0, 1], [0.6, 1]);
   const ctaOpacity = interpolate(ctaEntry, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
 
+  // Card shimmer: sweeps left→right starting after headline finishes
+  const shimmerStart = 12 + wordCount * 3 + 12;
+  const shimmerCycle = 80;
+  const shimmerPos   = frame >= shimmerStart
+    ? (((frame - shimmerStart) % shimmerCycle) / shimmerCycle) * 140 - 20
+    : -30;
+  const showShimmer  = frame >= shimmerStart;
+
   return (
     <div style={{
       width:     "100%",
       height:    "100%",
-      background:"#0A0A0A",
+      background:"radial-gradient(ellipse at 50% 60%, #111 0%, #0A0A0A 70%)",
       position:  "relative",
       overflow:  "hidden",
       fontFamily: FONT,
     }}>
-      {/* ── Ambient layer (behind content) ── */}
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+
+      <ParticleBackground frame={frame} />
+
+      {/* Ambient orbs (behind content) */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 1 }}>
         <AmbientDot frame={frame} fps={fps} seed={1} color={`${accent}18`} />
         <AmbientDot frame={frame} fps={fps} seed={4} color={`${accent}0E`} />
         <AmbientDot frame={frame} fps={fps} seed={7} color="rgba(255,255,255,0.04)" />
       </div>
 
-      {/* ── Content layer ── */}
+      {/* Content layer */}
       <div style={{
         position:      "absolute",
         inset:         0,
-        zIndex:        1,
+        zIndex:        2,
         display:       "flex",
         flexDirection: "column",
         justifyContent:"center",
@@ -215,6 +214,19 @@ export const TakeawayScene: React.FC<{
             background: `linear-gradient(90deg, transparent, ${accent}60, transparent)`,
           }} />
 
+          {/* Shimmer sweep after headline lands */}
+          {showShimmer && (
+            <div style={{
+              position:     "absolute",
+              inset:        0,
+              left:         `${shimmerPos}%`,
+              width:        "20%",
+              background:   "linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent)",
+              transform:    "skewX(-15deg)",
+              pointerEvents:"none",
+            }} />
+          )}
+
           <WordReveal
             text={data.headline}
             frame={frame}
@@ -245,8 +257,10 @@ export const TakeawayScene: React.FC<{
         )}
       </div>
 
-      {/* ── Progress border fills over beat duration ── */}
+      {/* Progress border fills over beat duration */}
       <ProgressBorder frame={frame} durationFrames={durationFrames} color={accent} />
+
+      <TelemetryFrame frame={frame} />
     </div>
   );
 };

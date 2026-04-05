@@ -57,7 +57,7 @@ function clamp01(v: number): number {
  *
  * @param audioSrc  Filename in remotion/public/ (e.g. "narration.wav")
  */
-export function useAudioMetrics(audioSrc: string): AudioMetrics {
+export function useAudioMetrics(audioSrc: string = "narration.wav"): AudioMetrics {
   const frame      = useCurrentFrame();
   const { fps }    = useVideoConfig();
   const audioData  = useAudioData(staticFile(audioSrc));
