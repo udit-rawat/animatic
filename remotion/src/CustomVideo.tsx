@@ -1,11 +1,11 @@
 /**
- * CustomVideo.tsx — MolmoWeb: "You Pay for Web Agents. This Open Source One Beats Them Locally"
- * 937 frames · 30fps · 31.2s
+ * CustomVideo.tsx — Unsloth Studio: "You No Longer Need to Pay for Cloud GPUs to Fine-Tune Models"
+ * 1149 frames · 30fps · 38.3s
  *
- * [hook]      frames   0–216   7.2s  Custom browser + MolmoWeb logo entrance + FREE slam
- * [concept_1] frames 216–512   9.9s  BarComparison — 4 web agent benchmark scores
- * [concept_2] frames 512–731   7.3s  MetricFocus   — $0 hero metric
- * [takeaway]  frames 731–937   6.8s  TakeawayScene — word reveal + CTA
+ * [hook]      frames   0–214   7.1s  Cloud invoice knocked off by Unsloth + FREE slam
+ * [concept_1] frames 214–562  11.6s  ComparisonSplit — Cloud vs Unsloth
+ * [concept_2] frames 562–889  10.9s  TriStat — Your Data / Your Hardware / Your Speed
+ * [takeaway]  frames 889–1149  8.7s  TakeawayScene — word reveal
  */
 
 import React from "react";
@@ -21,25 +21,27 @@ import {
 } from "remotion";
 
 import { BeatFrameContext } from "./hooks/useBeatFrame";
-import { BarComparison } from "./layouts/BarComparison";
-import { MetricFocus } from "./layouts/MetricFocus";
+import { ComparisonSplit } from "./layouts/ComparisonSplit";
+import { TriStat } from "./layouts/TriStat";
 import { TakeawayScene } from "./layouts/TakeawayScene";
-import {
-  COLOR,
-  FONT,
-  ParticleBackground,
-  TelemetryFrame,
-} from "./layouts/_shared";
+import { COLOR, FONT, ParticleBackground, TelemetryFrame } from "./layouts/_shared";
 import { SPRING_HEAVY, SPRING_MEDIUM } from "./utils/springIn";
 
 // ── Frame budgets ─────────────────────────────────────────────────────────────
 
-const HOOK_F     = 216;
-const CONCEPT1_F = 296;   // 512 - 216
-const CONCEPT2_F = 219;   // 731 - 512
-const TAKEAWAY_F = 206;   // 937 - 731
+const HOOK_F     = 214;
+const CONCEPT1_F = 348;  // 562 - 214
+const CONCEPT2_F = 327;  // 889 - 562
+const TAKEAWAY_F = 260;  // 1149 - 889
 
-// ── Beat context wrapper ──────────────────────────────────────────────────────
+export const CustomVideoConfig = {
+  durationInFrames: HOOK_F + CONCEPT1_F + CONCEPT2_F + TAKEAWAY_F,
+  fps:    30,
+  width:  1080,
+  height: 1920,
+};
+
+// ── Beat wrapper ──────────────────────────────────────────────────────────────
 
 const Beat: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
@@ -49,204 +51,98 @@ const Beat: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const PINK   = "#F472B6";
-const CYAN   = COLOR.cyan;
+const TEAL   = "#1BC8A0";   // Unsloth brand teal
+const RED    = "#FF3366";   // Radium Red — cloud cost pain
 const YELLOW = COLOR.yellow;
+const CYAN   = COLOR.cyan;
 
-// ── Loading spinner ───────────────────────────────────────────────────────────
+// ── Invoice line item ─────────────────────────────────────────────────────────
 
-const Spinner: React.FC<{ frame: number; size: number; color: string }> = ({ frame, size, color }) => (
-  <svg width={size} height={size} viewBox="0 0 40 40" style={{ overflow: "visible" }}>
-    {Array.from({ length: 8 }, (_, i) => {
-      const angle   = (i / 8) * Math.PI * 2;
-      const phase   = ((frame * 0.12) + i / 8) % 1;
-      const x1 = 20 + Math.cos(angle) * 11;
-      const y1 = 20 + Math.sin(angle) * 11;
-      const x2 = 20 + Math.cos(angle) * 17;
-      const y2 = 20 + Math.sin(angle) * 17;
-      return (
-        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke={color} strokeWidth={2.5} strokeLinecap="round" opacity={0.15 + phase * 0.85} />
-      );
-    })}
-  </svg>
-);
+const InvoiceLine: React.FC<{
+  label:   string;
+  amount:  string;
+  frame:   number;
+  fps:     number;
+  delay:   number;
+}> = ({ label, amount, frame, fps, delay }) => {
+  const prog = spring({ frame: Math.max(0, frame - delay), fps, config: SPRING_MEDIUM });
+  const opacity  = interpolate(prog, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
+  const translateX = interpolate(prog, [0, 1], [-40, 0], { extrapolateRight: "clamp" });
 
-// ── Geometric network node ────────────────────────────────────────────────────
+  return (
+    <div style={{
+      display:       "flex",
+      justifyContent:"space-between",
+      alignItems:    "center",
+      opacity,
+      transform:     `translateX(${translateX}px)`,
+      padding:       "10px 0",
+      borderBottom:  "1px solid rgba(255,100,100,0.15)",
+    }}>
+      <div style={{ fontSize: 26, color: "rgba(255,255,255,0.55)", fontFamily: FONT }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 600, color: RED, fontFamily: FONT }}>{amount}</div>
+    </div>
+  );
+};
 
-const NetworkNode: React.FC<{ frame: number; size: number }> = ({ frame, size }) => {
-  const rot      = frame * 0.6;
+// ── Unsloth logo (TSX — no white background issue) ────────────────────────────
+
+const UnslothLogo: React.FC<{ size: number; frame: number }> = ({ size, frame }) => {
   const glowPulse = Math.sin((frame / 30) * Math.PI * 2 * 0.4) * 0.5 + 0.5;
-  const glow      = 12 + glowPulse * 16;
-
-  const pts = Array.from({ length: 6 }, (_, i) => {
-    const a = (i / 6) * Math.PI * 2 + (rot * Math.PI) / 180;
-    return { x: Math.cos(a) * 0.65, y: Math.sin(a) * 0.65 };
-  });
-
-  const edges: [number, number][] = [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,3],[1,4],[2,5]];
+  const glow      = 16 + glowPulse * 20;
 
   return (
-    <div style={{ width: size, height: size, filter: `drop-shadow(0 0 ${glow}px ${PINK}80)` }}>
-      <svg width={size} height={size} viewBox="-1 -1 2 2">
-        <circle cx={0} cy={0} r={0.92} fill={`${PINK}22`} stroke={PINK} strokeWidth={0.04} />
-        {edges.map(([a, b], i) => (
-          <line key={i} x1={pts[a].x} y1={pts[a].y} x2={pts[b].x} y2={pts[b].y}
-            stroke={PINK} strokeWidth={0.03} opacity={0.5} />
-        ))}
-        {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={0.055} fill={PINK} opacity={0.85} />
-        ))}
-        <circle cx={0} cy={0} r={0.08} fill={PINK} opacity={0.9} />
-      </svg>
-    </div>
-  );
-};
-
-// ── Bidirectional pulse arrow ─────────────────────────────────────────────────
-
-const PulseArrow: React.FC<{ frame: number; width: number }> = ({ frame, width }) => {
-  const cycle   = 60;
-  const t       = (frame % cycle) / cycle;
-  const goRight = Math.floor(frame / cycle) % 2 === 0;
-  const pos     = (goRight ? t : 1 - t) * width;
-
-  return (
-    <div style={{ position: "relative", width, height: 20, display: "flex", alignItems: "center" }}>
+    <div style={{
+      display:    "flex",
+      alignItems: "center",
+      gap:        16,
+      filter:     `drop-shadow(0 0 ${glow}px ${TEAL}80)`,
+    }}>
+      {/* Teal circle with sloth face — simplified TSX */}
       <div style={{
-        position: "absolute", left: 0, right: 0, height: 1,
-        background: `linear-gradient(90deg, ${PINK}30, ${PINK}70, ${PINK}30)`,
-      }} />
-      <div style={{
-        position: "absolute", left: -4,
-        width: 0, height: 0,
-        borderTop: "5px solid transparent", borderBottom: "5px solid transparent",
-        borderRight: `7px solid ${PINK}70`,
-      }} />
-      <div style={{
-        position: "absolute", right: -4,
-        width: 0, height: 0,
-        borderTop: "5px solid transparent", borderBottom: "5px solid transparent",
-        borderLeft: `7px solid ${PINK}70`,
-      }} />
-      <div style={{
-        position:     "absolute",
-        left:         pos - 4,
-        width:        8, height: 8,
+        width:        size,
+        height:       size,
         borderRadius: "50%",
-        background:   PINK,
-        boxShadow:    `0 0 10px ${PINK}`,
-      }} />
-    </div>
-  );
-};
-
-// ── Browser window ────────────────────────────────────────────────────────────
-
-const BrowserWindow: React.FC<{ frame: number; fps: number; progress: number }> = ({ frame, fps, progress }) => {
-  const fullText   = "✦ MolmoWeb";
-  const charCount  = Math.floor(
-    interpolate(progress, [0.15, 0.65], [0, fullText.length], { extrapolateRight: "clamp" })
-  );
-  const displayText = fullText.slice(0, charCount);
-
-  const elemProgress = spring({ frame: Math.max(0, frame - 14), fps, config: SPRING_MEDIUM });
-  const elemOpacity  = interpolate(elemProgress, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
-  const elemScale    = interpolate(elemProgress, [0, 1], [0.7, 1]);
-
-  const urlGlow     = Math.sin((frame / fps) * Math.PI * 2 * 0.4) * 0.3 + 0.5;
-  const browserOpacity = interpolate(progress, [0, 0.12], [0, 1], { extrapolateRight: "clamp" });
-  const browserY       = interpolate(progress, [0, 1], [-60, 0]);
-
-  return (
-    <div style={{ opacity: browserOpacity, transform: `translateY(${browserY}px)`, width: 640 }}>
-      {/* Chrome bar */}
-      <div style={{
-        background:   "rgba(255,255,255,0.04)",
-        border:       `1px solid ${CYAN}40`,
-        borderBottom: "none",
-        borderRadius: "16px 16px 0 0",
-        padding:      "14px 18px",
+        background:   `radial-gradient(circle at 40% 35%, ${TEAL}EE, #0D9A77)`,
         display:      "flex",
         alignItems:   "center",
-        gap:          10,
-      }}>
-        {["#FF5F57", "#FFBD2E", "#28C840"].map((c, i) => (
-          <div key={i} style={{ width: 12, height: 12, borderRadius: "50%", background: c, opacity: 0.7 }} />
-        ))}
-        <div style={{
-          flex:         1,
-          marginLeft:   8,
-          background:   `rgba(0,229,255,${urlGlow * 0.06})`,
-          border:       `1px solid ${CYAN}30`,
-          borderRadius: 6,
-          padding:      "4px 12px",
-          fontSize:     17,
-          color:        "rgba(255,255,255,0.35)",
-          fontFamily:   FONT,
-        }}>
-          localhost:7860/molmoweb
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={{
-        background:   "rgba(10,10,10,0.92)",
-        border:       `1px solid ${CYAN}35`,
-        borderTop:    `1px solid ${CYAN}18`,
-        borderRadius: "0 0 16px 16px",
-        padding:      "36px 40px 44px",
+        justifyContent:"center",
+        border:       `2px solid ${TEAL}`,
+        boxShadow:    `0 0 ${glow}px ${TEAL}60`,
+        flexShrink:   0,
         position:     "relative",
         overflow:     "hidden",
-        boxShadow:    `0 0 60px ${CYAN}08`,
       }}>
-        {/* MolmoWeb logo type-in */}
-        <div style={{
-          fontSize:      52,
-          fontWeight:    700,
-          color:         PINK,
-          fontFamily:    FONT,
-          letterSpacing: "-0.02em",
-          marginBottom:  36,
-          minHeight:     64,
-          display:       "flex",
-          alignItems:    "center",
-        }}>
-          {displayText}
-          {charCount < fullText.length && (
-            <span style={{
-              display:      "inline-block",
-              width:        3, height: "0.85em",
-              background:   PINK,
-              marginLeft:   2,
-              opacity:      Math.floor(frame / 8) % 2 === 0 ? 1 : 0,
-              verticalAlign:"middle",
-            }} />
-          )}
-        </div>
-
-        {/* Cursor + arrow + node */}
-        <div style={{
-          display:         "flex",
-          alignItems:      "center",
-          opacity:         elemOpacity,
-          transform:       `scale(${elemScale})`,
-          transformOrigin: "left center",
-        }}>
-          <div style={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
-            <div style={{ position: "absolute", top: 0, left: 0 }}>
-              <Spinner frame={frame} size={60} color={CYAN} />
-            </div>
-            <svg width={38} height={38} viewBox="0 0 24 24"
-              style={{ position: "absolute", bottom: 0, right: 0 }}>
-              <path d="M4 4 L4 20 L8 16 L11 22 L13 21 L10 15 L16 15 Z"
-                fill="none" stroke={CYAN} strokeWidth="1.5" strokeLinejoin="round" />
-            </svg>
-          </div>
-
-          <PulseArrow frame={frame} width={120} />
-          <NetworkNode frame={frame} size={80} />
-        </div>
+        {/* Sloth face simplified */}
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 60 60">
+          {/* Face */}
+          <ellipse cx="30" cy="32" rx="22" ry="20" fill="#F5DEB3" />
+          {/* Eye patches */}
+          <ellipse cx="20" cy="28" rx="8" ry="8" fill="#5C3A1E" opacity="0.85" />
+          <ellipse cx="40" cy="28" rx="8" ry="8" fill="#5C3A1E" opacity="0.85" />
+          {/* Eyes */}
+          <circle cx="20" cy="28" r="4.5" fill="white" />
+          <circle cx="40" cy="28" r="4.5" fill="white" />
+          <circle cx="21" cy="27" r="2.5" fill="#1a5c3a" />
+          <circle cx="41" cy="27" r="2.5" fill="#1a5c3a" />
+          <circle cx="22" cy="26" r="1" fill="white" />
+          <circle cx="42" cy="26" r="1" fill="white" />
+          {/* Nose */}
+          <ellipse cx="30" cy="36" rx="4" ry="3" fill="#C68642" opacity="0.7" />
+          {/* Smile */}
+          <path d="M 22 42 Q 30 48 38 42" stroke="#8B5E3C" strokeWidth="2" fill="none" strokeLinecap="round" />
+        </svg>
+      </div>
+      {/* Wordmark */}
+      <div style={{
+        fontSize:      size * 0.75,
+        fontWeight:    800,
+        color:         "#FFFFFF",
+        fontFamily:    FONT,
+        letterSpacing: "-0.03em",
+        lineHeight:    1,
+      }}>
+        unsloth
       </div>
     </div>
   );
@@ -258,14 +154,31 @@ const HookBeat: React.FC = () => {
   const frame   = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const progress     = spring({ frame: Math.max(0, frame), fps, config: SPRING_HEAVY });
-  const freeProgress = spring({ frame: Math.max(0, frame - 28), fps, config: SPRING_HEAVY });
-  const line1Progress = spring({ frame: Math.max(0, frame - 6), fps, config: SPRING_MEDIUM });
-  const line2Progress = spring({ frame: Math.max(0, frame - 36), fps, config: SPRING_MEDIUM });
+  // Invoice slides in from top
+  const invoiceProgress = spring({ frame: Math.max(0, frame), fps, config: SPRING_HEAVY });
+  const invoiceY  = interpolate(invoiceProgress, [0, 1], [-120, 0]);
+  const invoiceOp = interpolate(invoiceProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
 
-  const freeScale   = interpolate(freeProgress, [0, 1], [0.5, 1]);
-  const freeOpacity = interpolate(freeProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
-  const freeGlow    = 30 + (Math.sin((frame / fps) * Math.PI * 2 * 0.4) * 0.5 + 0.5) * 40;
+  // Invoice exits — slides left and fades at frame 90
+  const exitProgress = spring({ frame: Math.max(0, frame - 90), fps, config: SPRING_HEAVY });
+  const invoiceExitX = interpolate(exitProgress, [0, 1], [0, -800]);
+  const invoiceExitOp = interpolate(exitProgress, [0, 0.4], [1, 0], { extrapolateRight: "clamp" });
+
+  // Unsloth logo crashes in from below at frame 80
+  const logoProgress = spring({ frame: Math.max(0, frame - 80), fps, config: SPRING_HEAVY });
+  const logoY  = interpolate(logoProgress, [0, 1], [200, 0]);
+  const logoOp = interpolate(logoProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+
+  // FREE slams in at frame 110
+  const freeProgress = spring({ frame: Math.max(0, frame - 110), fps, config: SPRING_HEAVY });
+  const freeScale = interpolate(freeProgress, [0, 1], [0.4, 1]);
+  const freeOp    = interpolate(freeProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
+  const freeGlow  = 30 + (Math.sin((frame / fps) * Math.PI * 2 * 0.4) * 0.5 + 0.5) * 50;
+
+  // Hook text fades in at frame 130
+  const textProgress = spring({ frame: Math.max(0, frame - 130), fps, config: SPRING_MEDIUM });
+  const textOp = interpolate(textProgress, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
+  const textY  = interpolate(textProgress, [0, 1], [20, 0]);
 
   return (
     <AbsoluteFill style={{
@@ -279,76 +192,79 @@ const HookBeat: React.FC = () => {
       overflow:       "hidden",
       padding:        60,
       boxSizing:      "border-box",
+      gap:            40,
     }}>
       <ParticleBackground frame={frame} />
 
-      <div style={{
-        position:       "relative",
-        zIndex:         1,
-        display:        "flex",
-        flexDirection:  "column",
-        alignItems:     "center",
-        gap:            36,
-        width:          "100%",
-      }}>
-        {/* Top eyebrow */}
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 40, width: "100%" }}>
+
+        {/* Cloud invoice card */}
         <div style={{
-          fontSize:      28,
-          fontWeight:    500,
-          color:         "rgba(255,255,255,0.4)",
-          letterSpacing: "0.1em",
-          textTransform: "uppercase",
-          opacity:       interpolate(line1Progress, [0, 0.3], [0, 1], { extrapolateRight: "clamp" }),
-          transform:     `translateY(${interpolate(line1Progress, [0, 1], [20, 0])}px)`,
+          opacity:   invoiceOp * invoiceExitOp,
+          transform: `translateY(${invoiceY}px) translateX(${invoiceExitX}px)`,
+          width:     "100%",
+          background:"rgba(255,50,80,0.06)",
+          border:    `1px solid ${RED}30`,
+          borderRadius: 16,
+          padding:   "28px 32px",
         }}>
-          AllenAI · Open Source
+          <div style={{
+            fontSize: 22, fontWeight: 600, color: "rgba(255,255,255,0.4)",
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            fontFamily: FONT, marginBottom: 16,
+          }}>
+            Cloud GPU Invoice — April 2026
+          </div>
+          <InvoiceLine label="GPU compute (A100 · 40h)" amount="$47.20" frame={frame} fps={fps} delay={4} />
+          <InvoiceLine label="Training runs"            amount="$23.80" frame={frame} fps={fps} delay={10} />
+          <InvoiceLine label="Storage + egress"         amount="$8.40"  frame={frame} fps={fps} delay={16} />
+          <div style={{
+            display: "flex", justifyContent: "space-between",
+            marginTop: 16, paddingTop: 16,
+            borderTop: `1px solid ${RED}40`,
+          }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.7)", fontFamily: FONT }}>Total this month</div>
+            <div style={{ fontSize: 36, fontWeight: 900, color: RED, fontFamily: FONT, letterSpacing: "-0.02em",
+              textShadow: `0 0 20px ${RED}50` }}>$79.40</div>
+          </div>
         </div>
 
-        <BrowserWindow frame={frame} fps={fps} progress={progress} />
-
-        {/* FREE slam */}
+        {/* Unsloth logo crashes in */}
         <div style={{
-          display:         "flex",
-          alignItems:      "baseline",
-          gap:             20,
-          opacity:         freeOpacity,
-          transform:       `scale(${freeScale})`,
-          transformOrigin: "center bottom",
+          opacity:   logoOp,
+          transform: `translateY(${logoY}px)`,
         }}>
-          <div style={{
-            fontSize:      44,
-            fontWeight:    400,
-            color:         "rgba(255,255,255,0.4)",
-            fontFamily:    FONT,
-            letterSpacing: "0.02em",
-          }}>
-            Runs locally.
-          </div>
-          <div style={{
-            fontSize:      100,
-            fontWeight:    900,
-            color:         YELLOW,
-            fontFamily:    FONT,
-            letterSpacing: "-0.04em",
-            lineHeight:    1,
-            textShadow:    `0 0 ${freeGlow}px ${YELLOW}60, 0 0 ${freeGlow * 2}px ${YELLOW}20`,
-          }}>
-            FREE.
-          </div>
+          <UnslothLogo size={72} frame={frame} />
+        </div>
+
+        {/* FREE */}
+        <div style={{
+          opacity:         freeOp,
+          transform:       `scale(${freeScale})`,
+          transformOrigin: "center center",
+          fontSize:        140,
+          fontWeight:      900,
+          color:           YELLOW,
+          fontFamily:      FONT,
+          letterSpacing:   "-0.05em",
+          lineHeight:      1,
+          textShadow:      `0 0 ${freeGlow}px ${YELLOW}60, 0 0 ${freeGlow * 2}px ${YELLOW}20`,
+        }}>
+          FREE.
         </div>
 
         {/* Hook line */}
         <div style={{
-          fontSize:      26,
-          fontWeight:    400,
-          color:         "rgba(255,255,255,0.28)",
-          letterSpacing: "0.02em",
-          opacity:       interpolate(line2Progress, [0, 0.3], [0, 1], { extrapolateRight: "clamp" }),
-          transform:     `translateY(${interpolate(line2Progress, [0, 1], [16, 0])}px)`,
-          textAlign:     "center",
-          maxWidth:      680,
+          opacity:   textOp,
+          transform: `translateY(${textY}px)`,
+          fontSize:  28,
+          color:     "rgba(255,255,255,0.35)",
+          fontFamily: FONT,
+          textAlign: "center",
+          maxWidth:  700,
+          lineHeight: 1.5,
         }}>
-          You pay monthly for web agents that break.
+          You are still paying for cloud GPUs every month to fine-tune your own models.
         </div>
       </div>
 
@@ -359,42 +275,43 @@ const HookBeat: React.FC = () => {
 
 // ── Beat data ─────────────────────────────────────────────────────────────────
 
-const barData = {
-  section_label: "Web Agent Benchmarks",
-  accent_color:  "cyan" as const,
-  items: [
-    { label: "MolmoWeb 8B",    value: "67.8", highlight: true  },
-    { label: "GPT-4V",         value: "59.1", highlight: false },
-    { label: "Claude 3.5",     value: "57.3", highlight: false },
-    { label: "Gemini 1.5 Pro", value: "52.4", highlight: false },
-  ],
+const comparisonData = {
+  section_label: "Cloud vs Local",
+  left: {
+    heading: "Cloud GPU",
+    color:   "red" as const,
+    metrics: [
+      { label: "Monthly cost",  value: "$47–80",  color: "red"  as const },
+      { label: "Memory needed", value: "Full",    color: "red"  as const },
+      { label: "Data control",  value: "None",    color: "red"  as const },
+    ],
+  },
+  right: {
+    heading: "Unsloth",
+    color:   "green" as const,
+    metrics: [
+      { label: "Monthly cost",  value: "$0",   color: "green" as const, glow: true },
+      { label: "Memory saved",  value: "70%",  color: "green" as const, glow: true },
+      { label: "Data control",  value: "Full", color: "green" as const },
+    ],
+  },
 };
 
-const metricData = {
-  section_label: "Monthly API Cost",
-  hero: {
-    value: "$0",
-    label: "After switching to MolmoWeb",
-    color: "cyan" as const,
-  },
-  context: "No API costs. No data leaving your machine. Your automation runs fully local.",
-  chips: ["Open Source", "Private", "Zero Cost"],
+const triStatData = {
+  section_label: "What you keep",
+  accent_color:  "cyan" as const,
+  stats: [
+    { value: "100%",  label: "Data Privacy",   sublabel: "Nothing leaves your machine", color: "cyan",  glow: true },
+    { value: "$0",    label: "Monthly Bill",    sublabel: "Fine-tune on your own GPU",   color: "green", glow: false },
+    { value: "500+",  label: "Models",          sublabel: "All open source, no waitlist",color: "cyan",  glow: false },
+  ],
 };
 
 const takeawayData = {
   section_label: "Takeaway",
   accent_color:  "cyan" as const,
-  headline:      "When a top lab open sources an agent this capable — ship with it the same day.",
-  cta:           "MolmoWeb is live. Go build.",
-};
-
-// ── Composition config (consumed by Root.tsx) ─────────────────────────────────
-
-export const CustomVideoConfig = {
-  durationInFrames: HOOK_F + CONCEPT1_F + CONCEPT2_F + TAKEAWAY_F,
-  fps:    30,
-  width:  1080,
-  height: 1920,
+  headline:      "Free local fine-tuning at seventy percent less memory means the cloud GPU bill is now optional.",
+  cta:           "Unsloth Studio. Download and run locally.",
 };
 
 // ── Root composition ──────────────────────────────────────────────────────────
@@ -415,13 +332,13 @@ export const CustomVideo: React.FC = () => {
 
       <Sequence from={start2} durationInFrames={CONCEPT1_F}>
         <Beat>
-          <AbsoluteFill><BarComparison data={barData} /></AbsoluteFill>
+          <AbsoluteFill><ComparisonSplit data={comparisonData} /></AbsoluteFill>
         </Beat>
       </Sequence>
 
       <Sequence from={start3} durationInFrames={CONCEPT2_F}>
         <Beat>
-          <AbsoluteFill><MetricFocus data={metricData} /></AbsoluteFill>
+          <AbsoluteFill><TriStat data={triStatData} /></AbsoluteFill>
         </Beat>
       </Sequence>
 

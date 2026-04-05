@@ -24,27 +24,27 @@
   "word_cues": [
     {
       "label": "metric_reveal",
-      "trigger_word": "Zero",
+      "trigger_word": "70%",
+      "occurrence": 0,
+      "offset_frames": -10
+    },
+    {
+      "label": "split_enter",
+      "trigger_word": "Studio",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "stat_show_2",
-      "trigger_word": "Molmo",
-      "occurrence": 0,
-      "offset_frames": -8
-    },
-    {
-      "label": "stat_show_3",
-      "trigger_word": "locally",
+      "label": "insight_drop",
+      "trigger_word": "systems",
       "occurrence": 0,
       "offset_frames": -8
     },
     {
       "label": "takeaway_flash",
-      "trigger_word": "Ditch",
+      "trigger_word": "Download",
       "occurrence": 0,
-      "offset_frames": -8
+      "offset_frames": -6
     }
   ]
 }
