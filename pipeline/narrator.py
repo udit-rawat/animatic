@@ -23,19 +23,20 @@ AUDIO_PATH  = os.path.join(os.path.dirname(__file__), "..", "output", "narration
 TIMING_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "narration_timing.json")
 
 TTS_MODEL  = "gemini-2.5-flash-preview-tts"
-VOICE_NAME = os.environ.get("TTS_VOICE", "Puck")   # Puck = fast-paced, energetic — good for Shorts/TikTok
+VOICE_NAME = os.environ.get("TTS_VOICE", "Aoede")  # Aoede = calm, precise female voice — best retention for tech content
 
 # Directorial prompt prepended to every TTS segment.
 # Gemini 2.5 TTS reads this and physically alters pacing/delivery.
 # Change the style here to reshape the whole video's voice character.
 _DEFAULT_VOICE_DIRECTIVE = (
-    "You are a working ML engineer talking to another ML engineer. "
-    "They've seen hype. Skip it. Give them one thing they can use tomorrow. "
-    "Speak fast enough to feel urgent, slow enough that numbers land clearly. "
-    "Pause briefly after every specific number or technical term — let it register. "
-    "Short declarative sentences. No padding. No filler. "
-    "When you hit the takeaway, slow down slightly — that's the line they'll remember. "
-    "Do not sound like a YouTuber, a lecturer, or a podcast host. "
+    "You are a senior ML engineer explaining something important to a colleague over coffee. "
+    "You already know this is significant — you do not need to perform excitement. "
+    "Speak with calm confidence. Let the facts carry the weight, not your tone. "
+    "Speak in full, flowing sentences — never staccato fragments. "
+    "Pause briefly after every number or technical term so it registers. "
+    "When you hit the takeaway, slow down slightly — that is the line they will remember. "
+    "Do not sound like a YouTuber, a news anchor, or a podcast host. "
+    "Sound like the smartest person in the room who does not need to prove it. "
 )
 
 def _get_voice_directive() -> str:
