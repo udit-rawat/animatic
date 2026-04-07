@@ -15,7 +15,7 @@ import { useBeatFrame } from "../hooks/useBeatFrame";
 import { useAudioMetrics } from "../hooks/useAudioMetrics";
 import { scaleIn, slideUp, staggerDelay } from "../utils/springIn";
 import {
-  COLOR, FONT, SectionLabelRow,
+  COLOR, FONT, HERO_NUMBER, BROADCAST_TEXT, SectionLabelRow,
   ParticleBackground, TelemetryFrame,
   useBreath, countUp,
 } from "./_shared";
@@ -72,28 +72,27 @@ export const MetricFocus: React.FC<{ data: MetricFocusData }> = ({ data }) => {
           transformOrigin: "left center",
         }}>
           <div style={{
-            fontSize:      heroFontSize,
-            fontWeight:    800,
-            color:         accent,
-            lineHeight:    0.9,
-            letterSpacing: "-0.04em",
-            fontFamily:    FONT,
-            textShadow:    `0 0 ${glowRadius}px ${accent}55, 0 0 ${glowRadius * 2}px ${accent}20`,
-            maxWidth:      "100%",
-            overflow:      "hidden",
-            whiteSpace:    "nowrap",
+            ...HERO_NUMBER,
+            fontSize:  heroFontSize,
+            fontWeight:800,
+            color:     accent,
+            lineHeight:0.9,
+            textShadow:`0 0 ${glowRadius}px ${accent}55, 0 0 ${glowRadius * 2}px ${accent}20`,
+            maxWidth:  "100%",
+            overflow:  "hidden",
+            whiteSpace:"nowrap",
           }}>
             {displayValue}
           </div>
           <div style={{
-            fontSize:      36,
-            fontWeight:    500,
-            color:         "#F9FAFB",
-            opacity:       0.45,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            fontFamily:    FONT,
-            marginTop:     12,
+            ...BROADCAST_TEXT,
+            fontSize:     36,
+            fontWeight:   500,
+            color:        "#F9FAFB",
+            opacity:      0.45,
+            letterSpacing:"0.12em",
+            textTransform:"uppercase",
+            marginTop:    12,
           }}>
             {data.hero.label}
           </div>

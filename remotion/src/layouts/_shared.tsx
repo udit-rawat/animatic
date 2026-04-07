@@ -23,7 +23,7 @@
  *   useBreath(frame, fps)          — 0.25 Hz ambient scale/opacity pulse
  */
 
-import React from "react";
+import React, { useRef, useLayoutEffect } from "react";
 import { interpolate } from "remotion";
 import type { NodeColor } from "../types";
 
@@ -40,6 +40,25 @@ export const COLOR: Record<NodeColor, string> = {
 export const VIOLET = "#8B5CF6"; // Deep Violet — ambient backgrounds, particle tint
 
 export const FONT = "'Inter', 'system-ui', sans-serif";
+
+// ── Broadcast-grade typography styles ─────────────────────────────────────────
+// Apply to all text elements for optical precision matching broadcast graphics.
+
+export const BROADCAST_TEXT: React.CSSProperties = {
+  fontFamily:             FONT,
+  fontFeatureSettings:    '"kern" 1, "liga" 1, "calt" 1, "ss01" 1',
+  fontOpticalSizing:      "auto" as const,
+  textRendering:          "geometricPrecision" as const,
+  WebkitFontSmoothing:    "antialiased",
+  MozOsxFontSmoothing:    "grayscale",
+};
+
+/** Use on large numerals and hero values (tabular-nums prevents width jitter on count-ups). */
+export const HERO_NUMBER: React.CSSProperties = {
+  ...BROADCAST_TEXT,
+  fontVariantNumeric: "tabular-nums",
+  letterSpacing:      "-0.04em",
+};
 
 // ── Deterministic particle data (computed once, no Math.random) ───────────────
 
@@ -59,31 +78,63 @@ export const PARTICLE_FIELD = Array.from({ length: 40 }, (_, i) => ({
 // ── ParticleBackground ────────────────────────────────────────────────────────
 
 /**
- * Shared particle field. Drop inside any template as the first child.
- * 40 small squares drift upward at 0.3 px/frame on a slow sine X-axis.
- * Half are blurred for faux depth-of-field. Opacity 15% — never distracting.
+ * Shared particle field — canvas implementation.
+ * 40 DOM nodes → 1 canvas element. Canvas shadowBlur = GPU-composited gaussian,
+ * not software CSS blur. Circular particles instead of 1px square divs.
+ * useLayoutEffect fires synchronously pre-paint — Remotion Puppeteer screenshots after.
  */
-export const ParticleBackground: React.FC<{ frame: number }> = ({ frame }) => (
-  <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
-    {PARTICLE_FIELD.map((p, i) => {
+export const ParticleBackground: React.FC<{ frame: number }> = ({ frame }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, 1080, 1920);
+
+    for (const p of PARTICLE_FIELD) {
       const top  = ((p.y - frame * 0.3) % 1920 + 1920) % 1920;
       const left = p.x + Math.sin(frame * p.xFreq) * p.xAmp;
-      return (
-        <div key={i} style={{
-          position:     "absolute",
-          left,
-          top,
-          width:        p.size,
-          height:       p.size,
-          background:   p.isCyan ? COLOR.cyan : VIOLET,
-          opacity:      0.15,
-          filter:       p.blurred ? "blur(1px)" : "none",
-          pointerEvents:"none",
-        }} />
-      );
-    })}
-  </div>
-);
+      const color = p.isCyan ? COLOR.cyan : VIOLET;
+
+      ctx.save();
+
+      if (p.blurred) {
+        // Depth-of-field tier: soft glow, lower opacity
+        ctx.globalAlpha = 0.08;
+        ctx.shadowBlur  = 6;
+        ctx.shadowColor = color;
+      } else {
+        // Sharp tier: crisp dot with tight GPU glow
+        ctx.globalAlpha = 0.18;
+        ctx.shadowBlur  = 3;
+        ctx.shadowColor = color;
+      }
+
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(left, top, p.size * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={1080}
+      height={1920}
+      style={{
+        position:      "absolute",
+        inset:         0,
+        pointerEvents: "none",
+        zIndex:        0,
+      }}
+    />
+  );
+};
 
 // ── TelemetryFrame — brand signature ─────────────────────────────────────────
 
@@ -151,8 +202,9 @@ export const SectionLabelRow: React.FC<{
     <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
       <div style={{ width: 3, height: 22, background: c, borderRadius: 2, opacity: 0.9 }} />
       <div style={{
+        ...BROADCAST_TEXT,
         fontSize: 22, fontWeight: 600, color: c,
-        fontFamily: FONT, letterSpacing: "0.12em",
+        letterSpacing: "0.12em",
         textTransform: "uppercase", opacity: 0.85,
       }}>
         {text}
@@ -164,6 +216,37 @@ export const SectionLabelRow: React.FC<{
 export const HRule: React.FC = () => (
   <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
 );
+
+// ── Specular shimmer utility ──────────────────────────────────────────────────
+
+/**
+ * shimmerStyle — angle-aware specular highlight replacing the flat white smear.
+ * Narrow bright core (peak 20% opacity) with soft falloff either side.
+ * Matches real glass/metal specularity: bright centre, fast falloff.
+ *
+ * shimmerPos: -20 → 120 (percentage left offset)
+ */
+export function shimmerStyle(shimmerPos: number): React.CSSProperties {
+  return {
+    position:      "absolute",
+    inset:         0,
+    left:          `${shimmerPos}%`,
+    width:         "22%",
+    background:    [
+      "linear-gradient(90deg,",
+      "  transparent 0%,",
+      "  rgba(255,255,255,0.02) 20%,",
+      "  rgba(255,255,255,0.12) 45%,",
+      "  rgba(255,255,255,0.20) 50%,",
+      "  rgba(255,255,255,0.12) 55%,",
+      "  rgba(255,255,255,0.02) 80%,",
+      "  transparent 100%",
+      ")",
+    ].join(""),
+    transform:     "skewX(-18deg)",
+    pointerEvents: "none",
+  };
+}
 
 // ── Ambient breathing hook ────────────────────────────────────────────────────
 

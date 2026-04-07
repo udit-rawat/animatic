@@ -12,7 +12,7 @@ import { interpolate, spring, useVideoConfig } from "remotion";
 import type { LeaderboardRankData } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
 import { SPRING_MEDIUM } from "../utils/springIn";
-import { COLOR, FONT, SectionLabelRow, ParticleBackground, TelemetryFrame } from "./_shared";
+import { COLOR, FONT, BROADCAST_TEXT, HERO_NUMBER, SectionLabelRow, ParticleBackground, TelemetryFrame, shimmerStyle } from "./_shared";
 
 const ROW_STAGGER  = 14;
 const SHIMMER_CYCLE = 90;
@@ -112,28 +112,17 @@ export const LeaderboardRank: React.FC<{ data: LeaderboardRankData }> = ({ data 
                   overflow:    "hidden",
                 }}
               >
-                {/* Shimmer on highlighted row */}
-                {showShimmer && (
-                  <div style={{
-                    position:     "absolute",
-                    inset:        0,
-                    left:         `${shimmerPos}%`,
-                    width:        "22%",
-                    background:   "linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)",
-                    transform:    "skewX(-10deg)",
-                    pointerEvents:"none",
-                  }} />
-                )}
+                {/* Shimmer on highlighted row — specular model */}
+                {showShimmer && <div style={shimmerStyle(shimmerPos)} />}
 
                 {/* Rank badge */}
                 <div style={{
+                  ...HERO_NUMBER,
                   width:         52,
                   flexShrink:    0,
                   fontSize:      isHighlight ? 42 : 34,
                   fontWeight:    800,
                   color:         rankColor,
-                  letterSpacing: "-0.03em",
-                  fontFamily:    FONT,
                   textAlign:     "right",
                   textShadow:    isHighlight ? `0 0 ${rankGlow}px ${accent}50` : "none",
                 }}>
@@ -152,30 +141,29 @@ export const LeaderboardRank: React.FC<{ data: LeaderboardRankData }> = ({ data 
 
                 {/* Name */}
                 <div style={{
-                  flex:          1,
-                  fontSize:      isHighlight ? 44 : 36,
-                  fontWeight:    isHighlight ? 700 : 500,
-                  color:         COLOR.white,
-                  opacity:       nameOpacity,
-                  letterSpacing: "-0.02em",
-                  fontFamily:    FONT,
-                  minWidth:      0,
-                  overflow:      "hidden",
-                  textOverflow:  "ellipsis",
-                  whiteSpace:    "nowrap",
+                  ...BROADCAST_TEXT,
+                  flex:         1,
+                  fontSize:     isHighlight ? 44 : 36,
+                  fontWeight:   isHighlight ? 700 : 500,
+                  color:        COLOR.white,
+                  opacity:      nameOpacity,
+                  letterSpacing:"-0.02em",
+                  minWidth:     0,
+                  overflow:     "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace:   "nowrap",
                 }}>
                   {item.name}
                 </div>
 
                 {/* Score */}
                 <div style={{
-                  flexShrink:    0,
-                  fontSize:      isHighlight ? 44 : 36,
-                  fontWeight:    700,
-                  color:         scoreColor,
-                  letterSpacing: "-0.02em",
-                  fontFamily:    FONT,
-                  textShadow:    isHighlight ? `0 0 24px ${accent}40` : "none",
+                  ...HERO_NUMBER,
+                  flexShrink: 0,
+                  fontSize:   isHighlight ? 44 : 36,
+                  fontWeight: 700,
+                  color:      scoreColor,
+                  textShadow: isHighlight ? `0 0 24px ${accent}40` : "none",
                 }}>
                   {item.score}
                 </div>
