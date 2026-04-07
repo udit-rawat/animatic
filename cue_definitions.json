@@ -24,27 +24,27 @@
   "word_cues": [
     {
       "label": "metric_reveal",
-      "trigger_word": "70%",
-      "occurrence": 0,
-      "offset_frames": -10
-    },
-    {
-      "label": "split_enter",
-      "trigger_word": "Studio",
+      "trigger_word": "million",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "insight_drop",
-      "trigger_word": "systems",
+      "label": "leap_reveal",
+      "trigger_word": "leap",
       "occurrence": 0,
-      "offset_frames": -8
+      "offset_frames": 0
+    },
+    {
+      "label": "insight_drop",
+      "trigger_word": "orchestration",
+      "occurrence": 0,
+      "offset_frames": 0
     },
     {
       "label": "takeaway_flash",
-      "trigger_word": "Download",
+      "trigger_word": "Instinct",
       "occurrence": 0,
-      "offset_frames": -6
+      "offset_frames": 0
     }
   ]
 }
