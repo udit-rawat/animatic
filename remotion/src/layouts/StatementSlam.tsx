@@ -12,7 +12,7 @@ import { interpolate, spring, useVideoConfig } from "remotion";
 import type { StatementSlamData } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
 import { SPRING_MEDIUM } from "../utils/springIn";
-import { COLOR, FONT, SectionLabelRow, ParticleBackground, TelemetryFrame, useBreath } from "./_shared";
+import { COLOR, FONT, BROADCAST_TEXT, SectionLabelRow, ParticleBackground, TelemetryFrame, useBreath } from "./_shared";
 
 const LINE_STAGGER = 20;
 const LINE_OPACITY = [1.0, 0.88, 0.68];
@@ -84,13 +84,13 @@ export const StatementSlam: React.FC<{ data: StatementSlamData }> = ({ data }) =
                 }}
               >
                 <div style={{
-                  fontSize:      80,
-                  fontWeight:    800,
-                  color:         lineColor,
-                  lineHeight:    1.05,
-                  letterSpacing: "-0.03em",
-                  fontFamily:    FONT,
-                  textShadow:    i === 0 ? `0 0 ${glowRadius}px ${accent}30` : "none",
+                  ...BROADCAST_TEXT,
+                  fontSize:     80,
+                  fontWeight:   800,
+                  color:        lineColor,
+                  lineHeight:   1.05,
+                  letterSpacing:"-0.03em",
+                  textShadow:   i === 0 ? `0 0 ${glowRadius}px ${accent}30` : "none",
                 }}>
                   {line}
                 </div>

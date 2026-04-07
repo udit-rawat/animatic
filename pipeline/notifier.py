@@ -124,7 +124,7 @@ async def send_notification():
     with open(SCRIPT_PATH) as f:
         script = json.load(f)
 
-    bot = Bot(token=token, request=HTTPXRequest(read_timeout=120, write_timeout=120, connect_timeout=30))
+    bot = Bot(token=token, request=HTTPXRequest(read_timeout=300, write_timeout=300, connect_timeout=60))
 
     print("Sending Telegram message...")
     await bot.send_message(chat_id=chat_id, text=build_message(topic, script))
@@ -132,7 +132,13 @@ async def send_notification():
     video_path = VIDEO_PATH
     print(f"Sending video ({os.path.basename(video_path)})...")
     with open(video_path, "rb") as video_file:
-        await bot.send_video(chat_id=chat_id, video=video_file)
+        await bot.send_video(
+            chat_id=chat_id,
+            video=video_file,
+            read_timeout=300,
+            write_timeout=300,
+            connect_timeout=60,
+        )
 
     print("Sending caption + hashtags...")
     await bot.send_message(chat_id=chat_id, text=build_caption_message(script))

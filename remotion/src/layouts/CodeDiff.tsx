@@ -13,7 +13,7 @@ import { interpolate, spring, useVideoConfig } from "remotion";
 import type { CodeDiffData } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
 import { SPRING_MEDIUM } from "../utils/springIn";
-import { COLOR, FONT, SectionLabelRow, ParticleBackground, TelemetryFrame } from "./_shared";
+import { COLOR, FONT, BROADCAST_TEXT, SectionLabelRow, ParticleBackground, TelemetryFrame, shimmerStyle } from "./_shared";
 
 const CODE_FONT    = "'JetBrains Mono', 'Fira Code', 'Courier New', monospace";
 const AFTER_START  = 22;
@@ -92,12 +92,12 @@ export const CodeDiff: React.FC<{ data: CodeDiffData }> = ({ data }) => {
           {/* BEFORE block */}
           <div style={{ opacity: beforeOpacity, willChange: "opacity" }}>
             <div style={{
+              ...BROADCAST_TEXT,
               fontSize:      18,
               fontWeight:    600,
               color:         RED,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              fontFamily:    FONT,
               marginBottom:  10,
               opacity:       0.8,
             }}>
@@ -155,18 +155,8 @@ export const CodeDiff: React.FC<{ data: CodeDiffData }> = ({ data }) => {
               position:     "relative",
               overflow:     "hidden",
             }}>
-              {/* Shimmer sweep */}
-              {showShimmer && (
-                <div style={{
-                  position:     "absolute",
-                  inset:        0,
-                  left:         `${shimmerPos}%`,
-                  width:        "20%",
-                  background:   "linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)",
-                  transform:    "skewX(-15deg)",
-                  pointerEvents:"none",
-                }} />
-              )}
+              {/* Shimmer sweep — specular model */}
+              {showShimmer && <div style={shimmerStyle(shimmerPos)} />}
 
               {data.after.lines.map((line, i) => {
                 const lineFrame    = afterFrame - i * LINE_STAGGER;

@@ -13,7 +13,7 @@ import { interpolate, spring, useVideoConfig } from "remotion";
 import type { TakeawaySceneData } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
 import { SPRING_HEAVY } from "../utils/springIn";
-import { COLOR, FONT, ParticleBackground, TelemetryFrame } from "./_shared";
+import { COLOR, FONT, BROADCAST_TEXT, ParticleBackground, TelemetryFrame, shimmerStyle } from "./_shared";
 
 // ── Deterministic floating glow dot ──────────────────────────────────────────
 
@@ -71,13 +71,13 @@ const WordReveal: React.FC<{
         const isLast = i === words.length - 1;
         return (
           <span key={i} style={{
+            ...BROADCAST_TEXT,
             display:       "inline-block",
             opacity:       interpolate(progress, [0, 0.2], [0, 1], { extrapolateRight: "clamp" }),
             transform:     `translateY(${interpolate(progress, [0, 1], [120, 0])}px)`,
             fontSize,
             fontWeight:    700,
             color,
-            fontFamily:    FONT,
             letterSpacing: "-0.02em",
             paddingRight:  isLast ? 0 : "0.3em",
           }}>
@@ -189,6 +189,7 @@ export const TakeawayScene: React.FC<{
       }}>
         {/* Section micro-label */}
         <div style={{
+          ...BROADCAST_TEXT,
           fontSize:      20, fontWeight: 500, color: accent,
           letterSpacing: "0.18em", textTransform: "uppercase",
           opacity:       labelOpacity,
@@ -214,18 +215,8 @@ export const TakeawayScene: React.FC<{
             background: `linear-gradient(90deg, transparent, ${accent}60, transparent)`,
           }} />
 
-          {/* Shimmer sweep after headline lands */}
-          {showShimmer && (
-            <div style={{
-              position:     "absolute",
-              inset:        0,
-              left:         `${shimmerPos}%`,
-              width:        "20%",
-              background:   "linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent)",
-              transform:    "skewX(-15deg)",
-              pointerEvents:"none",
-            }} />
-          )}
+          {/* Shimmer sweep after headline lands — specular model */}
+          {showShimmer && <div style={shimmerStyle(shimmerPos)} />}
 
           <WordReveal
             text={data.headline}

@@ -12,7 +12,7 @@ import React from "react";
 import { interpolate, spring, useVideoConfig } from "remotion";
 import type { BarComparisonData } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
-import { COLOR, FONT, SectionLabelRow, ParticleBackground, TelemetryFrame } from "./_shared";
+import { COLOR, FONT, BROADCAST_TEXT, HERO_NUMBER, SectionLabelRow, ParticleBackground, TelemetryFrame, shimmerStyle } from "./_shared";
 import { SPRING_MEDIUM } from "../utils/springIn";
 
 const ROW_STAGGER  = 15;
@@ -94,12 +94,12 @@ export const BarComparison: React.FC<{ data: BarComparisonData }> = ({ data }) =
               }}>
                 {/* Label */}
                 <div style={{
+                  ...BROADCAST_TEXT,
                   fontSize:      isHighlight ? 28 : 24,
                   fontWeight:    isHighlight ? 600 : 400,
                   color:         COLOR.white,
                   opacity:       isHighlight ? 1.0 : 0.55,
                   letterSpacing: "-0.01em",
-                  fontFamily:    FONT,
                   marginBottom:  10,
                   transform:     `translateX(${labelDrift}px)`,
                   transition:    "none",
@@ -131,28 +131,19 @@ export const BarComparison: React.FC<{ data: BarComparisonData }> = ({ data }) =
                       boxShadow:       isHighlight ? `0 0 20px ${accent}50` : "none",
                     }} />
 
-                    {/* Shimmer sweep — only on highlighted bar, only after it's grown */}
+                    {/* Shimmer sweep — specular model, only highlighted bar after fill */}
                     {isHighlight && barScaleX > 0.95 && (
-                      <div style={{
-                        position:     "absolute",
-                        top: 0, bottom: 0,
-                        left:         `${shimmerPos}%`,
-                        width:        "20%",
-                        background:   "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)",
-                        transform:    "skewX(-15deg)",
-                        pointerEvents:"none",
-                      }} />
+                      <div style={{ ...shimmerStyle(shimmerPos), inset: undefined, top: 0, bottom: 0 }} />
                     )}
                   </div>
 
                   <div style={{
+                    ...HERO_NUMBER,
                     flexShrink:    0,
                     width:         VALUE_WIDTH,
                     fontSize:      isHighlight ? 34 : 28,
                     fontWeight:    700,
                     color:         valueColor,
-                    letterSpacing: "-0.02em",
-                    fontFamily:    FONT,
                     textShadow:    isHighlight ? `0 0 20px ${accent}50` : "none",
                   }}>
                     {item.value}{item.unit ? ` ${item.unit}` : ""}

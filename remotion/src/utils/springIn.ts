@@ -148,6 +148,47 @@ export function popIn(
   };
 }
 
+// ── HEAVY slam with anticipation sneak ───────────────────────────────────────
+
+/**
+ * slideUpHeavy — HEAVY spring entrance with 3-frame anticipation.
+ * Before the main slam, the element sneaks 4px in the WRONG direction
+ * (downward), then launches. Adds perceived mass and snappiness.
+ *
+ * Returns { opacity, translateY, progress }.
+ * Drop-in replacement for slideUp(frame, fps, delay, "heavy").
+ */
+export function slideUpHeavy(
+  frame: number,
+  fps: number,
+  delay: number = 0,
+): { opacity: number; translateY: number; progress: number } {
+  const ANTICIPATION_FRAMES = 3;
+  const localFrame = frame - delay;
+
+  // Anticipation: 0→3 frames, sneak 4px wrong-way (downward = positive Y)
+  const antProgress = interpolate(
+    localFrame,
+    [0, ANTICIPATION_FRAMES],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+  const anticipationY = Math.sin(antProgress * Math.PI) * 4; // 0 → 4 → 0px
+
+  // Main spring starts after anticipation window
+  const mainProgress = spring({
+    frame:  Math.max(0, localFrame - ANTICIPATION_FRAMES),
+    fps,
+    config: SPRING_HEAVY,
+  });
+
+  return {
+    opacity:    interpolate(mainProgress, [0, 0.15], [0, 1], { extrapolateRight: "clamp" }),
+    translateY: interpolate(mainProgress, [0, 1], [80, 0]) + anticipationY,
+    progress:   mainProgress,
+  };
+}
+
 // ── Stagger utility ───────────────────────────────────────────────────────────
 
 export function staggerDelay(

@@ -12,7 +12,7 @@ import { interpolate, spring, useVideoConfig } from "remotion";
 import type { TriStatData } from "../types";
 import { useBeatFrame } from "../hooks/useBeatFrame";
 import { SPRING_MEDIUM } from "../utils/springIn";
-import { COLOR, FONT, SectionLabelRow, ParticleBackground, TelemetryFrame, countUp } from "./_shared";
+import { COLOR, FONT, HERO_NUMBER, BROADCAST_TEXT, SectionLabelRow, ParticleBackground, TelemetryFrame, countUp } from "./_shared";
 
 const CARD_STAGGER = 18;
 
@@ -107,24 +107,23 @@ export const TriStat: React.FC<{ data: TriStatData }> = ({ data }) => {
                 {/* Value + labels */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize:      88,
-                    fontWeight:    800,
-                    color:         cardColor,
-                    lineHeight:    1.0,
-                    letterSpacing: "-0.04em",
-                    fontFamily:    FONT,
-                    textShadow:    stat.glow || i === 0 ? `0 0 60px ${cardColor}50` : "none",
+                    ...HERO_NUMBER,
+                    fontSize:  88,
+                    fontWeight:800,
+                    color:     cardColor,
+                    lineHeight:1.0,
+                    textShadow:stat.glow || i === 0 ? `0 0 60px ${cardColor}50` : "none",
                   }}>
                     {displayValue}
                   </div>
                   <div style={{
-                    fontSize:      24,
-                    fontWeight:    600,
-                    color:         COLOR.white,
-                    opacity:       0.82,
-                    marginTop:     6,
-                    fontFamily:    FONT,
-                    letterSpacing: "0.01em",
+                    ...BROADCAST_TEXT,
+                    fontSize:     24,
+                    fontWeight:   600,
+                    color:        COLOR.white,
+                    opacity:      0.82,
+                    marginTop:    6,
+                    letterSpacing:"0.01em",
                   }}>
                     {stat.label}
                   </div>
