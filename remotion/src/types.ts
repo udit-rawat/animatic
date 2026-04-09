@@ -140,7 +140,8 @@ export type LayoutKind =
   | "TriStat"
   | "LeaderboardRank"
   | "BarComparison"
-  | "CodeDiff";
+  | "CodeDiff"
+  | "TerminalScene";
 
 export interface MetricItem {
   label:  string;         // ≤ 8 chars — renders at 60px on phone
@@ -314,6 +315,32 @@ export interface CodeDiffData {
   accent_color?: "cyan" | "green" | "yellow";
 }
 
+/** One line in a TerminalScene beat. */
+export interface TerminalLine {
+  /** "command" — types in with $ prompt. "output" — fades in. "comment" — muted # line. */
+  type:    "command" | "output" | "comment";
+  text:    string;
+  /** Optional color override for output lines. */
+  color?:  "green" | "yellow" | "red" | "white";
+}
+
+/**
+ * TerminalSceneData — macOS-style terminal window.
+ * Use for install commands, git clone steps, CLI walkthroughs.
+ */
+export interface TerminalSceneData {
+  layout:        "TerminalScene";
+  section_label: string;
+  /** Terminal window title bar text (default "bash") */
+  title?:        string;
+  lines:         TerminalLine[];
+  accent_color?: "cyan" | "green" | "yellow";
+  /** Index of the line to pulse-highlight (0-based) */
+  pulse_line?:   number;
+  /** Beat-local frames at which to fire the pulse on pulse_line */
+  pulse_frames?: number[];
+}
+
 export type SceneData =
   | ComparisonSplitData
   | MetricFocusData
@@ -326,7 +353,8 @@ export type SceneData =
   | TriStatData
   | LeaderboardRankData
   | BarComparisonData
-  | CodeDiffData;
+  | CodeDiffData
+  | TerminalSceneData;
 
 export interface ScenePayload {
   animate_in: AnimateIn;
