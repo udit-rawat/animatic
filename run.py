@@ -14,7 +14,7 @@ STAGES = ["scraper", "ranker", "scripter", "verifier", "scene_planner", "narrato
 STAGES_SINGLE_SHOT = ["scraper", "ranker", "content_generator", "narrator", "word_aligner", "animator", "notifier"]
 
 # Custom pipeline: skips scraper+ranker entirely — topic comes from CLI.
-STAGES_CUSTOM = ["content_generator", "narrator", "word_aligner", "animator", "notifier"]
+STAGES_CUSTOM = ["content_generator", "narrator", "word_aligner", "brief_generator", "animator", "notifier"]
 
 OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), "output")
 TOPIC_PATH  = os.path.join(OUTPUT_DIR, "topic.json")
@@ -240,8 +240,18 @@ def _compositor_pause() -> str:
         print()
 
     print("  ─────────────────────────────────────────────────────────────")
-    print("  Prompt Claude with the TOPIC + NARRATION above to generate")
-    print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
+
+    # Print compositor_prompt.md if brief_generator already ran
+    prompt_path = os.path.join(OUTPUT_DIR, "compositor_prompt.md")
+    if os.path.exists(prompt_path):
+        print("\n  ANIMATION BRIEF READY — paste this into your Claude session:\n")
+        print(f"    ! cat \"{prompt_path}\"")
+        print(f"\n  Or read it now and paste the contents directly.")
+        print(f"\n  Brief also at: {os.path.join(OUTPUT_DIR, 'animation_brief.json')}")
+    else:
+        print("  Prompt Claude with the TOPIC + NARRATION above to generate")
+        print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
+
     print(f"\n  Drop the file here when ready:")
     print(f"\n    {drop_path}\n")
     print("═" * 70)
@@ -327,6 +337,8 @@ def run_stage(name: str):
         from pipeline.narrator import main
     elif name == "word_aligner":
         from pipeline.word_aligner import main
+    elif name == "brief_generator":
+        from pipeline.brief_generator import main
     elif name == "notifier":
         from pipeline.notifier import main
     else:
