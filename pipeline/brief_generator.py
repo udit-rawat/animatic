@@ -23,15 +23,17 @@ Hard rules enforced in code (not prompts):
 import json
 import os
 import math
+import re
 
-_ROOT        = os.path.join(os.path.dirname(__file__), "..")
-PARAMS_PATH  = os.path.join(_ROOT, "output", "params.json")
-TIMING_PATH  = os.path.join(_ROOT, "output", "narration_timing.json")
-CUES_PATH    = os.path.join(_ROOT, "cue_definitions.json")
-TOPIC_PATH   = os.path.join(_ROOT, "output", "topic.json")
-SPOKEN_PATH  = os.path.join(_ROOT, "output", "spoken_narration.json")
-BRIEF_OUT    = os.path.join(_ROOT, "output", "animation_brief.json")
-PROMPT_OUT   = os.path.join(_ROOT, "output", "compositor_prompt.md")
+_ROOT         = os.path.join(os.path.dirname(__file__), "..")
+PARAMS_PATH   = os.path.join(_ROOT, "output", "params.json")
+TIMING_PATH   = os.path.join(_ROOT, "output", "narration_timing.json")
+CUES_PATH     = os.path.join(_ROOT, "cue_definitions.json")
+TOPIC_PATH    = os.path.join(_ROOT, "output", "topic.json")
+SPOKEN_PATH   = os.path.join(_ROOT, "output", "spoken_narration.json")
+BRIEF_OUT     = os.path.join(_ROOT, "output", "animation_brief.json")
+PROMPT_OUT    = os.path.join(_ROOT, "output", "compositor_prompt.md")
+DROP_PATH_OUT = os.path.join(_ROOT, "output", "drop_path.txt")
 
 FPS = 30
 
@@ -401,9 +403,23 @@ def main():
         json.dump(brief, f, indent=2)
     print(f"[brief_generator] animation_brief.json → {BRIEF_OUT}")
 
+    # Compute drop path (same slug logic as run.py _compositor_pause)
+    from datetime import date as _date
+    title = topic.get("title", "video")
+    slug  = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40]
+    today = _date.today().isoformat()
+    comp_dir  = os.path.join(_ROOT, "output", "compositions", f"{today}_{slug}")
+    drop_path = os.path.join(comp_dir, "CustomVideo.tsx")
+    os.makedirs(comp_dir, exist_ok=True)
+
+    # Persist drop_path so _compositor_pause can read it back
+    with open(DROP_PATH_OUT, "w") as f:
+        f.write(drop_path)
+
     # Build compositor_prompt.md
-    _write_compositor_prompt(brief, topic, beat_keys)
+    _write_compositor_prompt(brief, topic, beat_keys, drop_path=drop_path)
     print(f"[brief_generator] compositor_prompt.md  → {PROMPT_OUT}")
+    print(f"[brief_generator] drop_path             → {drop_path}")
 
     if all_issues:
         print(f"\n[brief_generator] {len(all_issues)} rule violation(s) found — review brief before compositor.")
@@ -413,7 +429,7 @@ def main():
     return brief
 
 
-def _write_compositor_prompt(brief: dict, topic: dict, beat_keys: list[str]):
+def _write_compositor_prompt(brief: dict, topic: dict, beat_keys: list[str], drop_path: str = ""):
     title = topic.get("title", "Video")
 
     # Build beat summary for the prompt
@@ -499,7 +515,11 @@ Write ONE self-contained `CustomVideo.tsx`.
 - Wrap each beat in a `<Sequence from={{beatStartFrame}} durationInFrames={{duration}}>`.
 - Beat start frames (cumulative): {_beat_start_summary(brief, beat_keys)}
 
-When done, drop the file at the path shown in your terminal and press Enter.
+When done, drop the file at this exact path and press Enter in the pipeline terminal:
+
+```
+{drop_path}
+```
 """
 
     with open(PROMPT_OUT, "w") as f:

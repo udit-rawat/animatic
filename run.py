@@ -241,20 +241,30 @@ def _compositor_pause() -> str:
 
     print("  ─────────────────────────────────────────────────────────────")
 
-    # Print compositor_prompt.md if brief_generator already ran
+    # Use drop_path written by brief_generator if available
+    drop_path_file = os.path.join(OUTPUT_DIR, "drop_path.txt")
+    if os.path.exists(drop_path_file):
+        with open(drop_path_file) as f:
+            drop_path = f.read().strip()
+        os.makedirs(os.path.dirname(drop_path), exist_ok=True)
+
+    # Print full compositor_prompt.md inline if brief_generator already ran
     prompt_path = os.path.join(OUTPUT_DIR, "compositor_prompt.md")
     if os.path.exists(prompt_path):
-        print("\n  ANIMATION BRIEF READY — paste this into your Claude session:\n")
-        print(f"    ! cat \"{prompt_path}\"")
-        print(f"\n  Or read it now and paste the contents directly.")
-        print(f"\n  Brief also at: {os.path.join(OUTPUT_DIR, 'animation_brief.json')}")
+        print("\n" + "═" * 70)
+        print("  ANIMATION BRIEF — paste everything below into your Claude session:")
+        print("═" * 70 + "\n")
+        with open(prompt_path) as f:
+            print(f.read())
+        print("═" * 70)
+        print(f"\n  Full brief also at: {os.path.join(OUTPUT_DIR, 'animation_brief.json')}")
+        print(f"\n  DROP FILE HERE:  {drop_path}\n")
     else:
         print("  Prompt Claude with the TOPIC + NARRATION above to generate")
         print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
-
-    print(f"\n  Drop the file here when ready:")
-    print(f"\n    {drop_path}\n")
-    print("═" * 70)
+        print(f"\n  Drop the file here when ready:")
+        print(f"\n    {drop_path}\n")
+        print("═" * 70)
 
     try:
         input("  Press Enter when the file is ready → ")

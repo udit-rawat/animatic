@@ -222,11 +222,39 @@ If under 50: add one concrete number or consequence to concept_2.
 ## PIPELINE PAUSE FLOW
 
 The `--compositor` flag means the pipeline will:
-1. Run all stages (TTS, timing, layout generation)
+1. Run all stages (TTS, timing, layout generation, brief_generator)
 2. Pause and show the **exact narration going to TTS** — you confirm before audio is generated
-3. After TTS: pause again and print **narration + frame timings** per segment
-4. At that second pause: share context with Claude to get an **animation brief** — approve before any code is written
-5. Claude writes CustomVideo.tsx, you drop it in the printed path, press Enter, pipeline renders
+3. After TTS + brief_generator: pause again and **print the full animation brief inline** — no cat command needed
+4. **Copy the entire brief block and paste it into a Claude session** — Claude reads it and writes CustomVideo.tsx
+5. Drop the file at the exact path printed at the bottom of the brief, press Enter, pipeline renders
+
+---
+
+## COMPOSITOR ROLE — read this before writing code
+
+When you receive an animation brief, your role is **coder, not creative director**.
+
+- The brief is the creative decision. Do not invent structure, change layouts, or add scenes.
+- Implement the spec exactly as written. Every beat, every event, every frame offset.
+- One question to ask before writing: "Is this in the brief?" If no, don't add it.
+
+**What you get in the brief:**
+- Beat specs: template name, duration in frames, narration text, text_frame (first visible text), animation events with exact frame offsets
+- Beat start frames (cumulative) — use these for `<Sequence from={n}>`
+- Available animation primitives from `_shared.tsx`
+- Hard rules that are already enforced — no need to re-derive them
+
+**What you write:**
+- ONE file: `CustomVideo.tsx`
+- Self-contained — no external props, all data hardcoded from the brief
+- Imports only from `remotion`, `react`, `./layouts/`
+- Each beat wrapped in `<Sequence from={beatStartFrame} durationInFrames={duration}>`
+- Drop it at the exact path printed at the bottom of the brief
+
+**What you do NOT do:**
+- No intro animations, logo reveals, or blank first frames — beat_1 text at frame 1, always
+- No extra beats, extra layouts, or creative additions
+- No external data fetching or runtime props
 
 ---
 
