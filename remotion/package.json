@@ -8,15 +8,20 @@
     "render": "npx remotion render src/index.ts VideoComposition output/video.mp4"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^8.18.0",
     "@remotion/cli": "^4.0.0",
     "@remotion/media-utils": "^4.0.441",
+    "@remotion/three": "^4.0.446",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "remotion": "^4.0.0"
+    "remotion": "^4.0.0",
+    "three": "^0.183.2"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/three": "^0.183.1",
     "typescript": "^5.3.0"
   }
 }

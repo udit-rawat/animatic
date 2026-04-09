@@ -23,27 +23,27 @@
   ],
   "word_cues": [
     {
-      "label": "metric_reveal",
-      "trigger_word": "million",
+      "label": "stats_reveal",
+      "trigger_word": "Maverick",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "leap_reveal",
-      "trigger_word": "leap",
+      "label": "moe_explain",
+      "trigger_word": "MoE",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "insight_drop",
-      "trigger_word": "orchestration",
+      "label": "beats_claim",
+      "trigger_word": "beats",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "takeaway_flash",
-      "trigger_word": "Instinct",
-      "occurrence": 0,
+      "label": "new_bar_flash",
+      "trigger_word": "bar",
+      "occurrence": -1,
       "offset_frames": 0
     }
   ]

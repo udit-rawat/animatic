@@ -1,9 +1,10 @@
 import React from "react";
-import { Composition, staticFile } from "remotion";
+import { Composition, staticFile, AbsoluteFill } from "remotion";
 import { getAudioDurationInSeconds } from "@remotion/media-utils";
 import { VideoComposition } from "./VideoComposition";
 import { LayoutRenderer } from "./LayoutRenderer";
 import { CustomVideo, CustomVideoConfig } from "./CustomVideo";
+import { HookR3F } from "./layouts/HookR3F";
 import type { RemotionProps, BeatLayout, LayoutNode } from "./types";
 
 const FPS     = 30;
@@ -159,6 +160,23 @@ const phase2Props: RemotionProps = {
   // scenes inherited from defaultProps spread — all 4 ScenePayload beats
 };
 
+// ── Phase 3 gate composition ──────────────────────────────────────────────────
+
+const Phase3TestComposition: React.FC = () => (
+  <AbsoluteFill style={{ background: "#040408" }}>
+    <HookR3F
+      text="AdaMax"
+      subtext="adamax.ai"
+      color="#00E5FF"
+      heroValue="1M+"
+      heroLabel="Tokens Per Second"
+      hookLine="The compute moat just shifted. Speed is the new moat."
+      slamFrame={70}
+      plateHeight={420}
+    />
+  </AbsoluteFill>
+);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyComponent = React.ComponentType<any>;
 
@@ -206,6 +224,17 @@ export const RemotionRoot: React.FC = () => {
         height={1920}
         defaultProps={phase2Props as unknown as Record<string, unknown>}
         calculateMetadata={dynamicDuration}
+      />
+
+      {/* Phase 3 gate — R3F metallic hook pilot. Inspect PBR lighting + entrance spring.
+          Run: cd remotion && npx remotion render src/index.ts Phase3Test /tmp/phase3_test.mp4 */}
+      <Composition
+        id="Phase3Test"
+        component={Phase3TestComposition}
+        durationInFrames={150}
+        fps={30}
+        width={1080}
+        height={1920}
       />
     </>
   );
