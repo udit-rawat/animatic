@@ -183,7 +183,10 @@ export const TakeawayScene: React.FC<{
         display:       "flex",
         flexDirection: "column",
         justifyContent:"center",
-        padding:       60,
+        paddingTop:    120,
+      paddingBottom: 180,
+      paddingLeft:   72,
+      paddingRight:  72,
         boxSizing:     "border-box",
         gap:           36,
       }}>

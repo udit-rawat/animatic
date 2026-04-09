@@ -44,7 +44,10 @@ export const KineticBridge: React.FC<{ data: KineticBridgeData }> = ({ data }) =
       overflow:      "hidden",
       display:       "flex",
       flexDirection: "column",
-      padding:       60,
+      paddingTop:    120,
+      paddingBottom: 180,
+      paddingLeft:   72,
+      paddingRight:  72,
       boxSizing:     "border-box",
       fontFamily:    FONT,
     }}>
