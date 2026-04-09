@@ -194,10 +194,21 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
         # Higher budgets cause Gemini to take 5-10+ min per call (hangs urllib).
         gen_config["thinkingConfig"] = {"thinkingBudget": 2048}
 
-    payload = json.dumps({
+    # Google Search grounding — enabled for ranker stage only.
+    # Allows Gemini to search the web (GitHub Trending, X/Twitter, HN) in real-time
+    # before picking a topic, so the ranker isn't limited to scraped Reddit/arXiv candidates.
+    # Grounding is incompatible with responseMimeType (json_mode), so ranker must NOT
+    # use json_mode — its JSON output is parsed manually via extract_json().
+    use_grounding = (stage == "ranker") and os.environ.get("GEMINI_GROUNDING", "1") != "0"
+
+    body: dict = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": gen_config,
-    }).encode()
+    }
+    if use_grounding:
+        body["tools"] = [{"google_search": {}}]
+
+    payload = json.dumps(body).encode()
 
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
