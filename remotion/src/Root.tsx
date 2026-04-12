@@ -3,7 +3,7 @@ import { Composition, staticFile, AbsoluteFill } from "remotion";
 import { getAudioDurationInSeconds } from "@remotion/media-utils";
 import { VideoComposition } from "./VideoComposition";
 import { LayoutRenderer } from "./LayoutRenderer";
-import { CustomVideo, CustomVideoConfig } from "./CustomVideo";
+import { CustomVideo, CustomVideoConfig, customVideoSchema } from "./CustomVideo";
 import { HookR3F } from "./layouts/HookR3F";
 import type { RemotionProps, BeatLayout, LayoutNode } from "./types";
 
@@ -212,6 +212,8 @@ export const RemotionRoot: React.FC = () => {
         fps={CustomVideoConfig.fps}
         width={CustomVideoConfig.width}
         height={CustomVideoConfig.height}
+        schema={customVideoSchema}
+        defaultProps={CustomVideoConfig.defaultProps}
       />
 
       {/* Phase 2 gate — 4-beat video, inspect spring camera pans between beats */}

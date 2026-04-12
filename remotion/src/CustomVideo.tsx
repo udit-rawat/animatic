@@ -1,708 +1,420 @@
 /**
- * CustomVideo.tsx — Meta Llama 4 Maverick  (v4 — real Meta logo + reel-sized text)
- * 1590 frames · 30fps · 53.0s
+ * CustomVideo.tsx — CheetahClaws Local Claude Code Agent
+ * 614 frames · 30fps · 20.5s
  *
- * [hook]      0–218     Meta ∞ SVG draw-in → "LLAMA 4" types → MAVERICK slams → hook line
- * [concept_1] 218–725   MoE expert grid → 2 illuminate → benchmark bars
- * [concept_2] 725–1237  Context bar fills to 1M → LMSYS leaderboard
- * [takeaway]  1237–1590 "Pull it." / "Run it." / "Own it." slam lines + Meta logo bookend
+ * beat_1  frames   0– 82   Hook: hookLine1/hookLine2 frame 0, hookSub @30f, chips @55/70/85f
+ * beat_2  frames  82–235   Model swap cards stagger @0/45/90f, pulse @120f
+ * beat_3  frames 235–455   Slam lines @0/60/120f
+ * beat_4  frames 455–614   Option 3 hard cut — ctaLine1/2/3
+ *
+ * All text is schema-editable in Remotion Studio left panel.
  */
 
-import React, { useRef, useLayoutEffect } from "react";
+import React from "react";
+import { z } from "zod";
 import {
-  AbsoluteFill,
-  Audio,
-  Sequence,
-  interpolate,
-  spring,
-  staticFile,
-  useCurrentFrame,
+  Sequence, useCurrentFrame, useVideoConfig,
+  Audio, staticFile, spring, interpolate,
 } from "remotion";
+import {
+  usePulseAt, useSlideIn,
+  COLOR, FONT, HERO_NUMBER, BROADCAST_TEXT,
+  SectionLabelRow, ParticleBackground, TelemetryFrame, useBreath,
+} from "./layouts/_shared";
+import { SPRING_HEAVY, SPRING_MEDIUM } from "./utils/springIn";
 
-// ── Frame budgets ─────────────────────────────────────────────────────────────
+// ── Schema — every visible string/color editable in Studio ────────────────────
 
-const HOOK_F     = 218;
-const CONCEPT1_F = 507;
-const CONCEPT2_F = 512;
-const TAKEAWAY_F = 353;
+export const customVideoSchema = z.object({
+  // Beat 1 — Hook
+  beat1Section: z.string().default("LOCAL AI AGENCY"),
+  hookLine1:    z.string().default("ZERO"),
+  hookLine2:    z.string().default("CLOUD."),
+  hookSub:      z.string().default("Claude Code. One command."),
+  chip1:        z.string().default("14B params"),
+  chip2:        z.string().default("Ollama"),
+  chip3:        z.string().default("RTX 3090"),
+
+  // Beat 2 — Model cards
+  beat2Section:   z.string().default("SWAP 3 MODELS"),
+  card1Value:     z.string().default("14B"),
+  card1Label:     z.string().default("Model"),
+  card1Sublabel:  z.string().default("Qwen / Llama / Mistral"),
+  card2Value:     z.string().default("Ollama"),
+  card2Label:     z.string().default("Endpoint"),
+  card2Sublabel:  z.string().default("swap without code change"),
+  card3Value:     z.string().default("RTX 3090"),
+  card3Label:     z.string().default("Hardware"),
+  card3Sublabel:  z.string().default("single GPU, full loop"),
+
+  // Beat 3 — Slam lines
+  beat3Section: z.string().default("AUTONOMOUS LOOP"),
+  slamLine1:    z.string().default("1 command. Loops."),
+  slamLine2:    z.string().default("Brainstorm → ship code."),
+  slamLine3:    z.string().default("Saves 6 hours. Per feature."),
+
+  // Beat 4 — CTA
+  ctaLine1: z.string().default("14B."),
+  ctaLine2: z.string().default("One 3090."),
+  ctaLine3: z.string().default("Full agent loop."),
+
+  // Global accent color
+  accentColor: z.enum(["cyan", "green", "yellow"]).default("green"),
+});
+
+export type CustomVideoProps = z.infer<typeof customVideoSchema>;
+
+// ── Config ─────────────────────────────────────────────────────────────────────
 
 export const CustomVideoConfig = {
-  durationInFrames: HOOK_F + CONCEPT1_F + CONCEPT2_F + TAKEAWAY_F,
-  fps: 30, width: 1080, height: 1920,
+  durationInFrames: 614,
+  fps:    30,
+  width:  1080,
+  height: 1920,
+  defaultProps: {
+    beat1Section: "LOCAL AI AGENCY",
+    hookLine1:    "ZERO",
+    hookLine2:    "CLOUD.",
+    hookSub:      "Claude Code. One command.",
+    chip1:        "14B params",
+    chip2:        "Ollama",
+    chip3:        "RTX 3090",
+    beat2Section:  "SWAP 3 MODELS",
+    card1Value:    "14B",
+    card1Label:    "Model",
+    card1Sublabel: "Qwen / Llama / Mistral",
+    card2Value:    "Ollama",
+    card2Label:    "Endpoint",
+    card2Sublabel: "swap without code change",
+    card3Value:    "RTX 3090",
+    card3Label:    "Hardware",
+    card3Sublabel: "single GPU, full loop",
+    beat3Section: "AUTONOMOUS LOOP",
+    slamLine1:    "1 command. Loops.",
+    slamLine2:    "Brainstorm → ship code.",
+    slamLine3:    "Saves 6 hours. Per feature.",
+    ctaLine1:     "14B.",
+    ctaLine2:     "One 3090.",
+    ctaLine3:     "Full agent loop.",
+    accentColor:  "green" as const,
+  },
 };
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
+// ── Beat 1 ────────────────────────────────────────────────────────────────────
 
-const META_BLUE  = "#0081FB";
-const META_BLUE2 = "#0668E1";
-const META_LIGHT = "#00B2FF";
-const WHITE      = "#FFFFFF";
-const DIM        = "#888888";
-const BG         = "#000000";
-const FONT       = "'Inter','system-ui',sans-serif";
+type Beat1Props = Pick<CustomVideoProps,
+  "beat1Section"|"hookLine1"|"hookLine2"|"hookSub"|"chip1"|"chip2"|"chip3"|"accentColor">;
 
-const SPRING_HEAVY  = { damping: 12,  stiffness: 150, mass: 1.2, overshootClamping: false };
-const SPRING_MEDIUM = { damping: 18,  stiffness: 220, mass: 1.0, overshootClamping: false };
-const SPRING_SOFT   = { damping: 28,  stiffness: 200, mass: 1.0, overshootClamping: false };
+const Beat1: React.FC<Beat1Props> = ({
+  beat1Section, hookLine1, hookLine2, hookSub, chip1, chip2, chip3, accentColor,
+}) => {
+  const frame   = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const accent  = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.green;
+  const { scale: bs } = useBreath(frame, fps);
 
-const BROADCAST: React.CSSProperties = {
-  fontFamily:          FONT,
-  fontFeatureSettings: '"kern" 1, "liga" 1, "calt" 1',
-  textRendering:       "geometricPrecision" as const,
-  WebkitFontSmoothing: "antialiased",
-  MozOsxFontSmoothing: "grayscale",
-};
-
-// ── Beat frame context ────────────────────────────────────────────────────────
-
-const BeatFrameCtx = React.createContext(0);
-const useBF = () => React.useContext(BeatFrameCtx);
-
-// ── Telemetry border ──────────────────────────────────────────────────────────
-
-const TelemetryBorder: React.FC<{ frame: number }> = ({ frame }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const W = 1080, H = 1920;
-  useLayoutEffect(() => {
-    const c = canvasRef.current; if (!c) return;
-    const ctx = c.getContext("2d"); if (!ctx) return;
-    ctx.clearRect(0, 0, W, H);
-    const perim = 2 * (W + H);
-    const offset = -(frame * 4) % perim;
-    ctx.strokeStyle = "rgba(255,255,255,0.10)";
-    ctx.lineWidth   = 1;
-    ctx.setLineDash([60, perim - 60]);
-    ctx.lineDashOffset = offset;
-    ctx.strokeRect(1, 1, W - 2, H - 2);
-    ctx.setLineDash([]);
-  });
-  return (
-    <canvas ref={canvasRef} width={W} height={H}
-      style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 10 }} />
-  );
-};
-
-// ── Real Meta infinity logo — SVG strokeDashoffset draw-in ───────────────────
-//
-// Two overlapping ovals forming the Meta ∞ lemniscate.
-// Gradient: #0668E1 → #0082FB → #00B2FF  (left→right, official Meta AI palette)
-// strokeDashoffset animates total perimeter → 0 as progress goes 0→1.
-// Glow pulse via CSS filter drop-shadow after draw completes.
-
-const META_LOGO_PATH =
-  "M 100,45 " +
-  "C 100,24 84,12 65,12 " +   // right-center → top of left loop
-  "C 42,12 22,26 22,45 " +    // top-left → left apex
-  "C 22,64 42,78 65,78 " +    // left apex → bottom-left
-  "C 84,78 100,66 100,45 " +  // bottom of left loop → center cross
-  "C 100,24 116,12 135,12 " + // center cross → top of right loop
-  "C 158,12 178,26 178,45 " + // top-right → right apex
-  "C 178,64 158,78 135,78 " + // right apex → bottom-right
-  "C 116,78 100,66 100,45 Z"; // bottom of right loop → center close
-
-// Approximate total perimeter of the path above
-const META_PERIMETER = 560;
-
-const MetaLogo: React.FC<{
-  frame:    number;
-  progress: number;
-  size?:    number;   // height of the SVG in px
-  showWord?: boolean; // whether to show "meta" wordmark below
-}> = ({ frame, progress, size = 180, showWord = true }) => {
-  const vbW = 200, vbH = 90;
-  const svgW = (vbW / vbH) * size;
-  const dashOffset = META_PERIMETER * (1 - Math.min(progress, 1));
-
-  const glow = progress > 0.92
-    ? 10 + (Math.sin((frame / 30) * Math.PI * 2 * 0.45) * 0.5 + 0.5) * 24
-    : 0;
-
-  const wordOp = interpolate(progress, [0.75, 1.0], [0, 1], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
+  const heroSp    = spring({ frame, fps, config: SPRING_HEAVY });
+  const heroScale = interpolate(heroSp, [0, 1], [0.6, 1], { extrapolateRight: "clamp" });
+  const pulse     = usePulseAt(frame, [60], accent, 48);
+  const sub       = useSlideIn(frame, "up", 30);
+  const chip0sl   = useSlideIn(frame, "up", 55);
+  const chip1sl   = useSlideIn(frame, "up", 70);
+  const chip2sl   = useSlideIn(frame, "up", 85);
+  const chipSls   = [chip0sl, chip1sl, chip2sl];
+  const chips     = [chip1, chip2, chip3];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-      <svg
-        width={svgW}
-        height={size}
-        viewBox={`0 0 ${vbW} ${vbH}`}
-        style={{ filter: glow > 0 ? `drop-shadow(0 0 ${glow}px ${META_BLUE})` : "none", overflow: "visible" }}
-      >
-        <defs>
-          <linearGradient id="metaInfGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor={META_BLUE2} />
-            <stop offset="50%"  stopColor={META_BLUE}  />
-            <stop offset="100%" stopColor={META_LIGHT} />
-          </linearGradient>
-        </defs>
-        <path
-          d={META_LOGO_PATH}
-          fill="none"
-          stroke="url(#metaInfGrad)"
-          strokeWidth="9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray={META_PERIMETER}
-          strokeDashoffset={dashOffset}
-        />
-      </svg>
-      {showWord && (
-        <div style={{
-          opacity:       wordOp,
-          ...BROADCAST,
-          fontSize:      size * 0.26,
-          fontWeight:    700,
-          color:         WHITE,
-          letterSpacing: "0.10em",
-          textTransform: "lowercase" as const,
-        }}>
-          meta
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── Underline draw-in ─────────────────────────────────────────────────────────
-
-const UnderlineDraw: React.FC<{ progress: number; width: number; color?: string }> = ({
-  progress, width, color = META_BLUE,
-}) => (
-  <div style={{
-    height:          3,
-    width:           width,
-    background:      `linear-gradient(90deg, ${color}, ${color}60)`,
-    transformOrigin: "left center",
-    transform:       `scaleX(${progress})`,
-    marginTop:       10,
-    borderRadius:    2,
-    boxShadow:       `0 0 8px ${color}60`,
-  }} />
-);
-
-// ── Benchmark bar ─────────────────────────────────────────────────────────────
-
-const BenchBar: React.FC<{
-  label:     string;
-  value:     number;
-  maxValue?: number;
-  color:     string;
-  frame:     number;
-  delay:     number;
-  fps:       number;
-  highlight?: boolean;
-}> = ({ label, value, maxValue = 100, color, frame, delay, fps, highlight }) => {
-  const prog = spring({ frame: Math.max(0, frame - delay), fps, config: SPRING_MEDIUM });
-  const barW = interpolate(prog, [0, 1], [0, value / maxValue], { extrapolateRight: "clamp" });
-  const op   = interpolate(prog, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
-
-  return (
-    <div style={{ opacity: op, marginBottom: 28 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ ...BROADCAST, fontSize: 28, color: highlight ? WHITE : DIM, fontWeight: highlight ? 600 : 400 }}>
-          {label}
-        </span>
-        <span style={{ ...BROADCAST, fontSize: 28, color, fontWeight: 700, fontVariantNumeric: "tabular-nums" as const }}>
-          {value}
-        </span>
-      </div>
-      <div style={{ height: 8, background: "#1a1a1a", borderRadius: 4 }}>
-        <div style={{
-          height:       "100%",
-          width:        `${barW * 100}%`,
-          background:   highlight ? `linear-gradient(90deg, ${META_BLUE2}, ${META_BLUE})` : "#2a2a2a",
-          borderRadius: 4,
-          boxShadow:    highlight ? `0 0 14px ${META_BLUE}60` : "none",
-        }} />
-      </div>
-    </div>
-  );
-};
-
-// ══════════════════════════════════════════════════════════════════════════════
-// BEAT 1 — HOOK
-// ══════════════════════════════════════════════════════════════════════════════
-
-const HookBeat: React.FC = () => {
-  const frame = useBF();
-  const fps   = 30;
-
-  // Meta logo draw-in: frames 0→70
-  const logoProgress = interpolate(frame, [0, 70], [0, 1], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  // "LLAMA 4" typewriter: starts frame 55
-  const LLAMA_STR    = "LLAMA 4";
-  const charsVisible = Math.min(LLAMA_STR.length, Math.max(0, Math.floor((frame - 55) * 0.38)));
-  const cursorOn     = frame > 55 && charsVisible < LLAMA_STR.length && Math.floor(frame / 12) % 2 === 0;
-
-  // MAVERICK slam: SPRING_HEAVY from frame 95
-  const mavProg   = spring({ frame: Math.max(0, frame - 95), fps, config: SPRING_HEAVY });
-  const mavScale  = interpolate(mavProg, [0, 1], [0.3, 1], { extrapolateRight: "clamp" });
-  const mavOp     = interpolate(mavProg, [0, 0.12], [0, 1], { extrapolateRight: "clamp" });
-
-  // Blue underline draws from frame 138
-  const ulProg     = spring({ frame: Math.max(0, frame - 138), fps, config: SPRING_SOFT });
-  const ulProgress = interpolate(ulProg, [0, 1], [0, 1], { extrapolateRight: "clamp" });
-
-  // Hook line fades in frame 162
-  const hookOp = interpolate(frame, [162, 192], [0, 1], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  return (
-    <AbsoluteFill style={{
-      background:     BG,
-      display:        "flex",
-      flexDirection:  "column",
-      alignItems:     "center",
-      justifyContent: "center",
-      fontFamily:     FONT,
-      gap:            0,
+    <div style={{
+      width: "100%", height: "100%",
+      background: "radial-gradient(ellipse at 50% 40%, #0A1A0A 0%, #0A0A0A 70%)",
+      position: "relative", overflow: "hidden",
+      display: "flex", flexDirection: "column",
+      paddingTop: 120, paddingBottom: 180, paddingLeft: 72, paddingRight: 72,
+      boxSizing: "border-box", justifyContent: "center", gap: 28, fontFamily: FONT,
     }}>
-      <TelemetryBorder frame={frame} />
-
-      {/* Real Meta infinity logo */}
-      <div style={{ marginBottom: 52 }}>
-        <MetaLogo frame={frame} progress={logoProgress} size={180} showWord />
-      </div>
-
-      {/* "LLAMA 4" typewriter */}
-      <div style={{ marginBottom: 24, minHeight: 72 }}>
-        <span style={{
-          ...BROADCAST, fontSize: 58, fontWeight: 300,
-          color: DIM, letterSpacing: "0.20em",
-        }}>
-          {LLAMA_STR.slice(0, charsVisible)}
-          {cursorOn && <span style={{ color: META_BLUE }}>|</span>}
-        </span>
-      </div>
-
-      {/* MAVERICK hero slam */}
-      <div style={{
-        opacity:         mavOp,
-        transform:       `scale(${mavScale})`,
-        transformOrigin: "center center",
-        display:         "flex",
-        flexDirection:   "column",
-        alignItems:      "center",
-        marginBottom:    56,
-      }}>
+      <ParticleBackground frame={frame} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 28 }}>
+        <SectionLabelRow text={beat1Section} color="green" />
         <div style={{
-          ...BROADCAST,
-          fontSize:      168,
-          fontWeight:    900,
-          color:         WHITE,
-          letterSpacing: "-0.04em",
-          lineHeight:    1,
+          opacity: 1,
+          transform: `scale(${heroScale * (frame > 22 ? bs : 1)})`,
+          transformOrigin: "left center",
+          boxShadow: pulse,
         }}>
-          MAVERICK
+          <div style={{ ...HERO_NUMBER, fontSize: 148, fontWeight: 800, color: accent, lineHeight: 0.95,
+            textShadow: `0 0 60px ${accent}55, 0 0 120px ${accent}20` }}>
+            {hookLine1}
+          </div>
+          <div style={{ ...HERO_NUMBER, fontSize: 148, fontWeight: 800, color: accent, lineHeight: 0.95,
+            textShadow: `0 0 60px ${accent}55, 0 0 120px ${accent}20` }}>
+            {hookLine2}
+          </div>
         </div>
-        <UnderlineDraw progress={ulProgress} width={840} />
-      </div>
-
-      {/* Hook line */}
-      <div style={{ opacity: hookOp, maxWidth: 840, textAlign: "center" as const, padding: "0 60px" }}>
-        <div style={{ ...BROADCAST, fontSize: 34, color: DIM, lineHeight: 1.55, fontWeight: 400 }}>
-          Most capable open model yet.
-          <br />Runs on hardware you actually own.
+        <div style={{ ...sub, opacity: sub.opacity }}>
+          <div style={{ ...BROADCAST_TEXT, fontSize: 52, fontWeight: 700, color: COLOR.white,
+            lineHeight: 1.2, letterSpacing: "-0.01em" }}>
+            {hookSub}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+          {chipSls.map((sl, i) => (
+            <span key={i} style={{ ...sl, display: "inline-block",
+              background: `${accent}12`, border: `1px solid ${accent}35`,
+              color: accent, padding: "10px 22px", borderRadius: 100,
+              fontSize: 24, fontWeight: 600, fontFamily: FONT, letterSpacing: "0.04em" }}>
+              {chips[i]}
+            </span>
+          ))}
         </div>
       </div>
-    </AbsoluteFill>
+      <TelemetryFrame frame={frame} />
+    </div>
   );
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// BEAT 2 — CONCEPT 1: MoE diagram + benchmark bars
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Beat 2 ────────────────────────────────────────────────────────────────────
 
-const Concept1Beat: React.FC = () => {
-  const frame = useBF();
-  const fps   = 30;
+type Beat2Props = Pick<CustomVideoProps,
+  "beat2Section"|
+  "card1Value"|"card1Label"|"card1Sublabel"|
+  "card2Value"|"card2Label"|"card2Sublabel"|
+  "card3Value"|"card3Label"|"card3Sublabel"|
+  "accentColor">;
 
-  const labelOp = interpolate(frame, [0, 22], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+const Beat2: React.FC<Beat2Props> = ({
+  beat2Section,
+  card1Value, card1Label, card1Sublabel,
+  card2Value, card2Label, card2Sublabel,
+  card3Value, card3Label, card3Sublabel,
+  accentColor,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const accent = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.green;
+  const pulse  = usePulseAt(frame, [120], accent, 48);
 
-  const EXPERTS     = 8;
-  const ACTIVE_IDXS = [2, 5];
-  const BOX_SIZE    = 100;
-  const BOX_GAP     = 14;
-  const ILLUM_F     = 100;
-  const BENCH_F     = 210;
-
-  const line1Op = interpolate(frame, [32,  58],  [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const line2Op = interpolate(frame, [105, 130], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const divOp   = interpolate(frame, [BENCH_F - 20, BENCH_F], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-
-  const benchmarks = [
-    { label: "Maverick",     value: 88, color: META_BLUE, highlight: true  },
-    { label: "GPT-4o",       value: 82, color: DIM,       highlight: false },
-    { label: "Gemini Flash", value: 76, color: DIM,       highlight: false },
+  const cards = [
+    { value: card1Value, label: card1Label, sublabel: card1Sublabel, color: accent },
+    { value: card2Value, label: card2Label, sublabel: card2Sublabel, color: COLOR.cyan  },
+    { value: card3Value, label: card3Label, sublabel: card3Sublabel, color: COLOR.white },
   ];
 
   return (
-    <AbsoluteFill style={{
-      background: BG, display: "flex", flexDirection: "column",
-      padding: "80px 72px", boxSizing: "border-box", fontFamily: FONT,
+    <div style={{
+      width: "100%", height: "100%",
+      background: "radial-gradient(ellipse at 50% 50%, #111 0%, #0A0A0A 70%)",
+      position: "relative", overflow: "hidden",
+      display: "flex", flexDirection: "column",
+      paddingTop: 120, paddingBottom: 180, paddingLeft: 72, paddingRight: 72,
+      boxSizing: "border-box", fontFamily: FONT, gap: 28,
     }}>
-      <TelemetryBorder frame={frame} />
-
-      {/* Section label */}
-      <div style={{ opacity: labelOp, marginBottom: 44 }}>
-        <div style={{ ...BROADCAST, fontSize: 18, color: META_BLUE, letterSpacing: "0.22em", textTransform: "uppercase" as const, marginBottom: 10 }}>
-          Architecture
-        </div>
-        <div style={{ ...BROADCAST, fontSize: 52, fontWeight: 700, color: WHITE, lineHeight: 1.15 }}>
-          Mixture of Experts
+      <ParticleBackground frame={frame} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 28, flex: 1 }}>
+        <SectionLabelRow text={beat2Section} color="cyan" />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 20 }}>
+          {cards.map((item, i) => {
+            const sp      = spring({ frame: Math.max(0, frame - i * 45), fps, config: SPRING_MEDIUM });
+            const opacity = interpolate(sp, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
+            const scale   = interpolate(sp, [0, 1],   [0.92, 1], { extrapolateRight: "clamp" });
+            return (
+              <div key={i} style={{
+                opacity, transform: `scale(${scale})`,
+                transformOrigin: "left center", willChange: "transform, opacity",
+                background: `${item.color}${i === 0 ? "10" : "07"}`,
+                border: `1px solid ${item.color}${i === 0 ? "50" : "25"}`,
+                borderRadius: 16, padding: "28px 32px",
+                display: "flex", alignItems: "center", gap: 24,
+                boxShadow: i === 0 ? pulse : "none",
+              }}>
+                <div style={{ width: 4, alignSelf: "stretch", background: item.color,
+                  borderRadius: 2, opacity: i === 0 ? 1 : 0.5, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...HERO_NUMBER, fontSize: 80, fontWeight: 800,
+                    color: item.color, lineHeight: 1.0,
+                    textShadow: i === 0 ? `0 0 50px ${item.color}50` : "none" }}>
+                    {item.value}
+                  </div>
+                  <div style={{ ...BROADCAST_TEXT, fontSize: 22, fontWeight: 600,
+                    color: COLOR.white, opacity: 0.8, marginTop: 6 }}>
+                    {item.label}
+                  </div>
+                  <div style={{ fontSize: 17, color: "rgba(255,255,255,0.35)",
+                    marginTop: 4, fontFamily: FONT }}>
+                    {item.sublabel}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
+      <TelemetryFrame frame={frame} />
+    </div>
+  );
+};
 
-      {/* Expert grid */}
-      <div style={{
-        display:             "grid",
-        gridTemplateColumns: `repeat(${EXPERTS}, ${BOX_SIZE}px)`,
-        gap:                 BOX_GAP,
-        marginBottom:        36,
-        justifyContent:      "center",
-      }}>
-        {Array.from({ length: EXPERTS }, (_, i) => {
-          const boxProg    = spring({ frame: Math.max(0, frame - i * 8), fps, config: SPRING_MEDIUM });
-          const boxOp      = interpolate(boxProg, [0, 0.25], [0, 1], { extrapolateRight: "clamp" });
-          const boxScale   = interpolate(boxProg, [0, 1], [0.5, 1], { extrapolateRight: "clamp" });
-          const isActive   = ACTIVE_IDXS.includes(i);
-          const illumProg  = isActive
-            ? spring({ frame: Math.max(0, frame - ILLUM_F - i * 8), fps, config: SPRING_SOFT })
-            : 0;
-          const illumAlpha = interpolate(illumProg, [0, 1], [0, 1], { extrapolateRight: "clamp" });
-          const illumBg    = interpolate(illumProg, [0, 1], [0, 0.16], { extrapolateRight: "clamp" });
+// ── Beat 3 ────────────────────────────────────────────────────────────────────
 
-          return (
+type Beat3Props = Pick<CustomVideoProps, "beat3Section"|"slamLine1"|"slamLine2"|"slamLine3"|"accentColor">;
+
+const Beat3: React.FC<Beat3Props> = ({ beat3Section, slamLine1, slamLine2, slamLine3, accentColor }) => {
+  const frame   = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const accent  = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.cyan;
+  const { scale: bs } = useBreath(frame, fps);
+  const glowPulse = Math.sin((frame / fps) * Math.PI * 2 * 0.4) * 0.5 + 0.5;
+  const pulse0    = usePulseAt(frame, [45, 90], accent, 40);
+
+  const sp0 = spring({ frame, fps, config: SPRING_HEAVY });
+  const sl1 = useSlideIn(frame, "up", 60);
+  const sl2 = useSlideIn(frame, "up", 120);
+
+  const lines = [slamLine1, slamLine2, slamLine3];
+  const items = [
+    { opacity: interpolate(sp0, [0, 0.2], [0, 1], { extrapolateRight: "clamp" }),
+      transform: `translateY(${interpolate(sp0, [0, 1], [40, 0])}px)${frame > 22 ? ` scale(${bs})` : ""}`,
+      pulse: pulse0 },
+    { opacity: sl1.opacity, transform: sl1.transform, pulse: "none" },
+    { opacity: sl2.opacity, transform: sl2.transform, pulse: "none" },
+  ];
+
+  return (
+    <div style={{
+      width: "100%", height: "100%",
+      background: "radial-gradient(ellipse at 50% 50%, #111 0%, #0A0A0A 70%)",
+      position: "relative", overflow: "hidden",
+      display: "flex", flexDirection: "column",
+      paddingTop: 120, paddingBottom: 180, paddingLeft: 72, paddingRight: 72,
+      boxSizing: "border-box", fontFamily: FONT, gap: 40,
+    }}>
+      <ParticleBackground frame={frame} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 40, flex: 1 }}>
+        <SectionLabelRow text={beat3Section} color="cyan" />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 36 }}>
+          {lines.map((line, i) => (
             <div key={i} style={{
-              opacity:       boxOp,
-              transform:     `scale(${boxScale})`,
-              width:         BOX_SIZE,
-              height:        BOX_SIZE,
-              borderRadius:  12,
-              border:        `1.5px solid ${isActive ? `rgba(0,129,251,${illumAlpha})` : "rgba(255,255,255,0.12)"}`,
-              background:    isActive ? `rgba(0,129,251,${illumBg})` : "rgba(255,255,255,0.03)",
-              display:       "flex",
-              alignItems:    "center",
-              justifyContent:"center",
-              boxShadow:     isActive && illumProg > 0.5 ? `0 0 24px ${META_BLUE}40` : "none",
-              transition:    "none",
+              opacity: items[i].opacity, transform: items[i].transform,
+              transformOrigin: "left center", willChange: "transform, opacity",
+              boxShadow: items[i].pulse,
             }}>
               <div style={{
-                ...BROADCAST, fontSize: 18,
-                color:      isActive ? META_BLUE : "rgba(255,255,255,0.22)",
-                fontWeight: isActive ? 700 : 400,
+                ...BROADCAST_TEXT,
+                fontSize:      i === 0 ? 84 : 72,
+                fontWeight:    800,
+                color:         i === 0 ? accent : COLOR.white,
+                lineHeight:    1.05,
+                letterSpacing: "-0.03em",
+                textShadow:    i === 0 ? `0 0 ${40 + glowPulse * 40}px ${accent}35` : "none",
               }}>
-                E{i + 1}
+                {line}
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Annotation lines */}
-      <div style={{ opacity: line1Op, marginBottom: 12 }}>
-        <div style={{ ...BROADCAST, fontSize: 30, color: DIM, lineHeight: 1.5 }}>
-          128 experts total —{" "}
-          <span style={{ color: WHITE, fontWeight: 600 }}>only 2 activate per token</span>
+          ))}
         </div>
       </div>
-      <div style={{ opacity: line2Op, marginBottom: 36 }}>
-        <div style={{ ...BROADCAST, fontSize: 30, color: DIM, lineHeight: 1.5 }}>
-          Fast and efficient. Beats models 10× its size.
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div style={{ opacity: divOp, height: 1, background: "rgba(255,255,255,0.08)", marginBottom: 36 }} />
-
-      {/* Benchmark bars */}
-      <div style={{ opacity: divOp }}>
-        <div style={{ ...BROADCAST, fontSize: 18, color: DIM, letterSpacing: "0.18em", textTransform: "uppercase" as const, marginBottom: 28 }}>
-          Coding · Reasoning · Vision — Overall Score
-        </div>
-        {benchmarks.map((b, i) => (
-          <BenchBar key={b.label} {...b} frame={frame} delay={BENCH_F + i * 20} fps={fps} />
-        ))}
-      </div>
-    </AbsoluteFill>
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2,
+        background: `linear-gradient(90deg, transparent, ${accent}40, transparent)`, zIndex: 2 }} />
+      <TelemetryFrame frame={frame} />
+    </div>
   );
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// BEAT 3 — CONCEPT 2: Context window + LMSYS leaderboard
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Beat 4 ────────────────────────────────────────────────────────────────────
 
-const ContextFillCanvas: React.FC<{ frame: number; progress: number }> = ({ frame, progress }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const W = 936, H = 88;
+type Beat4Props = Pick<CustomVideoProps, "ctaLine1"|"ctaLine2"|"ctaLine3"|"accentColor">;
 
-  useLayoutEffect(() => {
-    const c = canvasRef.current; if (!c) return;
-    const ctx = c.getContext("2d"); if (!ctx) return;
-    ctx.clearRect(0, 0, W, H);
-    const r = 10;
-    ctx.save();
-    ctx.fillStyle = "#111";
-    ctx.beginPath(); ctx.roundRect(0, 0, W, H, r); ctx.fill();
-    ctx.restore();
+const Beat4: React.FC<Beat4Props> = ({ ctaLine1, ctaLine2, ctaLine3, accentColor }) => {
+  const frame   = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const accent  = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.cyan;
+  const { scale: bs } = useBreath(frame, fps);
 
-    const fillW = W * progress;
-    if (fillW > 0) {
-      const grad = ctx.createLinearGradient(0, 0, fillW, 0);
-      grad.addColorStop(0,   META_BLUE2 + "80");
-      grad.addColorStop(0.7, META_BLUE);
-      grad.addColorStop(1,   META_LIGHT);
-      ctx.save();
-      ctx.shadowBlur  = 24;
-      ctx.shadowColor = META_BLUE + "60";
-      ctx.fillStyle   = grad;
-      ctx.beginPath(); ctx.roundRect(0, 0, W, H, r); ctx.clip();
-      ctx.beginPath(); ctx.roundRect(0, 0, fillW, H, r); ctx.fill();
-      ctx.restore();
-    }
-  });
-
-  return (
-    <canvas ref={canvasRef} width={W} height={H}
-      style={{ display: "block", width: "100%", borderRadius: 10 }} />
+  const sp      = spring({ frame: Math.max(0, frame - 1), fps, config: SPRING_HEAVY });
+  const opacity = interpolate(sp, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
+  const scale   = interpolate(sp, [0, 1],   [0.7, 1], { extrapolateRight: "clamp" });
+  const pulse   = usePulseAt(frame, [45, 100], accent, 40);
+  const labelOp = interpolate(
+    spring({ frame, fps, config: SPRING_MEDIUM }), [0, 0.3], [0, 1], { extrapolateRight: "clamp" }
   );
-};
-
-const LMSYS_ENTRIES = [
-  { name: "Maverick (chat)",   score: 1417, color: META_BLUE, highlight: true  },
-  { name: "GPT-4.1",           score: 1399, color: DIM,       highlight: false },
-  { name: "DeepSeek V3",       score: 1381, color: DIM,       highlight: false },
-  { name: "Gemini 2.0 Flash",  score: 1354, color: DIM,       highlight: false },
-  { name: "Claude 3.5 Sonnet", score: 1328, color: DIM,       highlight: false },
-];
-const MAX_SCORE = 1450;
-
-const Concept2Beat: React.FC = () => {
-  const frame = useBF();
-  const fps   = 30;
-
-  const ctxProg    = spring({ frame: Math.max(0, frame - 20), fps, config: { damping: 32, stiffness: 80, mass: 1, overshootClamping: true } });
-  const ctxFill    = interpolate(ctxProg, [0, 1], [0, 1], { extrapolateRight: "clamp" });
-  const tokenCount = Math.round(ctxFill * 1_000_000);
-  const labelOp    = interpolate(frame, [0, 22], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-
-  const LB_START = 210;
-  const lbOp  = interpolate(frame, [LB_START, LB_START + 25], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const mmOp  = interpolate(frame, [260, 285], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{
-      background: BG, display: "flex", flexDirection: "column",
-      padding: "80px 72px", boxSizing: "border-box", fontFamily: FONT,
+    <div style={{
+      width: "100%", height: "100%",
+      background: "radial-gradient(ellipse at 50% 60%, #111 0%, #0A0A0A 70%)",
+      position: "relative", overflow: "hidden", fontFamily: FONT,
     }}>
-      <TelemetryBorder frame={frame} />
-
-      {/* Context window */}
-      <div style={{ opacity: labelOp, marginBottom: 36 }}>
-        <div style={{ ...BROADCAST, fontSize: 18, color: META_BLUE, letterSpacing: "0.22em", textTransform: "uppercase" as const, marginBottom: 10 }}>
-          Context Window
+      <ParticleBackground frame={frame} />
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 2,
+        display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
+        paddingTop: 120, paddingBottom: 180, paddingLeft: 72, paddingRight: 72,
+        boxSizing: "border-box", gap: 24, textAlign: "center",
+      }}>
+        <div style={{ ...BROADCAST_TEXT, fontSize: 20, fontWeight: 500, color: accent,
+          letterSpacing: "0.18em", textTransform: "uppercase", opacity: labelOp }}>
+          TAKEAWAY
         </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 18, marginBottom: 22 }}>
-          <div style={{ ...BROADCAST, fontSize: 100, fontWeight: 900, color: WHITE, letterSpacing: "-0.04em", fontVariantNumeric: "tabular-nums" as const }}>
-            {tokenCount >= 1_000_000 ? "1M" : (tokenCount / 1000).toFixed(0) + "K"}
+        <div style={{ opacity, transform: `scale(${scale * (frame > 22 ? bs : 1)})`, boxShadow: pulse }}>
+          <div style={{ ...BROADCAST_TEXT, fontSize: 116, fontWeight: 800, color: accent,
+            lineHeight: 0.95, letterSpacing: "-0.03em",
+            textShadow: `0 0 60px ${accent}50, 0 0 120px ${accent}20` }}>
+            {ctaLine1}
           </div>
-          <div style={{ ...BROADCAST, fontSize: 30, color: DIM, fontWeight: 400 }}>tokens</div>
-        </div>
-        <ContextFillCanvas frame={frame} progress={ctxFill} />
-        <div style={{ ...BROADCAST, fontSize: 26, color: "rgba(255,255,255,0.35)", marginTop: 14 }}>
-          Entire codebases, long documents, multi-image inputs.
-        </div>
-      </div>
-
-      {/* Capability badges */}
-      <div style={{ opacity: mmOp, display: "flex", gap: 14, marginBottom: 44, flexWrap: "wrap" as const }}>
-        {["Native Vision", "Multi-Image", "Docs + Code"].map(tag => (
-          <div key={tag} style={{
-            ...BROADCAST, fontSize: 20, color: META_BLUE, fontWeight: 600,
-            border: `1px solid ${META_BLUE}40`, borderRadius: 8,
-            padding: "8px 18px", background: `${META_BLUE}0A`,
-          }}>
-            {tag}
+          <div style={{ ...BROADCAST_TEXT, fontSize: 58, fontWeight: 700, color: COLOR.white,
+            lineHeight: 1.2, letterSpacing: "-0.01em", marginTop: 16, opacity: 0.9 }}>
+            {ctaLine2}
           </div>
-        ))}
-      </div>
-
-      {/* Divider */}
-      <div style={{ opacity: lbOp, height: 1, background: "rgba(255,255,255,0.08)", marginBottom: 36 }} />
-
-      {/* LMSYS leaderboard */}
-      <div style={{ opacity: lbOp }}>
-        <div style={{ ...BROADCAST, fontSize: 18, color: DIM, letterSpacing: "0.18em", textTransform: "uppercase" as const, marginBottom: 28 }}>
-          LMSYS Chatbot Arena — Elo Score
+          <div style={{ ...BROADCAST_TEXT, fontSize: 48, fontWeight: 600, color: COLOR.white,
+            lineHeight: 1.2, letterSpacing: "-0.005em", marginTop: 12, opacity: 0.65 }}>
+            {ctaLine3}
+          </div>
         </div>
-        {LMSYS_ENTRIES.map((e, i) => {
-          const prog  = spring({ frame: Math.max(0, frame - LB_START - i * 24), fps, config: SPRING_MEDIUM });
-          const barW  = interpolate(prog, [0, 1], [0, e.score / MAX_SCORE], { extrapolateRight: "clamp" });
-          const rowOp = interpolate(prog, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
-
-          return (
-            <div key={e.name} style={{ opacity: rowOp, marginBottom: 22 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ ...BROADCAST, fontSize: 26, color: e.highlight ? WHITE : DIM, fontWeight: e.highlight ? 600 : 400 }}>
-                  {e.name}
-                </span>
-                <span style={{ ...BROADCAST, fontSize: 26, color: e.color, fontWeight: 700, fontVariantNumeric: "tabular-nums" as const }}>
-                  {e.score}
-                </span>
-              </div>
-              <div style={{ height: 7, background: "#1a1a1a", borderRadius: 4 }}>
-                <div style={{
-                  height:       "100%",
-                  width:        `${barW * 100}%`,
-                  background:   e.highlight ? `linear-gradient(90deg, ${META_BLUE2}, ${META_BLUE})` : "#2a2a2a",
-                  borderRadius: 4,
-                  boxShadow:    e.highlight ? `0 0 12px ${META_BLUE}50` : "none",
-                }} />
-              </div>
-            </div>
-          );
-        })}
       </div>
-    </AbsoluteFill>
+      <TelemetryFrame frame={frame} />
+    </div>
   );
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// BEAT 4 — TAKEAWAY
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Root ───────────────────────────────────────────────────────────────────────
 
-const TAKEAWAY_LINES = [
-  { text: "Pull it.",  delay: 0   },
-  { text: "Run it.",   delay: 60  },
-  { text: "Own it.",   delay: 120 },
-];
-
-const SUBLINES = [
-  { text: "Open weights. No API key.",         delay: 30  },
-  { text: "Your hardware. Your inference.",    delay: 90  },
-  { text: "No subscription. No lock-in.",      delay: 150 },
-];
-
-const TakeawayBeat: React.FC = () => {
-  const frame = useBF();
-  const fps   = 30;
-
-  const secLabelOp = interpolate(frame, [0, 22], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const mBookOp    = interpolate(frame, [210, 240], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const mDrawProg  = interpolate(frame, [210, 272], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const ctaOp      = interpolate(frame, [265, 295], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+export const CustomVideo: React.FC<CustomVideoProps> = (props) => {
+  const {
+    beat1Section, hookLine1, hookLine2, hookSub, chip1, chip2, chip3,
+    beat2Section, card1Value, card1Label, card1Sublabel,
+    card2Value, card2Label, card2Sublabel,
+    card3Value, card3Label, card3Sublabel,
+    beat3Section, slamLine1, slamLine2, slamLine3,
+    ctaLine1, ctaLine2, ctaLine3,
+    accentColor,
+  } = props;
 
   return (
-    <AbsoluteFill style={{
-      background:    BG,
-      display:       "flex",
-      flexDirection: "column",
-      padding:       "80px 72px",
-      boxSizing:     "border-box",
-      fontFamily:    FONT,
-      justifyContent:"center",
-    }}>
-      <TelemetryBorder frame={frame} />
-
-      {/* Section label */}
-      <div style={{ opacity: secLabelOp, marginBottom: 52 }}>
-        <div style={{ ...BROADCAST, fontSize: 18, color: META_BLUE, letterSpacing: "0.22em", textTransform: "uppercase" as const }}>
-          Takeaway
-        </div>
-      </div>
-
-      {/* Three slam lines */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        {TAKEAWAY_LINES.map((line, i) => {
-          const prog   = spring({ frame: Math.max(0, frame - line.delay), fps, config: SPRING_HEAVY });
-          const lineY  = interpolate(prog, [0, 1], [70, 0], { extrapolateRight: "clamp" });
-          const lineOp = interpolate(prog, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
-          const ulProg = spring({ frame: Math.max(0, frame - line.delay - 20), fps, config: SPRING_SOFT });
-          const ulW    = interpolate(ulProg, [0, 1], [0, 1], { extrapolateRight: "clamp" });
-
-          const sub    = SUBLINES[i];
-          const subP   = spring({ frame: Math.max(0, frame - sub.delay), fps, config: SPRING_SOFT });
-          const subOp  = interpolate(subP, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
-
-          // Underline pixel width based on text (each char ~60px at 130px fontSize)
-          const ulPx = line.text.length * 60;
-
-          return (
-            <div key={i} style={{ marginBottom: 44 }}>
-              <div style={{ opacity: lineOp, transform: `translateY(${lineY}px)` }}>
-                <div style={{
-                  ...BROADCAST,
-                  fontSize:      130,
-                  fontWeight:    900,
-                  color:         WHITE,
-                  letterSpacing: "-0.03em",
-                  lineHeight:    1,
-                }}>
-                  {line.text}
-                </div>
-                <UnderlineDraw progress={ulW} width={ulPx} />
-              </div>
-              <div style={{ opacity: subOp, marginTop: 12, paddingLeft: 3 }}>
-                <div style={{ ...BROADCAST, fontSize: 30, color: DIM, fontWeight: 400 }}>
-                  {sub.text}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Meta logo bookend */}
-      <div style={{ opacity: mBookOp, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-        <MetaLogo frame={frame} progress={mDrawProg} size={120} showWord={false} />
-        <div style={{ opacity: ctaOp, ...BROADCAST, fontSize: 26, color: DIM, letterSpacing: "0.10em" }}>
-          Follow for daily AI breakdowns
-        </div>
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ROOT COMPOSITION
-// ══════════════════════════════════════════════════════════════════════════════
-
-export const CustomVideo: React.FC = () => {
-  const frame = useCurrentFrame();
-  const bf    = (start: number) => frame - start;
-
-  return (
-    <AbsoluteFill style={{ background: BG }}>
+    <div style={{ width: "100%", height: "100%", background: "#0A0A0A", position: "relative" }}>
       <Audio src={staticFile("narration.wav")} />
-
-      <Sequence from={0} durationInFrames={HOOK_F}>
-        <BeatFrameCtx.Provider value={bf(0)}>
-          <HookBeat />
-        </BeatFrameCtx.Provider>
+      <Sequence from={0}   durationInFrames={82}>
+        <Beat1
+          beat1Section={beat1Section} hookLine1={hookLine1} hookLine2={hookLine2}
+          hookSub={hookSub} chip1={chip1} chip2={chip2} chip3={chip3} accentColor={accentColor}
+        />
       </Sequence>
-
-      <Sequence from={HOOK_F} durationInFrames={CONCEPT1_F}>
-        <BeatFrameCtx.Provider value={bf(HOOK_F)}>
-          <Concept1Beat />
-        </BeatFrameCtx.Provider>
+      <Sequence from={82}  durationInFrames={153}>
+        <Beat2
+          beat2Section={beat2Section}
+          card1Value={card1Value} card1Label={card1Label} card1Sublabel={card1Sublabel}
+          card2Value={card2Value} card2Label={card2Label} card2Sublabel={card2Sublabel}
+          card3Value={card3Value} card3Label={card3Label} card3Sublabel={card3Sublabel}
+          accentColor={accentColor}
+        />
       </Sequence>
-
-      <Sequence from={HOOK_F + CONCEPT1_F} durationInFrames={CONCEPT2_F}>
-        <BeatFrameCtx.Provider value={bf(HOOK_F + CONCEPT1_F)}>
-          <Concept2Beat />
-        </BeatFrameCtx.Provider>
+      <Sequence from={235} durationInFrames={220}>
+        <Beat3
+          beat3Section={beat3Section} slamLine1={slamLine1}
+          slamLine2={slamLine2} slamLine3={slamLine3} accentColor={accentColor}
+        />
       </Sequence>
-
-      <Sequence from={HOOK_F + CONCEPT1_F + CONCEPT2_F} durationInFrames={TAKEAWAY_F}>
-        <BeatFrameCtx.Provider value={bf(HOOK_F + CONCEPT1_F + CONCEPT2_F)}>
-          <TakeawayBeat />
-        </BeatFrameCtx.Provider>
+      <Sequence from={455} durationInFrames={159}>
+        <Beat4 ctaLine1={ctaLine1} ctaLine2={ctaLine2} ctaLine3={ctaLine3} accentColor={accentColor} />
       </Sequence>
-    </AbsoluteFill>
+    </div>
   );
 };
