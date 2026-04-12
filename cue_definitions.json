@@ -23,26 +23,32 @@
   ],
   "word_cues": [
     {
-      "label": "stats_reveal",
-      "trigger_word": "Maverick",
+      "label": "metric_reveal",
+      "trigger_word": "billion",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "moe_explain",
-      "trigger_word": "MoE",
+      "label": "chip_reveal_ollama",
+      "trigger_word": "Ollama",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "beats_claim",
-      "trigger_word": "beats",
+      "label": "chip_reveal_gpu",
+      "trigger_word": "RTX",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "new_bar_flash",
-      "trigger_word": "bar",
+      "label": "insight_flash",
+      "trigger_word": "unlocks",
+      "occurrence": 0,
+      "offset_frames": 0
+    },
+    {
+      "label": "takeaway_reframe",
+      "trigger_word": "today",
       "occurrence": -1,
       "offset_frames": 0
     }
