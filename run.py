@@ -283,6 +283,57 @@ def _compositor_pause() -> str:
     return drop_path
 
 
+def _studio_pause():
+    """
+    Launch Remotion Studio so the user can preview + scrub the rendered video,
+    adjust timing, and verify audio sync before sending to Telegram.
+    Blocks until the user presses Enter.
+    """
+    import subprocess
+    import threading
+
+    remotion_dir = os.path.join(os.path.dirname(__file__), "remotion")
+    video_path   = os.path.join(OUTPUT_DIR, "video.mp4")
+
+    print("\n" + "═" * 70)
+    print("  🎬  STUDIO REVIEW  —  inspect video before sending to Telegram")
+    print("═" * 70)
+
+    if os.path.exists(video_path):
+        print(f"\n  Rendered video: {video_path}")
+
+    print("\n  Starting Remotion Studio...")
+    print("  Browser will open at http://localhost:3000\n")
+    print("  • Scrub timeline to check audio sync")
+    print("  • Verify beat timing and transitions")
+    print("  • Press Ctrl+C in this terminal to kill Studio when done\n")
+    print("═" * 70)
+
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            ["npx", "remotion", "studio"],
+            cwd=remotion_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        try:
+            input("  Press Enter when review is done → ")
+        except (EOFError, KeyboardInterrupt):
+            print("\n[studio] Interrupted.")
+
+    finally:
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        print("\n[studio] Closed. Continuing to notifier.\n")
+        print("═" * 60 + "\n")
+
+
 def _apply_narration_override(narration_arg: str):
     """
     Write a custom spoken_narration.json from --narration argument.
@@ -358,7 +409,7 @@ def run_stage(name: str):
 
 def main():
     parser = argparse.ArgumentParser(description="adamax-content-engine pipeline")
-    parser.add_argument("--stage", choices=STAGES, help="Run a single stage")
+    parser.add_argument("--stage", choices=STAGES + ["content_generator", "brief_generator", "notifier"], help="Run a single stage")
     parser.add_argument(
         "--provider",
         choices=["claude", "openrouter", "anthropic", "gemini", "handoff"],
@@ -559,6 +610,10 @@ def main():
         # ── Compositor pause: wait for custom CustomVideo.tsx before animator ──
         if getattr(args, "compositor", False) and stage == "animator":
             _compositor_pause()
+
+        # ── Studio review: open Remotion Studio after animator, before notifier ──
+        if stage == "notifier":
+            _studio_pause()
 
         # ── Narration override: write spoken_narration.json after content stage ─
         if args.narration and stage == "content_generator":
