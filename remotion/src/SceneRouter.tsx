@@ -21,6 +21,7 @@ import { TriStat }          from "./layouts/TriStat";
 import { LeaderboardRank }  from "./layouts/LeaderboardRank";
 import { BarComparison }    from "./layouts/BarComparison";
 import { CodeDiff }         from "./layouts/CodeDiff";
+import { TerminalScene }    from "./layouts/TerminalScene";
 
 export const SceneRouter: React.FC<{ data: SceneData }> = ({ data }) => {
   switch (data.layout) {
@@ -35,6 +36,7 @@ export const SceneRouter: React.FC<{ data: SceneData }> = ({ data }) => {
     case "LeaderboardRank":  return <LeaderboardRank data={data} />;
     case "BarComparison":    return <BarComparison data={data} />;
     case "CodeDiff":         return <CodeDiff data={data} />;
+    case "TerminalScene":    return <TerminalScene data={data} />;
     case "TakeawayScene":    return null; // handled by VideoComposition with durationFrames
     default:                 return null;
   }

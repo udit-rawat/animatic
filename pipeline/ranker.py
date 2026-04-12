@@ -18,40 +18,98 @@ _STOP_WORDS = {
 
 
 PROMPT_TEMPLATE = """\
-You are a content strategist for an AI engineering audience on Instagram and X (Twitter).
-Your job: pick ONE topic from the candidates below that will make the best short Manim animation explainer.
+You are a content strategist for an AI-curious audience on Instagram Reels.
+Your job: pick ONE topic that will perform best as a 60-second short-form video.
 
-SCORING CRITERIA — rate each candidate 1–10 on four dimensions:
+STEP 1 — SEARCH THE WEB FIRST (do this before reading the candidates list):
+Use Google Search to find what is happening in AI RIGHT NOW today:
 
-1. VISUAL RICHNESS — Does this topic have concrete visual elements to show?
-   High: named pipeline stages, before/after metrics with real numbers, a process with distinct steps,
-         a measurable comparison (speed, memory, accuracy), a mechanism with named components
-   Low: abstract concepts with no tangible shape, opinion/policy topics, pure math derivations,
-        topics where the "visual" would just be text on screen
+  Search 1: "github trending AI today" OR "site:github.com AI repo trending"
+    → Find new AI/ML repos that went viral on GitHub in the last 24 hours.
+    → Look for repos built on top of famous models (Llama, GPT-4, Claude, Gemini).
+    → Note the repo name, what it does, star count if visible, and GitHub URL.
 
-2. ENGINEER VALUE — Will a working ML/AI engineer learn something immediately actionable or surprising?
-   High: a technique they can test today, a benchmark that changes best practices, a paper with a concrete trick
-   Low: general hype, things every engineer already knows, marketing posts
+  Search 2: "new AI model release today" OR "AI breakthrough today site:x.com OR site:twitter.com"
+    → Find what AI labs (OpenAI, Google, Meta, Anthropic, Mistral) released or announced today.
+    → Note any dramatic claims: speed records broken, models beating others, tools going free.
 
-3. FRESHNESS — Is this genuinely new or newly relevant?
-   High: paper from the last 72 hours, a newly released model/tool, a result that overturns prior assumptions
+  Search 3: "AI tool open source today github"
+    → Find tools people can actually run locally — no API key, no subscription.
+    → These are high-save content: viewers bookmark "run this today" content.
+
+Add any strong finds from your web search to your consideration pool alongside the scraped
+candidates below. A fresh repo or announcement found via search beats a 2-day-old Reddit post.
+
+STEP 2 — EVALUATE ALL CANDIDATES (scraped + web search finds):
+
+Instagram Reels is distributed by SHARES and SAVES — not just likes.
+People share content that surprised them or challenged an assumption they held.
+People save content that they want to act on later.
+Write for those two behaviors.
+
+SCORING CRITERIA — rate each candidate 1–10 on five dimensions:
+
+1. BRAND GRAVITY — Is a well-known name central to this topic?
+   High: OpenAI, Google/DeepMind, Meta, Anthropic, NVIDIA, Mistral, DeepSeek, Apple, Microsoft
+         — the audience already has feelings about these names; they stop scrolling when they appear
+   Low: obscure tools, academic labs, papers with no brand attachment
+   Note: a niche tool CAN score high if the hook can credibly reference a famous brand by comparison
+         (e.g. "beats GPT-4o" or "OpenAI just got outpaced by a 3B model")
+
+2. DRAMATIC HOOK POTENTIAL — Does the topic have a natural dramatic reversal, death, or surprising contrast?
+   High: "X just died", "Y broke a 56-year record", "the model that replaced 3 others", "free vs $20/month"
+         — anything with a before/after, a fall from grace, or a specific number that defies expectation
+   Low: incremental improvements, feature additions, topics that are "interesting" but not surprising
+
+3. VISUAL RICHNESS — Does this topic have concrete elements to show as animated data?
+   High: named pipeline stages, before/after metrics with real numbers, benchmark bars, a measurable comparison
+   Low: pure math derivations, abstract policy topics, topics where the only visual is text on screen
+
+4. FRESHNESS — Is this genuinely new or newly relevant?
+   High: released/published in the last 72 hours, a result that overturns prior assumptions
    Low: rehashed fundamentals, evergreen content dressed up as news
 
-4. FOCUS — Can the core idea be shown with 3–5 named steps + a clear before/after contrast?
-   High: one concrete mechanism or benchmark result with identifiable stages and measurable delta
-   Low: broad surveys, multi-paper comparisons, "state of X" overviews, topics needing >5 steps
+5. FOCUS — Can the core idea be expressed in one surprising sentence + 3 supporting facts?
+   High: one concrete mechanism or benchmark result with a clear before/after delta
+   Low: broad surveys, multi-paper comparisons, "state of X" overviews
 
-IDEAL TOPIC EXAMPLES (use as a calibration bar):
-- "Flash Attention 3 cuts prefill latency 40%% — here's the tiling trick behind it"
-- "Why LoRA rank matters: a visual guide to rank-1 vs rank-64 weight updates"
-- "Speculative decoding: how a small draft model makes large models 3× faster"
-- "Grouped-query attention: the small change that halved KV-cache memory in Llama 3"
+IDEAL TOPIC EXAMPLES (calibration bar — these would score 8+ on all five dimensions):
+- "OpenAI's Sora lasted 6 months. Here's the unit economics that killed it."
+- "Google's AlphaEvolve just broke a 56-year-old math record by rewriting its own algorithms."
+- "Meta's Llama 4 Maverick beats GPT-4o — and you can run it on your own hardware."
+- "Mistral Small 4: 119B parameters, only 6B fire per token. One model that replaced three."
+- "DeepSeek gives 5 million tokens free. You've been paying for API calls you didn't need to."
+
+CONTENT TYPE PRIORITY — in order of preference:
+
+1. NEW AI TOOL / REPO (source: github_trending or hackernews)
+   These score highest because they are ACTIONABLE — the viewer can pull and run the repo today.
+   "How to use X" content gets SAVED. Saves are the top Instagram distribution signal.
+   The hook writes itself: "Someone just built X using [Famous Model]. Here's how it works."
+   Prefer repos that: (a) are built on a famous model (Llama, GPT-4, Claude, Gemini),
+   (b) solve a problem anyone can relate to (run locally, no API key, replaces paid tool),
+   (c) have a clear 3-step usage story visible from the repo description.
+
+2. MODEL RELEASE / BREAKTHROUGH (source: reddit, hackernews)
+   A new model from a famous lab (OpenAI, Google, Meta, Mistral, Anthropic) with a specific
+   surprising capability or benchmark result. Only pick if the claim is dramatic and verifiable.
+
+3. RESEARCH PAPER (source: arxiv)
+   Only if the paper has a concrete trick with a visual mechanism AND a measurable result.
+   Avoid pure math, surveys, or papers with no public demo/code.
+
+STRONGLY PREFER topics where:
+- The viewer can DO something after watching (run a repo, change a workflow, try a tool)
+- A famous brand name appears naturally in the hook
+- The core claim fits in ≤12 words as a dramatic reversal or surprising contrast
+- The topic broke in the last 48 hours
 
 STRICTLY AVOID:
+- Pure benchmark comparisons with no actionable takeaway ("model X scores Y on benchmark Z")
+- Niche tools with no famous brand reference AND no clear "you can run this today" angle
 - "AI is changing everything"-style posts
 - Topics requiring more than 4 visual steps to explain clearly
-- Papers with no public abstract or open access
-- Topics that are purely mathematical with no intuitive visual hook
+- Papers with no public abstract, open access, or code
 {already_covered}{analytics_hint}CANDIDATES:
 {candidates}
 
@@ -222,7 +280,10 @@ def main():
     last_err = None
     for attempt in range(1, 4):
         try:
-            raw   = claude_client.call(prompt, stage="ranker", json_mode=True)
+            # json_mode=False — grounding (Google Search) is incompatible with
+            # responseMimeType. The ranker prompt instructs JSON output; extract_json()
+            # parses it from the plain text response.
+            raw   = claude_client.call(prompt, stage="ranker", json_mode=False)
             topic = extract_json(raw)
             break
         except (json.JSONDecodeError, KeyError, ValueError) as e:

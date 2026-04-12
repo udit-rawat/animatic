@@ -14,7 +14,7 @@ STAGES = ["scraper", "ranker", "scripter", "verifier", "scene_planner", "narrato
 STAGES_SINGLE_SHOT = ["scraper", "ranker", "content_generator", "narrator", "word_aligner", "animator", "notifier"]
 
 # Custom pipeline: skips scraper+ranker entirely — topic comes from CLI.
-STAGES_CUSTOM = ["content_generator", "narrator", "word_aligner", "animator", "notifier"]
+STAGES_CUSTOM = ["content_generator", "narrator", "word_aligner", "brief_generator", "animator", "notifier"]
 
 OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), "output")
 TOPIC_PATH  = os.path.join(OUTPUT_DIR, "topic.json")
@@ -240,11 +240,31 @@ def _compositor_pause() -> str:
         print()
 
     print("  ─────────────────────────────────────────────────────────────")
-    print("  Prompt Claude with the TOPIC + NARRATION above to generate")
-    print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
-    print(f"\n  Drop the file here when ready:")
-    print(f"\n    {drop_path}\n")
-    print("═" * 70)
+
+    # Use drop_path written by brief_generator if available
+    drop_path_file = os.path.join(OUTPUT_DIR, "drop_path.txt")
+    if os.path.exists(drop_path_file):
+        with open(drop_path_file) as f:
+            drop_path = f.read().strip()
+        os.makedirs(os.path.dirname(drop_path), exist_ok=True)
+
+    # Print full compositor_prompt.md inline if brief_generator already ran
+    prompt_path = os.path.join(OUTPUT_DIR, "compositor_prompt.md")
+    if os.path.exists(prompt_path):
+        print("\n" + "═" * 70)
+        print("  ANIMATION BRIEF — paste everything below into your Claude session:")
+        print("═" * 70 + "\n")
+        with open(prompt_path) as f:
+            print(f.read())
+        print("═" * 70)
+        print(f"\n  Full brief also at: {os.path.join(OUTPUT_DIR, 'animation_brief.json')}")
+        print(f"\n  DROP FILE HERE:  {drop_path}\n")
+    else:
+        print("  Prompt Claude with the TOPIC + NARRATION above to generate")
+        print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
+        print(f"\n  Drop the file here when ready:")
+        print(f"\n    {drop_path}\n")
+        print("═" * 70)
 
     try:
         input("  Press Enter when the file is ready → ")
@@ -261,6 +281,57 @@ def _compositor_pause() -> str:
     print("═" * 60 + "\n")
     os.environ["COMPOSITOR_FILE"] = drop_path
     return drop_path
+
+
+def _studio_pause():
+    """
+    Launch Remotion Studio so the user can preview + scrub the rendered video,
+    adjust timing, and verify audio sync before sending to Telegram.
+    Blocks until the user presses Enter.
+    """
+    import subprocess
+    import threading
+
+    remotion_dir = os.path.join(os.path.dirname(__file__), "remotion")
+    video_path   = os.path.join(OUTPUT_DIR, "video.mp4")
+
+    print("\n" + "═" * 70)
+    print("  🎬  STUDIO REVIEW  —  inspect video before sending to Telegram")
+    print("═" * 70)
+
+    if os.path.exists(video_path):
+        print(f"\n  Rendered video: {video_path}")
+
+    print("\n  Starting Remotion Studio...")
+    print("  Browser will open at http://localhost:3000\n")
+    print("  • Scrub timeline to check audio sync")
+    print("  • Verify beat timing and transitions")
+    print("  • Press Ctrl+C in this terminal to kill Studio when done\n")
+    print("═" * 70)
+
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            ["npx", "remotion", "studio"],
+            cwd=remotion_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        try:
+            input("  Press Enter when review is done → ")
+        except (EOFError, KeyboardInterrupt):
+            print("\n[studio] Interrupted.")
+
+    finally:
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        print("\n[studio] Closed. Continuing to notifier.\n")
+        print("═" * 60 + "\n")
 
 
 def _apply_narration_override(narration_arg: str):
@@ -327,6 +398,8 @@ def run_stage(name: str):
         from pipeline.narrator import main
     elif name == "word_aligner":
         from pipeline.word_aligner import main
+    elif name == "brief_generator":
+        from pipeline.brief_generator import main
     elif name == "notifier":
         from pipeline.notifier import main
     else:
@@ -336,7 +409,7 @@ def run_stage(name: str):
 
 def main():
     parser = argparse.ArgumentParser(description="adamax-content-engine pipeline")
-    parser.add_argument("--stage", choices=STAGES, help="Run a single stage")
+    parser.add_argument("--stage", choices=STAGES + ["content_generator", "brief_generator", "notifier"], help="Run a single stage")
     parser.add_argument(
         "--provider",
         choices=["claude", "openrouter", "anthropic", "gemini", "handoff"],
@@ -537,6 +610,10 @@ def main():
         # ── Compositor pause: wait for custom CustomVideo.tsx before animator ──
         if getattr(args, "compositor", False) and stage == "animator":
             _compositor_pause()
+
+        # ── Studio review: open Remotion Studio after animator, before notifier ──
+        if stage == "notifier":
+            _studio_pause()
 
         # ── Narration override: write spoken_narration.json after content stage ─
         if args.narration and stage == "content_generator":

@@ -108,9 +108,9 @@ def build_message(topic: dict, script: dict) -> str:
 
 
 def build_caption_message(script: dict) -> str:
-    """Standalone copy-paste message with just caption + hashtags for Instagram."""
-    hashtags = " ".join(script["hashtags"])
-    return f"{script['caption']}\n\n{hashtags}"
+    """Standalone copy-paste message with just caption for Instagram. No hashtags — they train
+    you to reuse the same tags and can get indexed externally. Caption only."""
+    return script["caption"]
 
 
 async def send_notification():
@@ -140,7 +140,7 @@ async def send_notification():
             connect_timeout=60,
         )
 
-    print("Sending caption + hashtags...")
+    print("Sending caption (no hashtags)...")
     await bot.send_message(chat_id=chat_id, text=build_caption_message(script))
 
     print("Notification sent successfully.")

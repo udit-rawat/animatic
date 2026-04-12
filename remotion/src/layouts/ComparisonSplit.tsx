@@ -166,7 +166,10 @@ export const ComparisonSplit: React.FC<{ data: ComparisonSplitData }> = ({ data 
 
   return (
     <div style={{
-      padding:       60,
+      paddingTop:    120,
+      paddingBottom: 180,
+      paddingLeft:   72,
+      paddingRight:  72,
       display:       "flex",
       flexDirection: "column",
       gap:           32,

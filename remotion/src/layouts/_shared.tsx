@@ -136,58 +136,91 @@ export const ParticleBackground: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
-// ── TelemetryFrame — brand signature ─────────────────────────────────────────
+// ── TelemetryFrame — canvas border (Phase 2) ─────────────────────────────────
 
 /**
- * 1px Cyber Cyan border around the video perimeter.
- * - Normal: 20% opacity — subtle HUD frame.
- * - First 15 frames (beat transition): spikes to 100%, Acid Volt streak sweeps top edge.
- * Drop inside every template as the last child (highest z-index).
+ * Canvas-based 1px Cyber Cyan border — replaces CSS border.
+ * Benefits over CSS border:
+ *   • strokeRect sub-pixel precise — no box-model bleed on odd pixel widths
+ *   • Animated dash offset on transition: marching ants effect at beat start
+ *   • Acid Volt streak drawn directly on canvas via gradient fill — no extra DOM node
+ *
+ * Normal: 20% opacity solid stroke.
+ * Frames 0–15: opacity spikes to 100%, dash offset marches, streak sweeps top.
  */
 export const TelemetryFrame: React.FC<{ frame: number }> = ({ frame }) => {
-  const isTransition = frame < 16;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const borderOpacity = isTransition
-    ? interpolate(frame, [0, 3, 10, 16], [1, 1, 0.55, 0.2], {
-        extrapolateLeft: "clamp", extrapolateRight: "clamp",
-      })
-    : 0.2;
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-  // Acid Volt streak travels along the top edge during transition
-  const streakLeft = isTransition
-    ? interpolate(frame, [0, 15], [-8, 108], {
-        extrapolateLeft: "clamp", extrapolateRight: "clamp",
-      })
-    : 110;
+    ctx.clearRect(0, 0, 1080, 1920);
 
-  const streakOpacity = isTransition
-    ? interpolate(frame, [0, 5, 13, 16], [0, 1, 1, 0], {
+    const isTransition = frame < 16;
+
+    const borderOpacity = isTransition
+      ? interpolate(frame, [0, 3, 10, 16], [1, 1, 0.55, 0.2], {
+          extrapolateLeft: "clamp", extrapolateRight: "clamp",
+        })
+      : 0.2;
+
+    // Border stroke
+    ctx.save();
+    ctx.strokeStyle = `rgba(0,229,255,${borderOpacity})`;
+    ctx.lineWidth   = 1;
+
+    if (isTransition) {
+      // Marching-ants dash: offset advances by 2px/frame
+      const dashLen    = 12;
+      const gapLen     = 8;
+      const dashOffset = -(frame * 2) % (dashLen + gapLen);
+      ctx.setLineDash([dashLen, gapLen]);
+      ctx.lineDashOffset = dashOffset;
+    } else {
+      ctx.setLineDash([]);
+    }
+
+    ctx.strokeRect(0.5, 0.5, 1079, 1919);
+    ctx.restore();
+
+    // Acid Volt streak along top edge (frames 0–15)
+    if (isTransition) {
+      const streakPct = interpolate(frame, [0, 15], [-8, 108], {
         extrapolateLeft: "clamp", extrapolateRight: "clamp",
-      })
-    : 0;
+      });
+      const streakOpacity = interpolate(frame, [0, 5, 13, 16], [0, 1, 1, 0], {
+        extrapolateLeft: "clamp", extrapolateRight: "clamp",
+      });
+
+      const streakCx = (streakPct / 100) * 1080;
+      const grad = ctx.createLinearGradient(streakCx - 60, 0, streakCx + 60, 0);
+      grad.addColorStop(0,   "transparent");
+      grad.addColorStop(0.5, `rgba(204,255,0,${streakOpacity})`);   // CCFF00 Acid Volt
+      grad.addColorStop(1,   "transparent");
+
+      ctx.save();
+      ctx.filter    = "blur(1px)";
+      ctx.fillStyle = grad;
+      ctx.fillRect(streakCx - 60, 0, 120, 2);
+      ctx.restore();
+    }
+  });
 
   return (
-    <div style={{
-      position:     "absolute",
-      inset:        0,
-      border:       `1px solid rgba(0,229,255,${borderOpacity})`,
-      borderRadius: 0,
-      pointerEvents:"none",
-      zIndex:       1000,
-    }}>
-      {/* Top-edge Acid Volt streak */}
-      <div style={{
-        position:   "absolute",
-        top:        -1,
-        left:       `${streakLeft}%`,
-        transform:  "translateX(-50%)",
-        width:      120,
-        height:     2,
-        background: `linear-gradient(90deg, transparent, ${COLOR.yellow}, transparent)`,
-        opacity:    streakOpacity,
-        filter:     `blur(1px) drop-shadow(0 0 6px ${COLOR.yellow})`,
-      }} />
-    </div>
+    <canvas
+      ref={canvasRef}
+      width={1080}
+      height={1920}
+      style={{
+        position:      "absolute",
+        inset:         0,
+        pointerEvents: "none",
+        zIndex:        1000,
+      }}
+    />
   );
 };
 
@@ -262,6 +295,70 @@ export function useBreath(frame: number, fps: number) {
     scale:        1 + sin * 0.012,
     opacityShift: sin * 0.04,
   };
+}
+
+// ── Phase 2 animation primitives ─────────────────────────────────────────────
+//
+// Consumed by brief_generator's animation_brief.json spec.
+// Templates accept optional frame arrays; these hooks do the math.
+
+/**
+ * usePulseAt — glow pulse at specific frames.
+ * Returns a CSS boxShadow string. Ramps in 6f, holds, fades over 18f.
+ */
+export function usePulseAt(
+  frame: number,
+  pulseFrames: number[],
+  color: string,
+  radius = 32,
+): string {
+  const fired = pulseFrames.filter(f => frame >= f);
+  if (fired.length === 0) return "none";
+  const age = frame - Math.max(...fired);
+  const strength = interpolate(age, [0, 6, 12, 30], [0, 1, 0.9, 0], {
+    extrapolateLeft: "clamp", extrapolateRight: "clamp",
+  });
+  if (strength <= 0.01) return "none";
+  const r  = Math.round(radius * strength);
+  const r2 = Math.round(radius * 2 * strength);
+  return `0 0 ${r}px ${color}99, 0 0 ${r2}px ${color}44`;
+}
+
+/**
+ * useSlideIn — per-element directional entrance.
+ * Returns { opacity, transform } style fragment.
+ */
+export function useSlideIn(
+  frame: number,
+  direction: "left" | "right" | "up" | "down",
+  startFrame: number,
+  distance = 40,
+): { opacity: number; transform: string } {
+  const f    = Math.max(0, frame - startFrame);
+  const prog = interpolate(f, [0, 18], [0, 1], { extrapolateRight: "clamp" });
+  const ease = prog < 0.5 ? 2 * prog * prog : 1 - Math.pow(-2 * prog + 2, 2) / 2;
+  const d    = (1 - ease) * distance;
+  const tx   = direction === "left" ? -d : direction === "right" ? d : 0;
+  const ty   = direction === "up"   ?  d : direction === "down"  ? -d : 0;
+  return {
+    opacity:   interpolate(prog, [0, 0.25], [0, 1], { extrapolateRight: "clamp" }),
+    transform: `translate(${tx}px, ${ty}px)`,
+  };
+}
+
+/**
+ * useHighlightAt — checkmark pop + scale burst at a specific frame.
+ * Returns { scale, active, opacity }.
+ */
+export function useHighlightAt(
+  frame: number,
+  highlightFrame: number,
+): { scale: number; active: boolean; opacity: number } {
+  if (frame < highlightFrame) return { scale: 1, active: false, opacity: 0 };
+  const age = frame - highlightFrame;
+  const scale   = interpolate(age, [0, 6, 12, 20, 60], [0.6, 1.12, 1.06, 1.04, 1.04], { extrapolateRight: "clamp" });
+  const opacity = interpolate(age, [0, 5], [0, 1], { extrapolateRight: "clamp" });
+  return { scale, active: true, opacity };
 }
 
 // ── Count-up helper ───────────────────────────────────────────────────────────

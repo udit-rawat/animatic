@@ -18,49 +18,79 @@ Do NOT repeat any of the hallucinated or contradicted claims above.
 
 """
     return f"""\
-You are writing on-screen text for a 55–65 second AI explainer video targeting ML engineers on TikTok/Shorts.
-These strings render as LARGE TEXT on a dark screen — they must be immediately readable and
-create curiosity, not describe what's happening.
-NOT stage directions. NOT narration. NOT descriptions of visuals. Just the words on screen.
+You are writing on-screen text for a 25–35 second AI explainer reel for Instagram.
+Target: GitHub repos, X launches, and AI tool releases people can run TODAY.
+These strings render as LARGE TEXT on a dark screen — immediately readable, creating
+curiosity or surprise. NOT stage directions. NOT narration. Just the words on screen.
+
+AUDIENCE: Technically-curious Instagram users — not just ML engineers.
+They know ChatGPT, OpenAI, Google, Meta, Llama, Gemini.
+Write so both an engineer AND a smart non-technical founder can follow along.
+
+DISTRIBUTION MECHANIC: Instagram pushes content via SHARES and SAVES.
+SAVES are the #1 signal — people save content they want to act on later.
+"How to use X" and "you can run this today" content gets saved. Write for that.
+
+CONTENT PRIORITY — in order:
+1. NEW GITHUB REPO / AI TOOL: something built on Llama, GPT-4, Claude, Gemini, or Stable Diffusion
+   that went viral on GitHub or X in the last 48 hours. Hook = what it does + famous model reference.
+   Script structure: hook (what it does, famous model) → install command → what you can build → pull it today.
+2. MODEL RELEASE / BREAKTHROUGH: new model from famous lab with a specific surprising number.
+3. RESEARCH PAPER: only if it has a concrete trick + public demo.
 
 TOPIC: {topic['title']}
 SUMMARY: {topic['summary']}
-{correction_block}OUTPUT RULES:
+{correction_block}OUTPUT RULES — 25–35 SECOND TARGET (every word must earn its place):
 
-hook (≤12 words):
-  Open with FRICTION. State the unexpected pain point, contradiction, or broken assumption.
-  DO NOT state what the tool or solution is yet. Just the problem or metric.
-  GOOD: "52GB RSS. VRAM untouched. Server OOM-killed itself."
-  GOOD: "Your GPU is idle, but your latency is 400ms. Why?"
+hook (≤8 words spoken aloud):
+  Open with a DRAMATIC REVERSAL or SURPRISING FACT — not a pain point.
+  The hook must include either: (a) a well-known brand name / model (Llama, GPT-4, Claude),
+  or (b) a specific number that defies expectation, or (c) a dramatic reversal ("just killed",
+  "just broke", "replaced by", "runs on your laptop").
+  DO NOT open with "Your GPU is..." or generic friction. Make it about something HAPPENING NOW.
+  GOOD: "Someone built local GPT-4 — with Llama 4. Free."
+  GOOD: "Google's AI just broke a 56-year-old math record."
+  GOOD: "119 billion parameters. Only 6 billion fire. One model."
+  BAD:  "Your GPU is idle but your latency is 400ms. Why?"  ← pain-point, no brand
+  BAD:  "52GB RSS. VRAM untouched."  ← too niche, no hook
 
-concept_bullets[0] (≤18 words total):
-  The mechanism. Drop the corporate tone. Sound like a hacker explaining it in a Slack channel.
-  Name the exact variable, architecture block, or technique. No vague descriptions.
+concept_bullets[0] (≤14 words total):
+  The mechanism — what exactly this repo/model/tool does. Name it directly.
+  For a GitHub repo: what problem it solves and which famous model powers it.
+  One sentence. Concrete. Tech journalist tone — not a hacker in Slack.
 
-concept_bullets[1] (≤18 words total):
-  The quantified result. ONLY cite numbers explicitly stated in the SUMMARY above.
-  If no specific number exists, describe the qualitative improvement concretely instead.
-  Never invent numbers. No "up to", no "approximately", no made-up benchmarks.
+concept_bullets[1] (≤14 words total):
+  For a REPO topic: the install or run command — copy-pasteable, ≤14 words.
+    Example: "pip install agentkit && agentkit run --model llama4"
+  For a MODEL topic: the quantified result. ONLY numbers from the SUMMARY. No invented benchmarks.
+  For a PAPER topic: the concrete trick in one sentence.
 
-concept_bullets[2] (≤18 words total):
-  The implication. Why does this change how engineers should think or build?
-  One concrete sentence about what this unlocks, breaks, or makes obsolete.
+concept_bullets[2] (≤14 words total):
+  What the viewer can BUILD or DO with this — right now, on their own machine.
+  Frame as an action: "Build a local X that replaces Y — no API key needed."
+  This is the save-trigger bullet. Make it feel achievable today.
 
-takeaway (≤15 words):
-  End with a statement that proves their intuition might be wrong, directly challenging the reader.
-  GOOD: "The allocator was the leak. Could you have spotted this?"
-  GOOD: "Two vars fixed it. What else in your stack are you not measuring?"
+takeaway (≤10 words):
+  For a REPO topic: repo name + "Pull it. Run it." — the viewer should know exactly what to search.
+  For any topic: a statement that reframes what they thought they knew.
+  Aim for the feeling of "I need to send this to someone" OR "I need to save this."
+  GOOD: "Pull it. Run it. No API key. No subscription." (repo)
+  GOOD: "The open-source gap just closed. Closed models have one year."
+  GOOD: "You've been paying for inference you could run locally."
+  BAD:  "What else in your stack are you not measuring?"  ← no shareability
 
 HALLUCINATION RULES (critical):
-- ONLY use specific numbers (latency ms, throughput t/s, GB, etc.) if they appear in the SUMMARY.
-- If the SUMMARY has no benchmark numbers, DO NOT invent them. Use qualitative language instead.
+- ONLY use specific numbers if they appear in the SUMMARY.
+- If the SUMMARY has no benchmark numbers, DO NOT invent them.
 - Never write "0ms", "100x", "500ms" unless those exact numbers are in the SUMMARY.
 
 NEVER write "VISUAL:", "Scene:", "Animation:", "Show", "Display", or any production note.
-Language: direct, factual, punchy — like a tweet from an engineer who just shipped a fix.
+Tone: confident, precise, slightly urgent — like a tech journalist breaking a story, not an
+engineer documenting a fix. The viewer should feel like they caught something important early.
 
-CAPTION: 2-3 sentences for Instagram/X. Lead with the hook, close with the question.
-HASHTAGS: exactly 5, mix of broad (#MachineLearning) and specific (#PyTorchTips, #MLOps) AI tags.
+CAPTION: 2-3 sentences for Instagram. Lead with the dramatic claim + brand name.
+Close with a question that makes people comment or tag someone.
+HASHTAGS: exactly 5, mix of broad (#AI #OpenSource) and specific to the topic.
 
 Respond with ONLY valid JSON:
 {{

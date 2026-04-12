@@ -24,26 +24,32 @@
   "word_cues": [
     {
       "label": "metric_reveal",
-      "trigger_word": "million",
+      "trigger_word": "billion",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "leap_reveal",
-      "trigger_word": "leap",
+      "label": "chip_reveal_ollama",
+      "trigger_word": "Ollama",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "insight_drop",
-      "trigger_word": "orchestration",
+      "label": "chip_reveal_gpu",
+      "trigger_word": "RTX",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "takeaway_flash",
-      "trigger_word": "Instinct",
+      "label": "insight_flash",
+      "trigger_word": "unlocks",
       "occurrence": 0,
+      "offset_frames": 0
+    },
+    {
+      "label": "takeaway_reframe",
+      "trigger_word": "today",
+      "occurrence": -1,
       "offset_frames": 0
     }
   ]

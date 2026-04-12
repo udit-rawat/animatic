@@ -231,66 +231,45 @@ UIContent = Annotated[
 
 class NarrationScript(BaseModel):
     """
-    Four spoken blocks — total MUST land between 130 and 145 words.
+    Four spoken blocks — total MUST land between 50 and 60 words.
 
-    Timing targets (Senior ML Engineer at ~135 WPM):
-        hook     →  8-12 s  ≈  18-27 words
-        context  → 12-15 s  ≈  27-34 words
-        insight  → 15-20 s  ≈  34-45 words
-        takeaway → 10-14 s  ≈  22-32 words
+    Timing targets (Aoede TTS at ~1.4 wps with natural pauses):
+        hook     →  5-7 s  ≈  7-10 words
+        context  →  7-9 s  ≈  10-13 words
+        insight  →  9-12 s ≈  13-17 words
+        takeaway →  5-7 s  ≈  7-10 words
     """
     hook: str = Field(
         description=(
-            "Stop-scroll in 3 seconds. No explanation. No setup. Just the fact that makes them stay. "
-            "Choose the pattern that fits the topic energy — do NOT force one pattern onto every topic:\n\n"
-            "PATTERN A — Mechanism / contradiction topics: "
-            "[what was previously assumed true] → [what this breaks] → [the number]. "
-            "Use when the topic IS the mechanism. "
-            "GOOD: 'Every 1-bit LLM kept embeddings at 16-bit. Bonsai closes that. 1.15 GB.' "
-            "GOOD: '119B parameters. Only 6B fire per pass. That's not a bug — that's the architecture.' "
-            "\n\n"
-            "PATTERN B — Capability / product / desire topics: "
-            "[the desire engineers have always had] → [it now exists] → [the proof number]. "
-            "Short declarative sentences. No filler. Punchy. "
-            "Use when the topic IS the capability — what it enables, not how it works. "
-            "GOOD: 'Private ChatGPT. Your iPhone. No internet. 1.15 GB. 44 tokens per second.' "
-            "GOOD: 'Your own LLM. Runs offline. Fits in 1.15 gigs. No cloud ever.' "
-            "\n\n"
-            "RULES for both patterns: "
-            "ONE concrete number minimum. No adjectives (use the number instead). "
-            "No 'Imagine', no 'What if', no commands like 'Run your own...'. "
-            "≤ 28 words. Every word earns its place or gets cut."
+            "Stop-scroll in 3 seconds. ≤ 10 words. "
+            "ONE fragment OR one short sentence — fragments are allowed and encouraged here. "
+            "GOOD: '$49 per month. Gone.' "
+            "GOOD: '119B parameters. Only 6B fire.' "
+            "GOOD: 'Google just broke a 56-year math record.' "
+            "BAD: 'Have you ever wondered why your GPU memory is wasted even though...' "
+            "ONE concrete number minimum. No adjectives. No 'Imagine', no 'What if'."
         ),
     )
     context: str = Field(
         description=(
             "Name the exact mechanism — the variable, layer, or operation causing it. "
-            "No analogies. No 'basically'. ≤ 36 words."
+            "No analogies. No 'basically'. ≤ 14 words."
         ),
     )
     insight: str = Field(
         description=(
-            "Name the mechanism at the code or architecture level — the specific variable, "
-            "layer, flag, operation, or design decision. Then state the non-obvious implication: "
-            "what specifically changes about how engineers build or measure. "
-            "GOOD: 'MALLOC_ARENA_MAX caps arena count. Default is 8. Set it to 2. "
-            "RSS drops immediately — no model changes required.' "
-            "GOOD: 'The fitness function must be exact and automatable. "
-            "That constraint is also the unlock — any verifiable objective qualifies.' "
-            "BAD: 'Memory management affects training in subtle ways.' "
-            "Mix short punchy sentences with one medium sentence for rhythm. ≤ 45 words."
+            "The non-obvious implication — what specifically changes for builders. "
+            "GOOD: 'Set MALLOC_ARENA_MAX=2. RSS drops 40%. No code change required.' "
+            "Mix one short sentence with one medium sentence. ≤ 18 words."
         ),
     )
     takeaway: str = Field(
         description=(
-            "Two sentences, ≤ 28 words total. "
-            "Sentence 1 — the save-trigger: state a specific rule, number, or decision "
-            "the engineer can act on or reference next week. Make it feel like a cheat-sheet line. "
-            "GOOD: 'Set MALLOC_ARENA_MAX=2 before any PyTorch job. One env var, 40% RSS drop.' "
-            "GOOD: 'Use evolutionary search when your objective is exact and cheap to evaluate.' "
-            "BAD: 'This changes how we think about memory.' "
-            "Sentence 2 (optional) — a provocation or open question that extends the thought. "
-            "The actionable line ALWAYS comes first. Never end on a question alone."
+            "≤ 10 words. The save-trigger line. Rotate CTA — use ONE of these three patterns: "
+            "1. Repo CTA: '[repo name]. Pull it. Run it.' "
+            "2. Share trigger: 'Send this to the guy still paying twenty a month.' "
+            "3. Hard cut (no CTA): end on the sharpest number or fact — forces rewatch. "
+            "NEVER use the same pattern twice in a row. Actionable line always. No questions alone."
         ),
     )
     statement_lines: list[str] = Field(
@@ -330,9 +309,9 @@ class NarrationScript(BaseModel):
             return self
         full = f"{self.hook} {self.context} {self.insight} {self.takeaway}"
         total = len(full.split())
-        if not (130 <= total <= 145):
+        if not (50 <= total <= 60):
             raise ValueError(
-                f"Total narration is {total} words — must be 130-145. "
+                f"Total narration is {total} words — must be 50-60. "
                 f"Adjust sections: hook={len(self.hook.split())}, "
                 f"context={len(self.context.split())}, "
                 f"insight={len(self.insight.split())}, "
@@ -431,14 +410,22 @@ SYSTEM_PROMPT = textwrap.dedent("""
     ═══════════════════════════════════════════════════════
      WORD BUDGET  —  HARD LIMIT, NO EXCEPTIONS
     ═══════════════════════════════════════════════════════
-    Total narration (hook + context + insight + takeaway): 130-145 words.
-    • hook:     ≤ 28 words
-    • context:  ≤ 36 words
-    • insight:  ≤ 45 words
-    • takeaway: ≤ 28 words
+    Total narration (hook + context + insight + takeaway): 50-60 words.
+    • hook:     ≤ 10 words  (fragment allowed — "$49/month. Gone." is valid)
+    • context:  ≤ 14 words
+    • insight:  ≤ 18 words
+    • takeaway: ≤ 10 words
 
     Count every word. If you are over, cut adverbs first, then adjectives, then clauses.
     Never pad to hit a minimum — dead words are worse than being 2 words short.
+
+    ═══════════════════════════════════════════════════════
+     TONE VARIANCE  —  ROTATE, DO NOT REPEAT
+    ═══════════════════════════════════════════════════════
+    2 out of 3 videos: calm + measured (default Aoede delivery).
+    1 out of 3 videos: deadpan + dry. No hype. Understate the drama.
+    GOOD (deadpan): "Meta spent 2 billion dollars. A teenager on GitHub did it for free."
+    This is set via --tone in the run command. The SYSTEM_PROMPT applies to both.
 
     ═══════════════════════════════════════════════════════
      THE 10-SECOND RULE  —  EVERY BLOCK MUST ADVANCE
@@ -538,12 +525,37 @@ SYSTEM_PROMPT = textwrap.dedent("""
 # § 3  ORCHESTRATION
 # ══════════════════════════════════════════════════════════════════════════════
 
+_LAYOUT_HISTORY_PATH = os.path.join(_ROOT, "output", "layout_history.json")
+
+
+def _load_last_layout() -> str | None:
+    if not os.path.exists(_LAYOUT_HISTORY_PATH):
+        return None
+    try:
+        with open(_LAYOUT_HISTORY_PATH) as f:
+            return json.load(f).get("last_layout")
+    except Exception:
+        return None
+
+
+def _save_last_layout(layout: str):
+    os.makedirs(os.path.dirname(_LAYOUT_HISTORY_PATH), exist_ok=True)
+    with open(_LAYOUT_HISTORY_PATH, "w") as f:
+        json.dump({"last_layout": layout}, f)
+
+
 def _user_prompt(topic: dict) -> str:
     """Build the per-run user message from the scraped topic."""
+    last_layout = _load_last_layout()
+    rotation_hint = (
+        f"\n        LAYOUT ROTATION — do NOT use '{last_layout}' again. "
+        f"The previous video used it. Pick a different layout_mode.\n"
+        if last_layout else ""
+    )
     return textwrap.dedent(f"""
         TOPIC:   {topic["title"]}
         SUMMARY: {topic.get("summary", "").strip()}
-
+        {rotation_hint}
         Generate a VideoPayload JSON for this topic.
         Choose the layout_mode that best fits the content — pick the MOST SPECIFIC match:
 
@@ -1097,11 +1109,13 @@ def main():
         payload.narration.hook, payload.narration.context,
         payload.narration.insight, payload.narration.takeaway,
     ])
-    print(f"  total words : {total}  (budget: 130-145)")
+    print(f"  total words : {total}  (budget: 50-60)")
     print(f"  cues        : {[c.label for c in payload.cue_definitions]}")
     print()
 
     save_outputs(payload, topic)
+    _save_last_layout(payload.ui_content.layout)
+    print(f"  layout saved to rotation history: {payload.ui_content.layout}")
     print("\n✓ content_generator complete.")
 
 
