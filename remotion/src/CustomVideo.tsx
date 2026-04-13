@@ -1,13 +1,11 @@
 /**
- * CustomVideo.tsx — CheetahClaws Local Claude Code Agent
- * 614 frames · 30fps · 20.5s
+ * CustomVideo.tsx — Microsoft markitdown. One command.
+ * 660 frames · 30fps · 22.0s
  *
- * beat_1  frames   0– 82   Hook: hookLine1/hookLine2 frame 0, hookSub @30f, chips @55/70/85f
- * beat_2  frames  82–235   Model swap cards stagger @0/45/90f, pulse @120f
- * beat_3  frames 235–455   Slam lines @0/60/120f
- * beat_4  frames 455–614   Option 3 hard cut — ctaLine1/2/3
- *
- * All text is schema-editable in Remotion Studio left panel.
+ * beat_1  frames   0–138   MetricFocus: "ZERO" hero @1f, chips @37/51/65f
+ * beat_2  frames 138–332   TriStat: 3 stats slide @8/53/98f, pulse @58f
+ * beat_3  frames 332–534   StatementSlam: lines @6/24/42f (18f stagger)
+ * beat_4  frames 534–660   TakeawayScene: headline slam @1f, CTA @28f, pulse @45f
  */
 
 import React from "react";
@@ -17,116 +15,113 @@ import {
   Audio, staticFile, spring, interpolate,
 } from "remotion";
 import {
-  usePulseAt, useSlideIn,
+  usePulseAt, useSlideIn, countUp,
   COLOR, FONT, HERO_NUMBER, BROADCAST_TEXT,
   SectionLabelRow, ParticleBackground, TelemetryFrame, useBreath,
 } from "./layouts/_shared";
 import { SPRING_HEAVY, SPRING_MEDIUM } from "./utils/springIn";
 
-// ── Schema — every visible string/color editable in Studio ────────────────────
+// ── Schema ────────────────────────────────────────────────────────────────────
 
 export const customVideoSchema = z.object({
-  // Beat 1 — Hook
-  beat1Section: z.string().default("LOCAL AI AGENCY"),
-  hookLine1:    z.string().default("ZERO"),
-  hookLine2:    z.string().default("CLOUD."),
-  hookSub:      z.string().default("Claude Code. One command."),
-  chip1:        z.string().default("14B params"),
-  chip2:        z.string().default("Ollama"),
-  chip3:        z.string().default("RTX 3090"),
+  beat1Section: z.string().default("DOCUMENT CONVERSION"),
+  heroValue:    z.string().default("ZERO"),
+  heroLabel:    z.string().default("API cost"),
+  heroContext:  z.string().default("One pip. Converts 9 file types locally."),
+  chip1:        z.string().default("PDF · DOCX · PPTX"),
+  chip2:        z.string().default("Images · Audio"),
+  chip3:        z.string().default("pip install markitdown"),
 
-  // Beat 2 — Model cards
-  beat2Section:   z.string().default("SWAP 3 MODELS"),
-  card1Value:     z.string().default("14B"),
-  card1Label:     z.string().default("Model"),
-  card1Sublabel:  z.string().default("Qwen / Llama / Mistral"),
-  card2Value:     z.string().default("Ollama"),
-  card2Label:     z.string().default("Endpoint"),
-  card2Sublabel:  z.string().default("swap without code change"),
-  card3Value:     z.string().default("RTX 3090"),
-  card3Label:     z.string().default("Hardware"),
-  card3Sublabel:  z.string().default("single GPU, full loop"),
+  beat2Section: z.string().default("9 FILE TYPES"),
+  stat1Value:   z.string().default("9"),
+  stat1Label:   z.string().default("File Types"),
+  stat1Sub:     z.string().default("PDF DOCX PPTX XLS images audio"),
+  stat2Value:   z.string().default("0 $"),
+  stat2Label:   z.string().default("API Cost"),
+  stat2Sub:     z.string().default("runs fully local"),
+  stat3Value:   z.string().default("1 pip"),
+  stat3Label:   z.string().default("Install"),
+  stat3Sub:     z.string().default("pip install markitdown"),
 
-  // Beat 3 — Slam lines
-  beat3Section: z.string().default("AUTONOMOUS LOOP"),
-  slamLine1:    z.string().default("1 command. Loops."),
-  slamLine2:    z.string().default("Brainstorm → ship code."),
-  slamLine3:    z.string().default("Saves 6 hours. Per feature."),
+  beat3Section: z.string().default("LOCAL PIPELINES"),
+  slamLine1:    z.string().default("Skip brittle parsers."),
+  slamLine2:    z.string().default("Zero paid APIs."),
+  slamLine3:    z.string().default("One pip install."),
 
-  // Beat 4 — CTA
-  ctaLine1: z.string().default("14B."),
-  ctaLine2: z.string().default("One 3090."),
-  ctaLine3: z.string().default("Full agent loop."),
+  ctaHeadline:  z.string().default("markitdown"),
+  ctaSub:       z.string().default("Pull it. Run it."),
 
-  // Global accent color
-  accentColor: z.enum(["cyan", "green", "yellow"]).default("green"),
+  accentColor: z.enum(["cyan", "green", "yellow"]).default("cyan"),
 });
 
 export type CustomVideoProps = z.infer<typeof customVideoSchema>;
 
-// ── Config ─────────────────────────────────────────────────────────────────────
-
 export const CustomVideoConfig = {
-  durationInFrames: 614,
+  durationInFrames: 660,
   fps:    30,
   width:  1080,
   height: 1920,
   defaultProps: {
-    beat1Section: "LOCAL AI AGENCY",
-    hookLine1:    "ZERO",
-    hookLine2:    "CLOUD.",
-    hookSub:      "Claude Code. One command.",
-    chip1:        "14B params",
-    chip2:        "Ollama",
-    chip3:        "RTX 3090",
-    beat2Section:  "SWAP 3 MODELS",
-    card1Value:    "14B",
-    card1Label:    "Model",
-    card1Sublabel: "Qwen / Llama / Mistral",
-    card2Value:    "Ollama",
-    card2Label:    "Endpoint",
-    card2Sublabel: "swap without code change",
-    card3Value:    "RTX 3090",
-    card3Label:    "Hardware",
-    card3Sublabel: "single GPU, full loop",
-    beat3Section: "AUTONOMOUS LOOP",
-    slamLine1:    "1 command. Loops.",
-    slamLine2:    "Brainstorm → ship code.",
-    slamLine3:    "Saves 6 hours. Per feature.",
-    ctaLine1:     "14B.",
-    ctaLine2:     "One 3090.",
-    ctaLine3:     "Full agent loop.",
-    accentColor:  "green" as const,
+    beat1Section: "DOCUMENT CONVERSION",
+    heroValue:    "ZERO",
+    heroLabel:    "API cost",
+    heroContext:  "One pip. Converts 9 file types locally.",
+    chip1:        "PDF · DOCX · PPTX",
+    chip2:        "Images · Audio",
+    chip3:        "pip install markitdown",
+    beat2Section: "9 FILE TYPES",
+    stat1Value:   "9",
+    stat1Label:   "File Types",
+    stat1Sub:     "PDF DOCX PPTX XLS images audio",
+    stat2Value:   "0 $",
+    stat2Label:   "API Cost",
+    stat2Sub:     "runs fully local",
+    stat3Value:   "1 pip",
+    stat3Label:   "Install",
+    stat3Sub:     "pip install markitdown",
+    beat3Section: "LOCAL PIPELINES",
+    slamLine1:    "Skip brittle parsers.",
+    slamLine2:    "Zero paid APIs.",
+    slamLine3:    "One pip install.",
+    ctaHeadline:  "markitdown",
+    ctaSub:       "Pull it. Run it.",
+    accentColor:  "cyan" as const,
   },
 };
 
-// ── Beat 1 ────────────────────────────────────────────────────────────────────
+// ── Beat 1 — MetricFocus ──────────────────────────────────────────────────────
+// hero @1f (opacity 1), context @21f, chip0 @37f, chip1 @51f, chip2 @65f, pulse @60f
 
 type Beat1Props = Pick<CustomVideoProps,
-  "beat1Section"|"hookLine1"|"hookLine2"|"hookSub"|"chip1"|"chip2"|"chip3"|"accentColor">;
+  "beat1Section"|"heroValue"|"heroLabel"|"heroContext"|"chip1"|"chip2"|"chip3"|"accentColor">;
 
 const Beat1: React.FC<Beat1Props> = ({
-  beat1Section, hookLine1, hookLine2, hookSub, chip1, chip2, chip3, accentColor,
+  beat1Section, heroValue, heroLabel, heroContext, chip1, chip2, chip3, accentColor,
 }) => {
   const frame   = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const accent  = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.green;
+  const accent  = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.cyan;
   const { scale: bs } = useBreath(frame, fps);
 
-  const heroSp    = spring({ frame, fps, config: SPRING_HEAVY });
+  const heroSp    = spring({ frame: Math.max(0, frame - 1), fps, config: SPRING_HEAVY });
   const heroScale = interpolate(heroSp, [0, 1], [0.6, 1], { extrapolateRight: "clamp" });
   const pulse     = usePulseAt(frame, [60], accent, 48);
-  const sub       = useSlideIn(frame, "up", 30);
-  const chip0sl   = useSlideIn(frame, "up", 55);
-  const chip1sl   = useSlideIn(frame, "up", 70);
-  const chip2sl   = useSlideIn(frame, "up", 85);
+  const ctx       = useSlideIn(frame, "up", 21);
+  const chip0sl   = useSlideIn(frame, "up", 37);
+  const chip1sl   = useSlideIn(frame, "up", 51);
+  const chip2sl   = useSlideIn(frame, "up", 65);
   const chipSls   = [chip0sl, chip1sl, chip2sl];
   const chips     = [chip1, chip2, chip3];
+
+  // countUp: animate hero number if numeric
+  const heroSp2  = spring({ frame: Math.max(0, frame - 1), fps, config: SPRING_MEDIUM });
+  const numeric  = parseFloat(heroValue);
+  const displayed = isNaN(numeric) ? heroValue : countUp(String(numeric), heroSp2);
 
   return (
     <div style={{
       width: "100%", height: "100%",
-      background: "radial-gradient(ellipse at 50% 40%, #0A1A0A 0%, #0A0A0A 70%)",
+      background: "radial-gradient(ellipse at 50% 40%, #001A1A 0%, #0A0A0A 70%)",
       position: "relative", overflow: "hidden",
       display: "flex", flexDirection: "column",
       paddingTop: 120, paddingBottom: 180, paddingLeft: 72, paddingRight: 72,
@@ -134,7 +129,9 @@ const Beat1: React.FC<Beat1Props> = ({
     }}>
       <ParticleBackground frame={frame} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 28 }}>
-        <SectionLabelRow text={beat1Section} color="green" />
+        <SectionLabelRow text={beat1Section} color="cyan" />
+
+        {/* Hero — visible at frame 1 */}
         <div style={{
           opacity: 1,
           transform: `scale(${heroScale * (frame > 22 ? bs : 1)})`,
@@ -143,25 +140,29 @@ const Beat1: React.FC<Beat1Props> = ({
         }}>
           <div style={{ ...HERO_NUMBER, fontSize: 148, fontWeight: 800, color: accent, lineHeight: 0.95,
             textShadow: `0 0 60px ${accent}55, 0 0 120px ${accent}20` }}>
-            {hookLine1}
+            {displayed}
           </div>
-          <div style={{ ...HERO_NUMBER, fontSize: 148, fontWeight: 800, color: accent, lineHeight: 0.95,
-            textShadow: `0 0 60px ${accent}55, 0 0 120px ${accent}20` }}>
-            {hookLine2}
-          </div>
-        </div>
-        <div style={{ ...sub, opacity: sub.opacity }}>
-          <div style={{ ...BROADCAST_TEXT, fontSize: 52, fontWeight: 700, color: COLOR.white,
-            lineHeight: 1.2, letterSpacing: "-0.01em" }}>
-            {hookSub}
+          <div style={{ ...BROADCAST_TEXT, fontSize: 28, fontWeight: 600,
+            color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em", marginTop: 8 }}>
+            {heroLabel}
           </div>
         </div>
+
+        {/* Context @21f */}
+        <div style={{ ...ctx, opacity: ctx.opacity }}>
+          <div style={{ ...BROADCAST_TEXT, fontSize: 44, fontWeight: 700, color: COLOR.white,
+            lineHeight: 1.25, letterSpacing: "-0.01em" }}>
+            {heroContext}
+          </div>
+        </div>
+
+        {/* Chips @37/51/65f */}
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
           {chipSls.map((sl, i) => (
             <span key={i} style={{ ...sl, display: "inline-block",
               background: `${accent}12`, border: `1px solid ${accent}35`,
               color: accent, padding: "10px 22px", borderRadius: 100,
-              fontSize: 24, fontWeight: 600, fontFamily: FONT, letterSpacing: "0.04em" }}>
+              fontSize: 22, fontWeight: 600, fontFamily: FONT, letterSpacing: "0.04em" }}>
               {chips[i]}
             </span>
           ))}
@@ -172,37 +173,34 @@ const Beat1: React.FC<Beat1Props> = ({
   );
 };
 
-// ── Beat 2 ────────────────────────────────────────────────────────────────────
+// ── Beat 2 — TriStat ──────────────────────────────────────────────────────────
+// 3 stat cards slide @8/53/98f, pulse on card 0 @58f
 
 type Beat2Props = Pick<CustomVideoProps,
-  "beat2Section"|
-  "card1Value"|"card1Label"|"card1Sublabel"|
-  "card2Value"|"card2Label"|"card2Sublabel"|
-  "card3Value"|"card3Label"|"card3Sublabel"|
-  "accentColor">;
+  "beat2Section"|"stat1Value"|"stat1Label"|"stat1Sub"|
+  "stat2Value"|"stat2Label"|"stat2Sub"|
+  "stat3Value"|"stat3Label"|"stat3Sub"|"accentColor">;
 
 const Beat2: React.FC<Beat2Props> = ({
-  beat2Section,
-  card1Value, card1Label, card1Sublabel,
-  card2Value, card2Label, card2Sublabel,
-  card3Value, card3Label, card3Sublabel,
-  accentColor,
+  beat2Section, stat1Value, stat1Label, stat1Sub,
+  stat2Value, stat2Label, stat2Sub,
+  stat3Value, stat3Label, stat3Sub, accentColor,
 }) => {
-  const frame = useCurrentFrame();
+  const frame   = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const accent = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.green;
-  const pulse  = usePulseAt(frame, [120], accent, 48);
+  const accent  = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.cyan;
+  const pulse   = usePulseAt(frame, [58], accent, 48);
 
-  const cards = [
-    { value: card1Value, label: card1Label, sublabel: card1Sublabel, color: accent },
-    { value: card2Value, label: card2Label, sublabel: card2Sublabel, color: COLOR.cyan  },
-    { value: card3Value, label: card3Label, sublabel: card3Sublabel, color: COLOR.white },
+  const stats = [
+    { value: stat1Value, label: stat1Label, sub: stat1Sub, color: accent,     startFrame: 8  },
+    { value: stat2Value, label: stat2Label, sub: stat2Sub, color: COLOR.green, startFrame: 53 },
+    { value: stat3Value, label: stat3Label, sub: stat3Sub, color: COLOR.white, startFrame: 98 },
   ];
 
   return (
     <div style={{
       width: "100%", height: "100%",
-      background: "radial-gradient(ellipse at 50% 50%, #111 0%, #0A0A0A 70%)",
+      background: "radial-gradient(ellipse at 50% 50%, #001A1A 0%, #0A0A0A 70%)",
       position: "relative", overflow: "hidden",
       display: "flex", flexDirection: "column",
       paddingTop: 120, paddingBottom: 180, paddingLeft: 72, paddingRight: 72,
@@ -211,36 +209,37 @@ const Beat2: React.FC<Beat2Props> = ({
       <ParticleBackground frame={frame} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 28, flex: 1 }}>
         <SectionLabelRow text={beat2Section} color="cyan" />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 20 }}>
-          {cards.map((item, i) => {
-            const sp      = spring({ frame: Math.max(0, frame - i * 45), fps, config: SPRING_MEDIUM });
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 24 }}>
+          {stats.map((stat, i) => {
+            const sp      = spring({ frame: Math.max(0, frame - stat.startFrame), fps, config: SPRING_MEDIUM });
             const opacity = interpolate(sp, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
-            const scale   = interpolate(sp, [0, 1],   [0.92, 1], { extrapolateRight: "clamp" });
+            const translateX = interpolate(sp, [0, 1], [-40, 0], { extrapolateRight: "clamp" });
             return (
               <div key={i} style={{
-                opacity, transform: `scale(${scale})`,
-                transformOrigin: "left center", willChange: "transform, opacity",
-                background: `${item.color}${i === 0 ? "10" : "07"}`,
-                border: `1px solid ${item.color}${i === 0 ? "50" : "25"}`,
+                opacity,
+                transform: `translateX(${translateX}px)`,
+                willChange: "transform, opacity",
+                background: `${stat.color}${i === 0 ? "10" : "07"}`,
+                border: `1px solid ${stat.color}${i === 0 ? "45" : "20"}`,
                 borderRadius: 16, padding: "28px 32px",
                 display: "flex", alignItems: "center", gap: 24,
                 boxShadow: i === 0 ? pulse : "none",
               }}>
-                <div style={{ width: 4, alignSelf: "stretch", background: item.color,
+                <div style={{ width: 4, alignSelf: "stretch", background: stat.color,
                   borderRadius: 2, opacity: i === 0 ? 1 : 0.5, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ ...HERO_NUMBER, fontSize: 80, fontWeight: 800,
-                    color: item.color, lineHeight: 1.0,
-                    textShadow: i === 0 ? `0 0 50px ${item.color}50` : "none" }}>
-                    {item.value}
+                    color: stat.color, lineHeight: 1.0,
+                    textShadow: i === 0 ? `0 0 50px ${stat.color}50` : "none" }}>
+                    {stat.value}
                   </div>
                   <div style={{ ...BROADCAST_TEXT, fontSize: 22, fontWeight: 600,
                     color: COLOR.white, opacity: 0.8, marginTop: 6 }}>
-                    {item.label}
+                    {stat.label}
                   </div>
                   <div style={{ fontSize: 17, color: "rgba(255,255,255,0.35)",
                     marginTop: 4, fontFamily: FONT }}>
-                    {item.sublabel}
+                    {stat.sub}
                   </div>
                 </div>
               </div>
@@ -253,7 +252,8 @@ const Beat2: React.FC<Beat2Props> = ({
   );
 };
 
-// ── Beat 3 ────────────────────────────────────────────────────────────────────
+// ── Beat 3 — StatementSlam ────────────────────────────────────────────────────
+// lines @6/24/42f (18f stagger), pulse line_0 @45/90f
 
 type Beat3Props = Pick<CustomVideoProps, "beat3Section"|"slamLine1"|"slamLine2"|"slamLine3"|"accentColor">;
 
@@ -265,15 +265,13 @@ const Beat3: React.FC<Beat3Props> = ({ beat3Section, slamLine1, slamLine2, slamL
   const glowPulse = Math.sin((frame / fps) * Math.PI * 2 * 0.4) * 0.5 + 0.5;
   const pulse0    = usePulseAt(frame, [45, 90], accent, 40);
 
-  const sp0 = spring({ frame, fps, config: SPRING_HEAVY });
-  const sl1 = useSlideIn(frame, "up", 60);
-  const sl2 = useSlideIn(frame, "up", 120);
+  const sl0 = useSlideIn(frame, "up", 6);
+  const sl1 = useSlideIn(frame, "up", 24);
+  const sl2 = useSlideIn(frame, "up", 42);
 
   const lines = [slamLine1, slamLine2, slamLine3];
   const items = [
-    { opacity: interpolate(sp0, [0, 0.2], [0, 1], { extrapolateRight: "clamp" }),
-      transform: `translateY(${interpolate(sp0, [0, 1], [40, 0])}px)${frame > 22 ? ` scale(${bs})` : ""}`,
-      pulse: pulse0 },
+    { opacity: sl0.opacity, transform: `${sl0.transform}${frame > 22 ? ` scale(${bs})` : ""}`, pulse: pulse0 },
     { opacity: sl1.opacity, transform: sl1.transform, pulse: "none" },
     { opacity: sl2.opacity, transform: sl2.transform, pulse: "none" },
   ];
@@ -281,7 +279,7 @@ const Beat3: React.FC<Beat3Props> = ({ beat3Section, slamLine1, slamLine2, slamL
   return (
     <div style={{
       width: "100%", height: "100%",
-      background: "radial-gradient(ellipse at 50% 50%, #111 0%, #0A0A0A 70%)",
+      background: "radial-gradient(ellipse at 50% 50%, #001A1A 0%, #0A0A0A 70%)",
       position: "relative", overflow: "hidden",
       display: "flex", flexDirection: "column",
       paddingTop: 120, paddingBottom: 180, paddingLeft: 72, paddingRight: 72,
@@ -319,28 +317,29 @@ const Beat3: React.FC<Beat3Props> = ({ beat3Section, slamLine1, slamLine2, slamL
   );
 };
 
-// ── Beat 4 ────────────────────────────────────────────────────────────────────
+// ── Beat 4 — TakeawayScene ────────────────────────────────────────────────────
+// headline slam @1f, cta @28f, pulse @45f — Option 1 CTA
 
-type Beat4Props = Pick<CustomVideoProps, "ctaLine1"|"ctaLine2"|"ctaLine3"|"accentColor">;
+type Beat4Props = Pick<CustomVideoProps, "ctaHeadline"|"ctaSub"|"accentColor">;
 
-const Beat4: React.FC<Beat4Props> = ({ ctaLine1, ctaLine2, ctaLine3, accentColor }) => {
+const Beat4: React.FC<Beat4Props> = ({ ctaHeadline, ctaSub, accentColor }) => {
   const frame   = useCurrentFrame();
   const { fps } = useVideoConfig();
   const accent  = COLOR[accentColor as keyof typeof COLOR] ?? COLOR.cyan;
   const { scale: bs } = useBreath(frame, fps);
 
-  const sp      = spring({ frame: Math.max(0, frame - 1), fps, config: SPRING_HEAVY });
-  const opacity = interpolate(sp, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
-  const scale   = interpolate(sp, [0, 1],   [0.7, 1], { extrapolateRight: "clamp" });
-  const pulse   = usePulseAt(frame, [45, 100], accent, 40);
-  const labelOp = interpolate(
-    spring({ frame, fps, config: SPRING_MEDIUM }), [0, 0.3], [0, 1], { extrapolateRight: "clamp" }
-  );
+  const headSp    = spring({ frame: Math.max(0, frame - 1), fps, config: SPRING_HEAVY });
+  const headScale = interpolate(headSp, [0, 1], [0.65, 1], { extrapolateRight: "clamp" });
+  const pulse     = usePulseAt(frame, [45], accent, 48);
+  const ctaSl     = useSlideIn(frame, "up", 28);
+
+  // "1 pip." chip slides @48f
+  const pipSl = useSlideIn(frame, "up", 48);
 
   return (
     <div style={{
       width: "100%", height: "100%",
-      background: "radial-gradient(ellipse at 50% 60%, #111 0%, #0A0A0A 70%)",
+      background: "radial-gradient(ellipse at 50% 60%, #001A1A 0%, #0A0A0A 70%)",
       position: "relative", overflow: "hidden", fontFamily: FONT,
     }}>
       <ParticleBackground frame={frame} />
@@ -350,23 +349,37 @@ const Beat4: React.FC<Beat4Props> = ({ ctaLine1, ctaLine2, ctaLine3, accentColor
         paddingTop: 120, paddingBottom: 180, paddingLeft: 72, paddingRight: 72,
         boxSizing: "border-box", gap: 24, textAlign: "center",
       }}>
-        <div style={{ ...BROADCAST_TEXT, fontSize: 20, fontWeight: 500, color: accent,
-          letterSpacing: "0.18em", textTransform: "uppercase", opacity: labelOp }}>
-          TAKEAWAY
+        {/* Headline slams @1f */}
+        <div style={{
+          opacity: 1,
+          transform: `scale(${headScale * (frame > 22 ? bs : 1)})`,
+          boxShadow: pulse,
+        }}>
+          <div style={{ ...HERO_NUMBER, fontSize: 116, fontWeight: 800, color: accent,
+            lineHeight: 0.9, letterSpacing: "-0.04em",
+            textShadow: `0 0 80px ${accent}60, 0 0 160px ${accent}25` }}>
+            {ctaHeadline}
+          </div>
         </div>
-        <div style={{ opacity, transform: `scale(${scale * (frame > 22 ? bs : 1)})`, boxShadow: pulse }}>
-          <div style={{ ...BROADCAST_TEXT, fontSize: 116, fontWeight: 800, color: accent,
-            lineHeight: 0.95, letterSpacing: "-0.03em",
-            textShadow: `0 0 60px ${accent}50, 0 0 120px ${accent}20` }}>
-            {ctaLine1}
+
+        {/* CTA @28f */}
+        <div style={{ ...ctaSl, opacity: ctaSl.opacity }}>
+          <div style={{ ...BROADCAST_TEXT, fontSize: 56, fontWeight: 700, color: COLOR.white,
+            letterSpacing: "-0.01em", lineHeight: 1.1 }}>
+            {ctaSub}
           </div>
-          <div style={{ ...BROADCAST_TEXT, fontSize: 58, fontWeight: 700, color: COLOR.white,
-            lineHeight: 1.2, letterSpacing: "-0.01em", marginTop: 16, opacity: 0.9 }}>
-            {ctaLine2}
-          </div>
-          <div style={{ ...BROADCAST_TEXT, fontSize: 48, fontWeight: 600, color: COLOR.white,
-            lineHeight: 1.2, letterSpacing: "-0.005em", marginTop: 12, opacity: 0.65 }}>
-            {ctaLine3}
+        </div>
+
+        {/* pip install chip @48f */}
+        <div style={{ ...pipSl, opacity: pipSl.opacity }}>
+          <div style={{
+            fontSize: 24, fontWeight: 500,
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            color: `${accent}90`, letterSpacing: "0.02em",
+            background: `${accent}10`, border: `1px solid ${accent}25`,
+            padding: "12px 28px", borderRadius: 8,
+          }}>
+            pip install markitdown
           </div>
         </div>
       </div>
@@ -379,41 +392,41 @@ const Beat4: React.FC<Beat4Props> = ({ ctaLine1, ctaLine2, ctaLine3, accentColor
 
 export const CustomVideo: React.FC<CustomVideoProps> = (props) => {
   const {
-    beat1Section, hookLine1, hookLine2, hookSub, chip1, chip2, chip3,
-    beat2Section, card1Value, card1Label, card1Sublabel,
-    card2Value, card2Label, card2Sublabel,
-    card3Value, card3Label, card3Sublabel,
+    beat1Section, heroValue, heroLabel, heroContext, chip1, chip2, chip3,
+    beat2Section, stat1Value, stat1Label, stat1Sub,
+    stat2Value, stat2Label, stat2Sub,
+    stat3Value, stat3Label, stat3Sub,
     beat3Section, slamLine1, slamLine2, slamLine3,
-    ctaLine1, ctaLine2, ctaLine3,
+    ctaHeadline, ctaSub,
     accentColor,
   } = props;
 
   return (
     <div style={{ width: "100%", height: "100%", background: "#0A0A0A", position: "relative" }}>
       <Audio src={staticFile("narration.wav")} />
-      <Sequence from={0}   durationInFrames={82}>
+      <Sequence from={0}   durationInFrames={138}>
         <Beat1
-          beat1Section={beat1Section} hookLine1={hookLine1} hookLine2={hookLine2}
-          hookSub={hookSub} chip1={chip1} chip2={chip2} chip3={chip3} accentColor={accentColor}
+          beat1Section={beat1Section} heroValue={heroValue} heroLabel={heroLabel}
+          heroContext={heroContext} chip1={chip1} chip2={chip2} chip3={chip3} accentColor={accentColor}
         />
       </Sequence>
-      <Sequence from={82}  durationInFrames={153}>
+      <Sequence from={138} durationInFrames={194}>
         <Beat2
           beat2Section={beat2Section}
-          card1Value={card1Value} card1Label={card1Label} card1Sublabel={card1Sublabel}
-          card2Value={card2Value} card2Label={card2Label} card2Sublabel={card2Sublabel}
-          card3Value={card3Value} card3Label={card3Label} card3Sublabel={card3Sublabel}
+          stat1Value={stat1Value} stat1Label={stat1Label} stat1Sub={stat1Sub}
+          stat2Value={stat2Value} stat2Label={stat2Label} stat2Sub={stat2Sub}
+          stat3Value={stat3Value} stat3Label={stat3Label} stat3Sub={stat3Sub}
           accentColor={accentColor}
         />
       </Sequence>
-      <Sequence from={235} durationInFrames={220}>
+      <Sequence from={332} durationInFrames={202}>
         <Beat3
           beat3Section={beat3Section} slamLine1={slamLine1}
           slamLine2={slamLine2} slamLine3={slamLine3} accentColor={accentColor}
         />
       </Sequence>
-      <Sequence from={455} durationInFrames={159}>
-        <Beat4 ctaLine1={ctaLine1} ctaLine2={ctaLine2} ctaLine3={ctaLine3} accentColor={accentColor} />
+      <Sequence from={534} durationInFrames={126}>
+        <Beat4 ctaHeadline={ctaHeadline} ctaSub={ctaSub} accentColor={accentColor} />
       </Sequence>
     </div>
   );

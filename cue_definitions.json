@@ -23,33 +23,27 @@
   ],
   "word_cues": [
     {
-      "label": "metric_reveal",
-      "trigger_word": "billion",
+      "label": "stat_reveal",
+      "trigger_word": "Zero",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "chip_reveal_ollama",
-      "trigger_word": "Ollama",
+      "label": "stat_reveal",
+      "trigger_word": "One",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "chip_reveal_gpu",
-      "trigger_word": "RTX",
+      "label": "insight_drop",
+      "trigger_word": "structured",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "insight_flash",
-      "trigger_word": "unlocks",
+      "label": "takeaway_flash",
+      "trigger_word": "smarter",
       "occurrence": 0,
-      "offset_frames": 0
-    },
-    {
-      "label": "takeaway_reframe",
-      "trigger_word": "today",
-      "occurrence": -1,
       "offset_frames": 0
     }
   ]
