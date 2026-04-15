@@ -23,26 +23,26 @@
   ],
   "word_cues": [
     {
-      "label": "stat_reveal",
-      "trigger_word": "Zero",
+      "label": "problem_reveal",
+      "trigger_word": "wrong",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "stat_reveal",
-      "trigger_word": "One",
+      "label": "graph_show",
+      "trigger_word": "graph",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "insight_drop",
-      "trigger_word": "structured",
+      "label": "tokens_slash",
+      "trigger_word": "slashes",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
       "label": "takeaway_flash",
-      "trigger_word": "smarter",
+      "trigger_word": "Instantly",
       "occurrence": 0,
       "offset_frames": 0
     }

@@ -9,3 +9,10 @@ SESSION_NOTES.md
 remotion/node_modules/
 remotion/.cache/
 remotion/public/narration.wav
+remotion/public/claude_screen.mov
+remotion/public/claude_screen.mp4
+remotion/public/code_review_graph_build.mov
+remotion/public/code_review_graph_build.mp4
+remotion/public/token_counter.mov
+remotion/public/ token_counter.mov
+remotion/public/token_counter.mp4
