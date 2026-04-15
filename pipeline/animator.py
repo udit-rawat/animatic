@@ -250,6 +250,7 @@ def run_remotion(props_path: str, output_path: str) -> tuple[bool, str]:
         f"--props={os.path.abspath(props_path)}",
         "--concurrency=4",
         "--log=verbose",
+        "--gl=angle",
     ]
 
     with Spinner("Remotion rendering"):
@@ -294,6 +295,7 @@ def run_remotion_custom(compositor_file: str, output_path: str) -> tuple[bool, s
         os.path.abspath(output_path),
         "--concurrency=4",
         "--log=verbose",
+        "--gl=angle",
     ]
 
     with Spinner("Remotion rendering (custom compositor)"):

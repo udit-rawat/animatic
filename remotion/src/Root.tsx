@@ -3,8 +3,9 @@ import { Composition, staticFile, AbsoluteFill } from "remotion";
 import { getAudioDurationInSeconds } from "@remotion/media-utils";
 import { VideoComposition } from "./VideoComposition";
 import { LayoutRenderer } from "./LayoutRenderer";
-import { CustomVideo, CustomVideoConfig, customVideoSchema } from "./CustomVideo";
+import { CustomVideo, CustomVideoConfig } from "./CustomVideo";
 import { HookR3F } from "./layouts/HookR3F";
+import { SampleMVP, SampleMVPConfig } from "./SampleMVP";
 import type { RemotionProps, BeatLayout, LayoutNode } from "./types";
 
 const FPS     = 30;
@@ -212,8 +213,16 @@ export const RemotionRoot: React.FC = () => {
         fps={CustomVideoConfig.fps}
         width={CustomVideoConfig.width}
         height={CustomVideoConfig.height}
-        schema={customVideoSchema}
-        defaultProps={CustomVideoConfig.defaultProps}
+      />
+
+      {/* SampleMVP — KV Cache 10s demo: HookR3F + GlassmorphBeat + camera pan */}
+      <Composition
+        id="SampleMVP"
+        component={SampleMVP}
+        durationInFrames={SampleMVPConfig.durationInFrames}
+        fps={SampleMVPConfig.fps}
+        width={SampleMVPConfig.width}
+        height={SampleMVPConfig.height}
       />
 
       {/* Phase 2 gate — 4-beat video, inspect spring camera pans between beats */}

@@ -23,33 +23,27 @@
   ],
   "word_cues": [
     {
-      "label": "metric_reveal",
-      "trigger_word": "billion",
+      "label": "problem_reveal",
+      "trigger_word": "wrong",
       "occurrence": 0,
       "offset_frames": -12
     },
     {
-      "label": "chip_reveal_ollama",
-      "trigger_word": "Ollama",
+      "label": "graph_show",
+      "trigger_word": "graph",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "chip_reveal_gpu",
-      "trigger_word": "RTX",
+      "label": "tokens_slash",
+      "trigger_word": "slashes",
       "occurrence": 0,
       "offset_frames": 0
     },
     {
-      "label": "insight_flash",
-      "trigger_word": "unlocks",
+      "label": "takeaway_flash",
+      "trigger_word": "Instantly",
       "occurrence": 0,
-      "offset_frames": 0
-    },
-    {
-      "label": "takeaway_reframe",
-      "trigger_word": "today",
-      "occurrence": -1,
       "offset_frames": 0
     }
   ]
