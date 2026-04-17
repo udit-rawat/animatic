@@ -365,7 +365,10 @@ def build_prompt(topic: dict, script: dict, scene_plan: dict) -> str:
 
     json_parts = []
     for beat in beats:
-        json_parts.append(f'  "beat_{beat["beat"]}": {{"animate_in": "...", "data": {{"layout": "...", ...}}}}')
+        json_parts.append(
+            f'  "beat_{beat["beat"]}": {{"animate_in": "...", "template_variant": "infographic|animation_hook", '
+            f'"template_variant_rationale": "...", "data": {{"layout": "...", ...}}}}'
+        )
     json_shape = "{\n" + ",\n".join(json_parts) + "\n}"
 
     return f"""\
@@ -383,6 +386,23 @@ PER-BEAT CONTENT:
 {beat_content}
 
 {_SCHEMA_REFERENCE}
+
+TEMPLATE VARIANT (choose per beat):
+Each beat must include "template_variant": "infographic" or "animation_hook".
+
+  infographic — text owns the center of the frame. Full opaque layout. Use when:
+    - Content is list-based, step-by-step, multi-metric, or pipeline flow
+    - No single dominant hero number (DataGrid, ComparisonSplit, PipelineFlow)
+    - Takeaway / CTA beats
+
+  animation_hook — text sits in caption zone (bottom 35% of screen). Top 65% is transparent
+    so a pre-rendered 3D animation can be composited behind it in editing.
+    Use when:
+    - Beat has ONE dominant hero number or stat (MetricFocus, TriStat primary)
+    - Content is a before/after comparison with a dramatic ratio (e.g. 8.2x)
+    - Hook beat with a single punchy metric
+
+  Provide "template_variant_rationale": one sentence explaining why you chose it.
 
 DESIGN RULES (non-negotiable):
 - Choose the layout kind that best visualises the narration content for that beat.

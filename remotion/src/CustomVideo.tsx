@@ -1,191 +1,183 @@
 /**
- * CustomVideo.tsx — Local Knowledge Graph for Claude Code
- * 615 frames · 30fps · 20.5s · Terminal Phosphor v1.1
+ * CustomVideo.tsx — QwenPaw. Local AI assistant. No API key.
+ * 545f / 18.2s / 30fps
  *
- * beat_1  frames   0–148   Hook — "8.2x" slam · claude_screen.mp4 bg (screen blend)
- * beat_2  frames 148–275   TriStat template — 3 metrics
- * beat_3  frames 275–468   StatementSlam template — 3 lines
- * beat_4  frames 468–615   TakeawayScene template — CTA
- *
- * Render: npx remotion render CustomVideo ../output/video.mp4 --gl=angle
+ * ── EDIT THESE PROPS ─────────────────────────────────────────────────────────
  */
+const PROPS = {
+  beat1: {
+    section_label: "qwenpaw",
+    hero_value:    "Zero API",
+    hero_label:    "100% local inference",
+    hero_color:    "cyan" as const,
+    context:       "Runs Qwen models entirely on CPU. No cloud. No key.",
+    chips:         ["CPU-only", "llama.cpp", "free forever"],
+  },
+  beat2: {
+    section_label: "under the hood",
+    accent_color:  "green" as const,
+    stats: [
+      { value: "100%", label: "CPU inference via llama.cpp",   color: "cyan"  as const, glow: true },
+      { value: "LOCAL", label: "All memory stored on device",  color: "green" as const },
+      { value: "$0",    label: "Zero API cost, zero key",       color: "yellow" as const },
+    ],
+  },
+  beat3: {
+    section_label: "install",
+    accent_color:  "cyan" as const,
+    lines: [
+      "git clone + build.",
+      "Multi chat. Tool plugins.",
+      "Ships tonight.",
+    ],
+  },
+  beat4: {
+    section_label: "takeaway",
+    headline:      "Local AI that costs nothing and leaks nothing.",
+    cta:           "Pull it. Run it.",
+    accent_color:  "cyan" as const,
+  },
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 import React from "react";
-import {
-  useVideoConfig,
-  Audio, Video, staticFile, spring, interpolate,
-} from "remotion";
+import { AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame, spring, interpolate, useVideoConfig } from "remotion";
+import { MetricFocus }    from "./layouts/MetricFocus";
+import { StatementSlam }  from "./layouts/StatementSlam";
+import { TakeawayScene }  from "./layouts/TakeawayScene";
+import { BeatFrameContext } from "./hooks/useBeatFrame";
 
-import { TriStat }       from "./layouts/TriStat";
-import { StatementSlam } from "./layouts/StatementSlam";
-import { TakeawayScene } from "./layouts/TakeawayScene";
+// Beat boundaries from pipeline brief
+const BEAT1_START = 0;
+const BEAT2_START = 98;
+const BEAT3_START = 296;
+const BEAT4_START = 493;
+const TOTAL_FRAMES = 545;
 
-import {
-  usePulseAt,
-  COLOR, FONT,
-  TelemetryFrame, SectionLabelRow, useBreath,
-} from "./layouts/_shared";
-import { SPRING_HEAVY, SPRING_MEDIUM } from "./utils/springIn";
-import { useCameraY }   from "./hooks/useCameraY";
-import { useBeatFrame } from "./hooks/useBeatFrame";
-import { CameraViewport, VirtualCanvas, BeatZone } from "./CameraViewport";
+const BEAT1_DUR = BEAT2_START - BEAT1_START;   // 98
+const BEAT2_DUR = BEAT3_START - BEAT2_START;   // 198
+const BEAT3_DUR = BEAT4_START - BEAT3_START;   // 197
+const BEAT4_DUR = TOTAL_FRAMES - BEAT4_START;  // 52
 
-import type { TriStatData, StatementSlamData, TakeawaySceneData } from "./types";
-
-const GREEN = "#00FF41";
-const BG    = "#0A0E13";
-const JB    = "'JetBrains Mono', 'Fira Code', monospace";
-
-const TIMING = {
-  hook:         { start: 0,      end: 4.931,  duration: 4.931 },
-  concept_1:    { start: 4.931,  end: 9.182,  duration: 4.251 },
-  concept_2:    { start: 9.182,  end: 15.593, duration: 6.411 },
-  takeaway_cta: { start: 15.593, end: 20.484, duration: 4.891 },
+export const CustomVideoConfig = {
+  durationInFrames: TOTAL_FRAMES,
+  fps:   30,
+  width:  1080,
+  height: 1920,
 };
 
-const Beat1: React.FC = () => {
-  const frame   = useBeatFrame();
+const STAT_COLORS: Record<string, string> = { cyan: "#00E5FF", green: "#10B981", yellow: "#CCFF00" };
+
+const Beat2Stats: React.FC = () => {
+  const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const { scale: bs } = useBreath(frame, fps);
-
-  const videoOp = interpolate(frame, [0, 20], [0, 1], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
-  });
-
-  const heroSp    = spring({ frame: Math.max(0, frame - 45), fps, config: SPRING_HEAVY });
-  const heroScale = interpolate(heroSp, [0, 1], [0.5, 1], { extrapolateRight: "clamp" });
-  const heroOp    = interpolate(heroSp, [0, 0.15], [0, 1], { extrapolateRight: "clamp" });
-
-  const labelSp = spring({ frame: Math.max(0, frame - 57), fps, config: SPRING_MEDIUM });
-  const labelOp = interpolate(labelSp, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
-
-  const hookSp = spring({ frame: Math.max(0, frame - 73), fps, config: SPRING_MEDIUM });
-  const hookOp = interpolate(hookSp, [0, 0.3], [0, 1], { extrapolateRight: "clamp" });
-  const hookY  = interpolate(hookSp, [0, 1], [14, 0]);
-
-  const pulse = usePulseAt(frame, [60, 110], GREEN, 20);
-  const glow  = 16 + (Math.sin((frame / fps) * Math.PI * 2 * 0.55) * 0.5 + 0.5) * 10;
-
   return (
-    <div style={{ width: "100%", height: "100%", background: BG, position: "relative", overflow: "hidden" }}>
-
-      <Video
-        src={staticFile("claude_screen.mp4")}
-        style={{
-          position: "absolute", inset: 0,
-          width: "100%", height: "100%",
-          objectFit: "cover",
-          opacity: videoOp * 0.65,
-          mixBlendMode: "screen",
-          zIndex: 1,
-        }}
-        muted
-      />
-
-      <div style={{
-        position: "absolute", inset: 0, zIndex: 2,
-        display: "flex", flexDirection: "column",
-        alignItems: "flex-start", justifyContent: "center",
-        paddingTop: 120, paddingBottom: 180,
-        paddingLeft: 72, paddingRight: 72,
-        boxSizing: "border-box", gap: 16,
-      }}>
-
-        <SectionLabelRow text="TOKEN REDUCTION" color="green" />
-
-        <div style={{
-          opacity: heroOp,
-          transform: `scale(${heroScale * (frame > 60 ? bs : 1)})`,
-          transformOrigin: "left center",
-          boxShadow: pulse,
-        }}>
-          <div style={{
-            fontFamily: JB, fontSize: 148, fontWeight: 900,
-            color: GREEN, lineHeight: 0.95, letterSpacing: "-2px",
-            textShadow: `0 0 ${glow}px ${GREEN}70, 0 0 ${glow * 2}px ${GREEN}25`,
-          }}>
-            8.2x
+    <div style={{
+      position: "absolute", top: 1480, left: 72, right: 72, zIndex: 20,
+      display: "flex", flexDirection: "column", gap: 18,
+      fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+    }}>
+      {PROPS.beat2.stats.map((stat, i) => {
+        const delay = 8 + i * 14;
+        const prog  = spring({ frame: Math.max(0, frame - delay), fps, config: { damping: 16, mass: 0.7, stiffness: 220 } });
+        const op    = interpolate(prog, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
+        const ty    = interpolate(prog, [0, 1], [28, 0], { extrapolateRight: "clamp" });
+        const c     = STAT_COLORS[stat.color] ?? "#00E5FF";
+        return (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 16, opacity: op, transform: `translateY(${ty}px)` }}>
+            <div style={{ width: 4, height: 36, background: c, borderRadius: 2, flexShrink: 0 }} />
+            <span style={{ fontSize: 52, fontWeight: 800, color: c, lineHeight: 1 }}>{stat.value}</span>
+            <span style={{ fontSize: 28, fontWeight: 400, color: "rgba(249,250,251,0.7)", lineHeight: 1.2 }}>{stat.label}</span>
           </div>
-        </div>
-
-        <div style={{ opacity: labelOp }}>
-          <div style={{
-            fontFamily: JB, fontSize: 28, fontWeight: 600,
-            color: GREEN, letterSpacing: "0.1em", textTransform: "uppercase",
-            textShadow: `0 0 12px ${GREEN}50`,
-          }}>
-            fewer tokens
-          </div>
-        </div>
-
-        <div style={{ opacity: hookOp, transform: `translateY(${hookY}px)`, marginTop: 8 }}>
-          <div style={{
-            fontFamily: FONT, fontSize: 40, fontWeight: 700,
-            color: "rgba(255,255,255,0.75)", lineHeight: 1.2,
-          }}>
-            Claude Code reads only what matters.
-          </div>
-        </div>
-
-      </div>
-
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 3 }}>
-        <TelemetryFrame frame={frame} />
-      </div>
+        );
+      })}
     </div>
   );
 };
 
-const BEAT2_DATA: TriStatData = {
-  layout: "TriStat", section_label: "CODE MAP", accent_color: "green",
-  stats: [
-    { value: "8.2x",  label: "fewer tokens", sublabel: "on code reviews",        color: "green", glow: true },
-    { value: "49x",   label: "fewer tokens", sublabel: "on daily coding tasks",  color: "green" },
-    { value: "1 map", label: "parse once",   sublabel: "tree-sitter AST cached", color: "white" },
-  ],
-};
-
-const Beat2: React.FC = () => <TriStat data={BEAT2_DATA} />;
-
-const BEAT3_DATA: StatementSlamData = {
-  layout: "StatementSlam", section_label: "WHY IT WORKS", accent_color: "green",
-  lines: [
-    "Reads only relevant files.",
-    "8.2x fewer review tokens.",
-    "49x fewer on daily code.",
-  ],
-};
-
-const Beat3: React.FC = () => <StatementSlam data={BEAT3_DATA} />;
-
-const BEAT4_DATA: TakeawaySceneData = {
-  layout: "TakeawayScene", section_label: "TAKEAWAY",
-  headline: "8.2x fewer tokens. Run it.",
-  cta: "pip install code-review-graph",
-  accent_color: "green",
-};
-
-const Beat4: React.FC = () => <TakeawayScene data={BEAT4_DATA} durationFrames={147} />;
-
-export const CustomVideoConfig = {
-  durationInFrames: 615,
-  fps: 30, width: 1080, height: 1920,
-};
-
 export const CustomVideo: React.FC = () => {
-  const { cameraY } = useCameraY(TIMING, 4);
-
   return (
-    <div style={{ width: "100%", height: "100%", background: BG, position: "relative" }}>
+    <AbsoluteFill style={{ background: "#0A0A0A" }}>
+
+      {/* Narration audio */}
       <Audio src={staticFile("narration.wav")} />
-      <CameraViewport cameraY={cameraY}>
-        <VirtualCanvas totalBeats={4}>
-          <BeatZone index={0} beatStartFrame={0}><Beat1 /></BeatZone>
-          <BeatZone index={1} beatStartFrame={148}><Beat2 /></BeatZone>
-          <BeatZone index={2} beatStartFrame={275}><Beat3 /></BeatZone>
-          <BeatZone index={3} beatStartFrame={468}><Beat4 /></BeatZone>
-        </VirtualCanvas>
-      </CameraViewport>
-    </div>
+
+      {/* ── beat_1 — MetricFocus ── */}
+      <Sequence from={BEAT1_START} durationInFrames={BEAT1_DUR}>
+        <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
+          <AbsoluteFill>
+            <MetricFocus data={{
+              layout:        "MetricFocus",
+              section_label: PROPS.beat1.section_label,
+              hero:          { value: PROPS.beat1.hero_value, label: PROPS.beat1.hero_label, color: PROPS.beat1.hero_color },
+              context:       PROPS.beat1.context,
+              chips:         PROPS.beat1.chips,
+            }} />
+          </AbsoluteFill>
+        </BeatFrameContext.Provider>
+      </Sequence>
+
+      {/* ── beat_2 — TriStat (caption zone — composite QwenPawCPU.mp4 over center in iMovie) ── */}
+      <Sequence from={BEAT2_START} durationInFrames={BEAT2_DUR}>
+        <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
+          <AbsoluteFill style={{ background: "#000000" }}>
+            {/* Center region y:400–1400 intentionally empty — bg_loop composited here */}
+            <div style={{
+              position: "absolute", top: 400, left: 80, right: 80, height: 900,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px dashed rgba(0,229,255,0.06)", borderRadius: 12,
+              pointerEvents: "none", zIndex: 0,
+            }} />
+
+            {/* Scrim above caption zone */}
+            <div style={{
+              position: "absolute", top: 1200, left: 0, right: 0, height: 280,
+              background: "linear-gradient(to bottom, transparent, rgba(0,0,0,0.92))",
+              zIndex: 5, pointerEvents: "none",
+            }} />
+            <div style={{
+              position: "absolute", top: 1480, left: 0, right: 0, bottom: 0,
+              background: "#000000", zIndex: 6, pointerEvents: "none",
+            }} />
+
+            {/* Caption zone — y:1480, stat lines with staggered spring entrance */}
+            <Beat2Stats />
+          </AbsoluteFill>
+        </BeatFrameContext.Provider>
+      </Sequence>
+
+      {/* ── beat_3 — StatementSlam ── */}
+      <Sequence from={BEAT3_START} durationInFrames={BEAT3_DUR}>
+        <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
+          <AbsoluteFill>
+            <StatementSlam data={{
+              layout:        "StatementSlam",
+              section_label: PROPS.beat3.section_label,
+              lines:         PROPS.beat3.lines,
+              accent_color:  PROPS.beat3.accent_color,
+            }} />
+          </AbsoluteFill>
+        </BeatFrameContext.Provider>
+      </Sequence>
+
+      {/* ── beat_4 — TakeawayScene ── */}
+      <Sequence from={BEAT4_START} durationInFrames={BEAT4_DUR}>
+        <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
+          <AbsoluteFill>
+            <TakeawayScene
+              data={{
+                layout:        "TakeawayScene",
+                section_label: PROPS.beat4.section_label,
+                headline:      PROPS.beat4.headline,
+                cta:           PROPS.beat4.cta,
+                accent_color:  PROPS.beat4.accent_color,
+              }}
+              durationFrames={BEAT4_DUR}
+            />
+          </AbsoluteFill>
+        </BeatFrameContext.Provider>
+      </Sequence>
+
+    </AbsoluteFill>
   );
 };

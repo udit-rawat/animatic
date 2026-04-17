@@ -112,6 +112,8 @@ If the hook does not have a number, brand, or runnable noun in the first 3 words
 
 **Visual rule: Frame 0 must have text.** If the first frame is a logo or blank screen, the hook fails. Text must render before 0.3 seconds. Brief animations that start with words, not intros.
 
+**Hero value rule: beat_1 `hero_value` must be the product/repo name — never a metric.** The metric goes in `hero_label`. Voice says the name first, screen shows the name first. Viewer must know WHAT in the first frame before they know HOW MUCH.
+
 **Formula A — The cost punch:**
 `[what they pay now] → [what just changed] → [the number that makes it real]`
 > "You are paying twenty dollars a month for browser automation that breaks every week, and AllenAI just open-sourced something that runs on your laptop for free."
@@ -223,7 +225,8 @@ If under 50: add one concrete number or consequence to concept_2.
 
 The `--compositor` flag means the pipeline will:
 1. Run all stages (TTS, timing, layout generation, brief_generator)
-2. Pause and show the **exact narration going to TTS** — you confirm before audio is generated
+2. param_extractor auto-selects `template_variant` per beat (`"infographic"` or `"threejs"`) — no manual step needed
+3. Pause and show the **exact narration going to TTS** — you confirm before audio is generated
 3. After TTS + brief_generator: pause again and **print the full animation brief inline** — no cat command needed
 4. **Copy the entire brief block and paste it into a Claude session** — Claude reads it and writes CustomVideo.tsx
 5. Drop the file at the exact path printed at the bottom of the brief, press Enter, pipeline renders
@@ -241,13 +244,14 @@ When you receive an animation brief, your role is **coder, not creative director
 **What you get in the brief:**
 - Beat specs: template name, duration in frames, narration text, text_frame (first visible text), animation events with exact frame offsets
 - Beat start frames (cumulative) — use these for `<Sequence from={n}>`
+- `template_variant` per beat: `"infographic"` (text-led, full layout) or `"threejs"` (caption-zone only — bg_loop composited in iMovie). Pass as `variant` prop to `SceneRouter`.
 - Available animation primitives from `_shared.tsx`
 - Hard rules that are already enforced — no need to re-derive them
 
 **What you write:**
 - ONE file: `CustomVideo.tsx`
 - Self-contained — no external props, all data hardcoded from the brief
-- Imports only from `remotion`, `react`, `./layouts/`
+- Imports only from `remotion`, `react`, `./layouts/`, `./templates/threejs/` (if any beat uses `"threejs"` variant)
 - Each beat wrapped in `<Sequence from={beatStartFrame} durationInFrames={duration}>`
 - Drop it at the exact path printed at the bottom of the brief
 

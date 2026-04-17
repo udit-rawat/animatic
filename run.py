@@ -180,6 +180,61 @@ def _narration_preview_pause():
         sys.exit(0)
 
 
+def _print_veo2_prompts(topic_title: str, narration_data: dict, timing_data: dict) -> None:
+    """
+    Read params.json for animation_hook beats and print one Veo2 video prompt per beat.
+    Also saves to output/veo2_prompts.txt for Telegram delivery.
+    """
+    params_path = os.path.join(OUTPUT_DIR, "params.json")
+    if not os.path.exists(params_path):
+        return
+    with open(params_path) as f:
+        params = json.load(f)
+
+    beats = params.get("beats", [])
+    scenes = params.get("scenes", {})
+    hook_beats = []
+    for beat in beats:
+        bid  = f"beat_{beat['beat']}"
+        scene = scenes.get(bid, {})
+        if scene.get("template_variant") == "animation_hook":
+            narr  = narration_data.get(
+                ["hook", "concept_1", "concept_2", "takeaway_cta"][beat["beat"] - 1], ""
+            )
+            timing = timing_data.get(
+                ["hook", "concept_1", "concept_2", "takeaway_cta"][beat["beat"] - 1], {}
+            )
+            dur = timing.get("duration", 6.0)
+            hook_beats.append((bid, scene, narr, round(dur)))
+
+    if not hook_beats:
+        return
+
+    prompts = []
+    print("\n" + "═" * 70)
+    print("  🎬  VEO2 PROMPTS — generate these animation clips")
+    print("═" * 70)
+    for bid, scene, narr, dur in hook_beats:
+        layout = scene.get("data", {}).get("layout", "unknown")
+        prompt = (
+            f"Portrait video, 1080x1920, {dur} seconds, black background, no text, no UI.\n"
+            f"Topic: {topic_title}\n"
+            f"Scene: {layout} beat — visually represents \"{narr}\"\n"
+            f"Style: dark cinematic, neon cyan accent #00E5FF, technical/sci-fi aesthetic. "
+            f"Slow camera push-in. Ambient particle drift. No cuts. Loop-friendly ending."
+        )
+        prompts.append(f"[{bid}]\n{prompt}")
+        print(f"\n  [{bid}]")
+        print(f"  {prompt}\n")
+    print("═" * 70 + "\n")
+
+    # Save for notifier to pick up
+    veo2_path = os.path.join(OUTPUT_DIR, "veo2_prompts.txt")
+    with open(veo2_path, "w") as f:
+        f.write(f"🎬 Veo2 prompts — {topic_title}\n\n")
+        f.write("\n\n---\n\n".join(prompts))
+
+
 def _compositor_pause() -> str:
     """
     Pause pipeline before animator. Print all context file paths so the user
@@ -259,6 +314,9 @@ def _compositor_pause() -> str:
         print("═" * 70)
         print(f"\n  Full brief also at: {os.path.join(OUTPUT_DIR, 'animation_brief.json')}")
         print(f"\n  DROP FILE HERE:  {drop_path}\n")
+
+        # ── Veo2 prompts for animation_hook beats ────────────────────────────
+        _print_veo2_prompts(topic_title, narration_data, timing_data)
     else:
         print("  Prompt Claude with the TOPIC + NARRATION above to generate")
         print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
@@ -283,20 +341,18 @@ def _compositor_pause() -> str:
     return drop_path
 
 
-def _studio_pause():
+def _studio_pause() -> bool:
     """
-    Launch Remotion Studio so the user can preview + scrub the rendered video,
-    adjust timing, and verify audio sync before sending to Telegram.
-    Blocks until the user presses Enter.
+    Launch Remotion Studio so the user can preview + scrub the rendered video.
+    Returns True to send to Telegram, False to skip notifier.
     """
     import subprocess
-    import threading
 
     remotion_dir = os.path.join(os.path.dirname(__file__), "remotion")
     video_path   = os.path.join(OUTPUT_DIR, "video.mp4")
 
     print("\n" + "═" * 70)
-    print("  🎬  STUDIO REVIEW  —  inspect video before sending to Telegram")
+    print("  STUDIO REVIEW  —  inspect video before sending to Telegram")
     print("═" * 70)
 
     if os.path.exists(video_path):
@@ -305,8 +361,7 @@ def _studio_pause():
     print("\n  Starting Remotion Studio...")
     print("  Browser will open at http://localhost:3000\n")
     print("  • Scrub timeline to check audio sync")
-    print("  • Verify beat timing and transitions")
-    print("  • Press Ctrl+C in this terminal to kill Studio when done\n")
+    print("  • Verify beat timing and transitions\n")
     print("═" * 70)
 
     proc = None
@@ -330,8 +385,20 @@ def _studio_pause():
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        print("\n[studio] Closed. Continuing to notifier.\n")
-        print("═" * 60 + "\n")
+        print("\n[studio] Closed.\n")
+
+    # Explicit send confirmation — bug fix: previously sent regardless of input
+    print("═" * 70)
+    try:
+        ans = input("  Send video to Telegram? [y/n] → ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        ans = "n"
+    print("═" * 70 + "\n")
+
+    if ans != "y":
+        print("[notifier] Skipped — video saved at output/video.mp4")
+        return False
+    return True
 
 
 def _apply_narration_override(narration_arg: str):
@@ -473,6 +540,10 @@ def main():
 
     # ── Intervention checkpoint ───────────────────────────────────────────────
     parser.add_argument(
+        "--no-notify", action="store_true", dest="no_notify",
+        help="Skip Telegram notification entirely — video saved to output/video.mp4 only.",
+    )
+    parser.add_argument(
         "--checkpoint", action="store_true",
         help=(
             "Pause after content generation, print script + beat layout plan, "
@@ -494,9 +565,10 @@ def main():
         os.environ.setdefault("GEMINI_MODEL_NARRATOR",           "gemini-2.5-flash-lite")
         os.environ.setdefault("GEMINI_MODEL_PARAM_EXTRACTOR",   "gemini-2.5-flash-lite")
         os.environ.setdefault("GEMINI_MODEL_ANIMATOR",           "gemini-2.5-flash-lite")
-        # content_generator intentionally stays on gemini-2.5-flash — flash-lite
-        # cannot reliably follow the word budget + field constraints simultaneously.
-        os.environ.setdefault("GEMINI_MODEL_CONTENT_GENERATOR", "gemini-2.5-flash")
+        # content_generator uses flash when generating narration from scratch.
+        # With --narration override it only structures data — flash-lite is enough
+        # and avoids 403s on keys without gemini-2.5-flash project access.
+        # The actual model selection is done in content_generator.py based on NARRATION_OVERRIDE.
 
     if args.provider:
         apply_provider(args.provider, args.model)
@@ -613,7 +685,11 @@ def main():
 
         # ── Studio review: open Remotion Studio after animator, before notifier ──
         if stage == "notifier":
-            _studio_pause()
+            if args.no_notify:
+                print("[notifier] Skipped — --no-notify flag set.")
+                continue
+            if not _studio_pause():
+                continue
 
         # ── Narration override: write spoken_narration.json after content stage ─
         if args.narration and stage == "content_generator":

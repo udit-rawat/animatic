@@ -13,6 +13,7 @@ TOPIC_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "topi
 AUDIT_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "audit.json")
 RETRIES_PATH     = os.path.join(os.path.dirname(__file__), "..", "output", "animator_retries.json")
 VIDEO_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
+VEO2_PROMPTS_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "veo2_prompts.txt")
 
 
 def build_audit_block() -> str:
@@ -142,6 +143,16 @@ async def send_notification():
 
     print("Sending caption (no hashtags)...")
     await bot.send_message(chat_id=chat_id, text=build_caption_message(script))
+
+    # Send Veo2 prompts if any animation_hook beats were generated
+    if os.path.exists(VEO2_PROMPTS_PATH):
+        with open(VEO2_PROMPTS_PATH) as f:
+            veo2_text = f.read().strip()
+        if veo2_text:
+            print("Sending Veo2 prompts...")
+            # Telegram message limit is 4096 chars — chunk if needed
+            for i in range(0, len(veo2_text), 4000):
+                await bot.send_message(chat_id=chat_id, text=veo2_text[i:i+4000])
 
     print("Notification sent successfully.")
 

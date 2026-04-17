@@ -628,9 +628,13 @@ def _generate_gemini(topic: dict, max_retries: int) -> VideoPayload:
     if not keys:
         raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS not set.")
 
-    # content_generator uses the full flash model — flash-lite lacks the instruction
-    # following capacity to reliably hit the word budget + field constraints simultaneously.
-    model_name = os.environ.get("GEMINI_MODEL_CONTENT_GENERATOR", "gemini-2.5-flash")
+    # When narration is pre-supplied (NARRATION_OVERRIDE=1), content_generator only
+    # needs to structure data — flash-lite is sufficient and avoids project-level 403s
+    # on keys that don't have gemini-2.5-flash access. Full flash only needed when
+    # generating narration from scratch (word budget + field constraints).
+    narration_override = os.environ.get("NARRATION_OVERRIDE") == "1"
+    default_model = "gemini-2.5-flash-lite" if narration_override else "gemini-2.5-flash"
+    model_name = os.environ.get("GEMINI_MODEL_CONTENT_GENERATOR", default_model)
     print(f"[content_generator] Gemini  model={model_name}  keys={len(keys)}  max_retries={max_retries}")
 
     last_err = None
