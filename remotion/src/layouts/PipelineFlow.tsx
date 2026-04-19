@@ -136,7 +136,7 @@ export const PipelineFlow: React.FC<{ data: PipelineFlowData }> = ({ data }) => 
       gap:           32,
       height:        "100%",
       boxSizing:     "border-box",
-      background:    "radial-gradient(ellipse at 50% 50%, #111 0%, #0A0A0A 70%)",
+      background:    "linear-gradient(180deg, #111112 0%, #080809 100%)",
       position:      "relative",
       overflow:      "hidden",
     }}>

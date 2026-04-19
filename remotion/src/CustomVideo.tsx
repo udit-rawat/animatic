@@ -1,93 +1,132 @@
 /**
- * CustomVideo.tsx — QwenPaw. Local AI assistant. No API key.
- * 545f / 18.2s / 30fps
+ * CustomVideo.tsx — Replace Paid Agents With OpenManus
+ * 639f / 21.3s / 30fps
+ *
+ * beat_1: MetricFocus    — infographic
+ * beat_2: BarComparison  — animation_hook (caption zone, Veo2 composite center)
+ * beat_3: StatementSlam  — animation_hook (caption zone, Veo2 composite center)
+ * beat_4: TakeawayScene  — infographic
  *
  * ── EDIT THESE PROPS ─────────────────────────────────────────────────────────
  */
 const PROPS = {
   beat1: {
-    section_label: "qwenpaw",
-    hero_value:    "Zero API",
-    hero_label:    "100% local inference",
+    section_label: "openmanus",
+    hero_value:    "OpenManus",
+    hero_label:    "free local agents",
     hero_color:    "cyan" as const,
-    context:       "Runs Qwen models entirely on CPU. No cloud. No key.",
-    chips:         ["CPU-only", "llama.cpp", "free forever"],
+    context:       "Thousands pay for cloud agents. This runs them for free.",
+    chips:         ["50k stars", "local", "free forever"],
   },
   beat2: {
-    section_label: "under the hood",
+    // animation_hook — caption zone only, center empty for Veo2
+    section_label: "python framework",
     accent_color:  "green" as const,
-    stats: [
-      { value: "100%", label: "CPU inference via llama.cpp",   color: "cyan"  as const, glow: true },
-      { value: "LOCAL", label: "All memory stored on device",  color: "green" as const },
-      { value: "$0",    label: "Zero API cost, zero key",       color: "yellow" as const },
+    bars: [
+      { label: "Cloud Agents", value: "$20/mo",  sublabel: "paid orchestration", color: "red"   as const },
+      { label: "OpenManus",    value: "$0",       sublabel: "local, 50k stars",   color: "green" as const, highlight: true },
     ],
+    caption: "50,000 star framework. Runs complex agent workflows locally.",
   },
   beat3: {
-    section_label: "install",
+    // animation_hook — caption zone only, center empty for Veo2
+    section_label: "deploy tonight",
     accent_color:  "cyan" as const,
     lines: [
-      "git clone + build.",
-      "Multi chat. Tool plugins.",
+      "$20/month. Gone.",
+      "Local agentic ecosystem.",
       "Ships tonight.",
     ],
   },
   beat4: {
     section_label: "takeaway",
-    headline:      "Local AI that costs nothing and leaks nothing.",
-    cta:           "Pull it. Run it.",
+    headline:      "Stop paying for agents. Own your stack.",
+    cta:           "OpenManus. Pull it. Run it.",
     accent_color:  "cyan" as const,
   },
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React from "react";
-import { AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame, spring, interpolate, useVideoConfig } from "remotion";
-import { MetricFocus }    from "./layouts/MetricFocus";
-import { StatementSlam }  from "./layouts/StatementSlam";
-import { TakeawayScene }  from "./layouts/TakeawayScene";
+import {
+  AbsoluteFill, Audio, Sequence, staticFile,
+  useCurrentFrame, spring, interpolate, useVideoConfig,
+} from "remotion";
+import { MetricFocus }   from "./layouts/MetricFocus";
+import { StatementSlam } from "./layouts/StatementSlam";
+import { TakeawayScene } from "./layouts/TakeawayScene";
 import { BeatFrameContext } from "./hooks/useBeatFrame";
 
-// Beat boundaries from pipeline brief
+// Beat boundaries
 const BEAT1_START = 0;
-const BEAT2_START = 98;
-const BEAT3_START = 296;
-const BEAT4_START = 493;
-const TOTAL_FRAMES = 545;
+const BEAT2_START = 128;
+const BEAT3_START = 323;
+const BEAT4_START = 549;
+const TOTAL_FRAMES = 639;
 
-const BEAT1_DUR = BEAT2_START - BEAT1_START;   // 98
-const BEAT2_DUR = BEAT3_START - BEAT2_START;   // 198
-const BEAT3_DUR = BEAT4_START - BEAT3_START;   // 197
-const BEAT4_DUR = TOTAL_FRAMES - BEAT4_START;  // 52
+const BEAT1_DUR = BEAT2_START - BEAT1_START;  // 128
+const BEAT2_DUR = BEAT3_START - BEAT2_START;  // 195
+const BEAT3_DUR = BEAT4_START - BEAT3_START;  // 226
+const BEAT4_DUR = TOTAL_FRAMES - BEAT4_START; // 90
+
+const FONT = "'Inter', 'Space Grotesk', sans-serif";
+const BG   = "linear-gradient(180deg, #111112 0%, #080809 100%)";
+
+const COLORS: Record<string, string> = {
+  cyan:   "#2563EB",
+  green:  "#10B981",
+  red:    "#E11D48",
+  yellow: "#D1D5DB",
+  white:  "#FFFFFF",
+};
 
 export const CustomVideoConfig = {
   durationInFrames: TOTAL_FRAMES,
-  fps:   30,
+  fps:    30,
   width:  1080,
   height: 1920,
 };
 
-const STAT_COLORS: Record<string, string> = { cyan: "#00E5FF", green: "#10B981", yellow: "#CCFF00" };
+// ── beat_2 caption zone — BarComparison stats ─────────────────────────────────
 
-const Beat2Stats: React.FC = () => {
+const Beat2Caption: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
   return (
     <div style={{
-      position: "absolute", top: 1480, left: 72, right: 72, zIndex: 20,
-      display: "flex", flexDirection: "column", gap: 18,
-      fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+      position: "absolute", top: 1420, left: 72, right: 72, zIndex: 20,
+      display: "flex", flexDirection: "column", gap: 20,
+      fontFamily: FONT,
     }}>
-      {PROPS.beat2.stats.map((stat, i) => {
-        const delay = 8 + i * 14;
+      {PROPS.beat2.bars.map((bar, i) => {
+        const delay = i === 0 ? 8 : 101;
         const prog  = spring({ frame: Math.max(0, frame - delay), fps, config: { damping: 16, mass: 0.7, stiffness: 220 } });
         const op    = interpolate(prog, [0, 0.2], [0, 1], { extrapolateRight: "clamp" });
-        const ty    = interpolate(prog, [0, 1], [28, 0], { extrapolateRight: "clamp" });
-        const c     = STAT_COLORS[stat.color] ?? "#00E5FF";
+        const tx    = interpolate(prog, [0, 1], [-32, 0], { extrapolateRight: "clamp" });
+
+        // highlight pulse on bar_0 at f20
+        const pulseAge   = Math.max(0, frame - 20);
+        const pulseStr   = i === 0 ? interpolate(pulseAge, [0, 6, 12, 30], [0, 1, 0.8, 0], { extrapolateRight: "clamp" }) : 0;
+        const c = COLORS[bar.color] ?? "#FFFFFF";
+
         return (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 16, opacity: op, transform: `translateY(${ty}px)` }}>
-            <div style={{ width: 4, height: 36, background: c, borderRadius: 2, flexShrink: 0 }} />
-            <span style={{ fontSize: 52, fontWeight: 800, color: c, lineHeight: 1 }}>{stat.value}</span>
-            <span style={{ fontSize: 28, fontWeight: 400, color: "rgba(249,250,251,0.7)", lineHeight: 1.2 }}>{stat.label}</span>
+          <div key={i} style={{
+            opacity: op,
+            transform: `translateX(${tx}px)`,
+            display: "flex", alignItems: "center", gap: 16,
+            background: `${c}08`,
+            border: `1px solid ${c}${bar.highlight ? "55" : "25"}`,
+            borderRadius: 12,
+            padding: "18px 24px",
+            boxShadow: pulseStr > 0.01 ? `0 0 ${Math.round(28 * pulseStr)}px ${c}66` : "none",
+          }}>
+            <div style={{ width: 4, alignSelf: "stretch", background: c, borderRadius: 2, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 58, fontWeight: 800, color: c, lineHeight: 1, fontFamily: FONT }}>{bar.value}</div>
+              <div style={{ fontSize: 24, fontWeight: 500, color: "#FFFFFF", opacity: 0.7, marginTop: 4, fontFamily: FONT }}>{bar.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 400, color: "rgba(255,255,255,0.38)", marginTop: 2, fontFamily: FONT }}>{bar.sublabel}</div>
+            </div>
           </div>
         );
       })}
@@ -95,14 +134,68 @@ const Beat2Stats: React.FC = () => {
   );
 };
 
+// ── beat_3 caption zone — StatementSlam lines ─────────────────────────────────
+
+const Beat3Caption: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const accent  = COLORS["cyan"];
+  const delays  = [6, 24, 42];
+  const pulseFrames = [45, 90];
+
+  return (
+    <div style={{
+      position: "absolute", top: 1420, left: 72, right: 72, zIndex: 20,
+      display: "flex", flexDirection: "column", gap: 14,
+      fontFamily: FONT,
+    }}>
+      {PROPS.beat3.lines.map((line, i) => {
+        const prog = spring({ frame: Math.max(0, frame - delays[i]), fps, config: { damping: 16, mass: 0.8, stiffness: 200 } });
+        const op   = interpolate(prog, [0, 0.18], [0, 1], { extrapolateRight: "clamp" });
+        const ty   = interpolate(prog, [0, 1], [32, 0], { extrapolateRight: "clamp" });
+
+        // pulse on line_0 at f45 + f90
+        let glowStr = 0;
+        if (i === 0) {
+          const fired = pulseFrames.filter(f => frame >= f);
+          if (fired.length > 0) {
+            const age = frame - Math.max(...fired);
+            glowStr = interpolate(age, [0, 6, 12, 30], [0, 1, 0.8, 0], { extrapolateRight: "clamp" });
+          }
+        }
+
+        const color = i === 0 ? accent : "#FFFFFF";
+        const opacity = i === 0 ? op : op * (i === 1 ? 0.88 : 0.68);
+
+        return (
+          <div key={i} style={{
+            opacity,
+            transform: `translateY(${ty}px)`,
+            fontSize: i === 0 ? 72 : 58,
+            fontWeight: 800,
+            color,
+            lineHeight: 1.05,
+            letterSpacing: "-0.02em",
+            fontFamily: FONT,
+            textShadow: glowStr > 0.01 ? `0 0 ${Math.round(48 * glowStr)}px ${accent}55` : "none",
+          }}>
+            {line}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Main composition ──────────────────────────────────────────────────────────
+
 export const CustomVideo: React.FC = () => {
   return (
-    <AbsoluteFill style={{ background: "#0A0A0A" }}>
+    <AbsoluteFill style={{ background: BG }}>
 
-      {/* Narration audio */}
       <Audio src={staticFile("narration.wav")} />
 
-      {/* ── beat_1 — MetricFocus ── */}
+      {/* ── beat_1 — MetricFocus — full infographic ── */}
       <Sequence from={BEAT1_START} durationInFrames={BEAT1_DUR}>
         <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
           <AbsoluteFill>
@@ -117,50 +210,48 @@ export const CustomVideo: React.FC = () => {
         </BeatFrameContext.Provider>
       </Sequence>
 
-      {/* ── beat_2 — TriStat (caption zone — composite QwenPawCPU.mp4 over center in iMovie) ── */}
+      {/* ── beat_2 — BarComparison — animation_hook ── */}
       <Sequence from={BEAT2_START} durationInFrames={BEAT2_DUR}>
         <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
-          <AbsoluteFill style={{ background: "#000000" }}>
-            {/* Center region y:400–1400 intentionally empty — bg_loop composited here */}
+          <AbsoluteFill style={{ background: "#080809" }}>
+            {/* Center y:400–1400 empty — composite Veo2 agent-nodes video here */}
             <div style={{
-              position: "absolute", top: 400, left: 80, right: 80, height: 900,
+              position: "absolute", top: 400, left: 0, right: 0, height: 1000,
               display: "flex", alignItems: "center", justifyContent: "center",
-              border: "1px dashed rgba(0,229,255,0.06)", borderRadius: 12,
               pointerEvents: "none", zIndex: 0,
             }} />
-
-            {/* Scrim above caption zone */}
+            {/* Scrim */}
             <div style={{
-              position: "absolute", top: 1200, left: 0, right: 0, height: 280,
-              background: "linear-gradient(to bottom, transparent, rgba(0,0,0,0.92))",
+              position: "absolute", top: 1180, left: 0, right: 0, height: 280,
+              background: "linear-gradient(to bottom, transparent, rgba(8,8,9,0.95))",
               zIndex: 5, pointerEvents: "none",
             }} />
-            <div style={{
-              position: "absolute", top: 1480, left: 0, right: 0, bottom: 0,
-              background: "#000000", zIndex: 6, pointerEvents: "none",
-            }} />
-
-            {/* Caption zone — y:1480, stat lines with staggered spring entrance */}
-            <Beat2Stats />
+            <Beat2Caption />
           </AbsoluteFill>
         </BeatFrameContext.Provider>
       </Sequence>
 
-      {/* ── beat_3 — StatementSlam ── */}
+      {/* ── beat_3 — StatementSlam — animation_hook ── */}
       <Sequence from={BEAT3_START} durationInFrames={BEAT3_DUR}>
         <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
-          <AbsoluteFill>
-            <StatementSlam data={{
-              layout:        "StatementSlam",
-              section_label: PROPS.beat3.section_label,
-              lines:         PROPS.beat3.lines,
-              accent_color:  PROPS.beat3.accent_color,
+          <AbsoluteFill style={{ background: "#080809" }}>
+            {/* Center y:400–1400 empty — composite Veo2 laptop-nodes video here */}
+            <div style={{
+              position: "absolute", top: 400, left: 0, right: 0, height: 1000,
+              pointerEvents: "none", zIndex: 0,
             }} />
+            {/* Scrim */}
+            <div style={{
+              position: "absolute", top: 1180, left: 0, right: 0, height: 280,
+              background: "linear-gradient(to bottom, transparent, rgba(8,8,9,0.95))",
+              zIndex: 5, pointerEvents: "none",
+            }} />
+            <Beat3Caption />
           </AbsoluteFill>
         </BeatFrameContext.Provider>
       </Sequence>
 
-      {/* ── beat_4 — TakeawayScene ── */}
+      {/* ── beat_4 — TakeawayScene — full infographic ── */}
       <Sequence from={BEAT4_START} durationInFrames={BEAT4_DUR}>
         <BeatFrameContext.Provider value={{ beatStartFrame: 0 }}>
           <AbsoluteFill>
