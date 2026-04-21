@@ -3,7 +3,7 @@
  *
  * The old per-template discriminated union (HookParams, StatsGridParams, …)
  * and BeatRouter are removed in Phase 2. Layout is now fully self-describing
- * via LayoutNode trees — see MOTION_DESIGN_V2_TDD.md §PILLAR 1.
+ * via LayoutNode trees — see legacy/docs/MOTION_DESIGN_V2_TDD.md §PILLAR 1.
  *
  * Python contract (param_extractor.py output):
  *   params.json: { "beat_1": BeatLayout, "beat_2": BeatLayout, ... }

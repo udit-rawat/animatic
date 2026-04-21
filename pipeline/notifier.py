@@ -158,7 +158,7 @@ async def send_notification():
 
     # Commit topic to history only after a video is successfully delivered.
     try:
-        from pipeline.ranker import load_history, save_history
+        from pipeline.topic_history import load_history, save_history
         history = load_history()
         save_history(history, topic["title"])
         print(f"Topic saved to history: {topic['title']}")

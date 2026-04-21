@@ -21,7 +21,7 @@ Automated daily AI short-form video pipeline. Runs once per day, end-to-end:
 9. **notifier** — Sends final video + caption to Telegram
 
 ## Rendering Engine — Motion Design v2
-Branch `feature/motion-design-v2`. Full architecture in `MOTION_DESIGN_V2_TDD.md`.
+Branch `feature/motion-design-v2`. Archived architecture doc now lives at `legacy/docs/MOTION_DESIGN_V2_TDD.md`.
 
 ### Pillar 1 — Generative Component Engine
 - `LayoutNode` schema: self-describing JSON trees replace all fixed templates

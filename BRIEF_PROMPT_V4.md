@@ -224,12 +224,12 @@ If under 50: add one concrete number or consequence to concept_2.
 ## PIPELINE PAUSE FLOW
 
 The `--compositor` flag means the pipeline will:
-1. Run all stages (TTS, timing, layout generation, brief_generator)
-2. param_extractor auto-selects `template_variant` per beat (`"infographic"` or `"threejs"`) — no manual step needed
-3. Pause and show the **exact narration going to TTS** — you confirm before audio is generated
-3. After TTS + brief_generator: pause again and **print the full animation brief inline** — no cat command needed
-4. **Copy the entire brief block and paste it into a Claude session** — Claude reads it and writes CustomVideo.tsx
-5. Drop the file at the exact path printed at the bottom of the brief, press Enter, pipeline renders
+1. Run `content_generator` and write structured content outputs
+2. Pause and show the **exact narration going to TTS** — you confirm before audio is generated
+3. Run TTS, timing extraction, and `brief_generator`
+4. Pause again and **print the full animation brief inline** — no cat command needed
+5. **Copy the full brief block and paste it into a Claude session** — Claude writes `CustomVideo.tsx`
+6. Drop the file at the exact path printed at the bottom of the brief, press Enter, pipeline renders
 
 ---
 
@@ -244,14 +244,13 @@ When you receive an animation brief, your role is **coder, not creative director
 **What you get in the brief:**
 - Beat specs: template name, duration in frames, narration text, text_frame (first visible text), animation events with exact frame offsets
 - Beat start frames (cumulative) — use these for `<Sequence from={n}>`
-- `template_variant` per beat: `"infographic"` (text-led, full layout) or `"threejs"` (caption-zone only — bg_loop composited in iMovie). Pass as `variant` prop to `SceneRouter`.
 - Available animation primitives from `_shared.tsx`
 - Hard rules that are already enforced — no need to re-derive them
 
 **What you write:**
 - ONE file: `CustomVideo.tsx`
 - Self-contained — no external props, all data hardcoded from the brief
-- Imports only from `remotion`, `react`, `./layouts/`, `./templates/threejs/` (if any beat uses `"threejs"` variant)
+- Imports only from `remotion`, `react`, and `./layouts/`
 - Each beat wrapped in `<Sequence from={beatStartFrame} durationInFrames={duration}>`
 - Drop it at the exact path printed at the bottom of the brief
 
