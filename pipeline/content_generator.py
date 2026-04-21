@@ -29,6 +29,8 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from pipeline.video_spec import build_video_spec, write_video_spec
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
 _ROOT       = os.path.join(os.path.dirname(__file__), "..")
@@ -1051,7 +1053,7 @@ def _build_cue_definitions(payload: VideoPayload) -> dict:
 
 
 def save_outputs(payload: VideoPayload, topic: dict) -> None:
-    """Write all four pipeline files from a validated VideoPayload."""
+    """Write legacy pipeline files plus renderer-neutral video_spec.json."""
     os.makedirs(os.path.join(_ROOT, "output"), exist_ok=True)
 
     script  = _build_script_json(payload, topic)
@@ -1059,6 +1061,14 @@ def save_outputs(payload: VideoPayload, topic: dict) -> None:
     params  = _build_params_json(payload)
     plan    = _build_scene_plan()
     cues    = _build_cue_definitions(payload)
+    spec    = build_video_spec(
+        topic=topic,
+        script=script,
+        spoken=spoken,
+        params=params,
+        scene_plan=plan,
+        cues=cues,
+    )
 
     for path, data in [
         (SCRIPT_OUT, script),
@@ -1070,6 +1080,9 @@ def save_outputs(payload: VideoPayload, topic: dict) -> None:
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
         print(f"  ✓ {os.path.relpath(path, _ROOT)}")
+
+    write_video_spec(spec)
+    print("  ✓ output/video_spec.json")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1095,7 +1108,10 @@ def main():
         topic = {"title": " ".join(sys.argv[2:]), "summary": ""}
     else:
         if not os.path.exists(TOPIC_PATH):
-            raise RuntimeError(f"topic.json not found at {TOPIC_PATH}. Run scraper + ranker first.")
+            raise RuntimeError(
+                f"topic.json not found at {TOPIC_PATH}. "
+                "Use --custom --title ... --summary ... or create topic.json first."
+            )
         with open(TOPIC_PATH) as f:
             topic = json.load(f)
 
