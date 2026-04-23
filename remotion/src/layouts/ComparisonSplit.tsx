@@ -61,7 +61,7 @@ const AnimatedDivider: React.FC<{ frame: number; color: string }> = ({ frame, co
     {/* VS label */}
     <div style={{
       position:      "absolute",
-      background:    "#0A0A0A",
+      background:    "#0C0C0D",
       padding:       "12px 0",
       color:         "rgba(255,255,255,0.3)",
       fontSize:      20,
@@ -175,7 +175,7 @@ export const ComparisonSplit: React.FC<{ data: ComparisonSplitData }> = ({ data 
       gap:           32,
       height:        "100%",
       boxSizing:     "border-box",
-      background:    "radial-gradient(ellipse at 50% 50%, #111 0%, #0A0A0A 70%)",
+      background:    "linear-gradient(180deg, #111112 0%, #080809 100%)",
       position:      "relative",
       overflow:      "hidden",
     }}>

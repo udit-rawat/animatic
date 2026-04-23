@@ -75,7 +75,7 @@ export const HookR3F: React.FC<HookR3FProps> = ({
 
   return (
     <AbsoluteFill style={{
-      background:    "radial-gradient(ellipse at 50% 35%, #0A0A14 0%, #040408 70%)",
+      background:    "linear-gradient(180deg, #111112 0%, #080809 100%)",
       display:       "flex",
       flexDirection: "column",
       alignItems:    "center",

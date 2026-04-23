@@ -16,6 +16,7 @@ import urllib.request
 import wave
 
 from pipeline import claude_client
+from pipeline.video_spec import update_video_spec_timing
 
 SCRIPT_PATH = os.path.join(os.path.dirname(
     __file__), "..", "output", "script.json")
@@ -395,6 +396,10 @@ def main():
     # Step 4 — save timing for animator
     with open(TIMING_PATH, "w") as f:
         json.dump(timing, f, indent=2)
+
+    updated = update_video_spec_timing(timing, audio_src="narration.wav")
+    if updated:
+        print("✓ video_spec.json refreshed with exact timing")
 
     total = cursor
     print(f"✓ Narration saved → {AUDIO_PATH}  ({total:.1f}s total)")

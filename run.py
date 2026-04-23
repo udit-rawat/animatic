@@ -7,14 +7,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-STAGES = ["scraper", "ranker", "scripter", "verifier", "scene_planner", "narrator", "word_aligner", "param_extractor", "animator", "notifier"]
-
-# Single-shot pipeline: replaces scripter+verifier+scene_planner+param_extractor
-# with one Pydantic-validated call. Activate with --single-shot.
-STAGES_SINGLE_SHOT = ["scraper", "ranker", "content_generator", "narrator", "word_aligner", "animator", "notifier"]
-
-# Custom pipeline: skips scraper+ranker entirely — topic comes from CLI.
-STAGES_CUSTOM = ["content_generator", "narrator", "word_aligner", "brief_generator", "animator", "notifier"]
+# Active pipeline only. Legacy scraper/ranker/multi-stage content generation is
+# archived under legacy/phase1-pipeline/ and no longer wired into the runner.
+STAGES = ["content_generator", "narrator", "word_aligner", "brief_generator", "animator", "notifier"]
+STAGES_CUSTOM = STAGES
 
 OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), "output")
 TOPIC_PATH  = os.path.join(OUTPUT_DIR, "topic.json")
@@ -57,7 +53,7 @@ def _is_gemini_active() -> bool:
 
 
 def _write_custom_topic(title: str, summary: str):
-    """Write a topic.json from CLI args, bypassing scraper + ranker."""
+    """Write a topic.json from CLI args for the active custom-topic flow."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     topic = {
         "title":      title,
@@ -180,10 +176,65 @@ def _narration_preview_pause():
         sys.exit(0)
 
 
+def _print_veo2_prompts(topic_title: str, narration_data: dict, timing_data: dict) -> None:
+    """
+    Read params.json for animation_hook beats and print one Veo2 video prompt per beat.
+    Also saves to output/veo2_prompts.txt for Telegram delivery.
+    """
+    params_path = os.path.join(OUTPUT_DIR, "params.json")
+    if not os.path.exists(params_path):
+        return
+    with open(params_path) as f:
+        params = json.load(f)
+
+    beats = params.get("beats", [])
+    scenes = params.get("scenes", {})
+    hook_beats = []
+    for beat in beats:
+        bid  = f"beat_{beat['beat']}"
+        scene = scenes.get(bid, {})
+        if scene.get("template_variant") == "animation_hook":
+            narr  = narration_data.get(
+                ["hook", "concept_1", "concept_2", "takeaway_cta"][beat["beat"] - 1], ""
+            )
+            timing = timing_data.get(
+                ["hook", "concept_1", "concept_2", "takeaway_cta"][beat["beat"] - 1], {}
+            )
+            dur = timing.get("duration", 6.0)
+            hook_beats.append((bid, scene, narr, round(dur)))
+
+    if not hook_beats:
+        return
+
+    prompts = []
+    print("\n" + "═" * 70)
+    print("  🎬  VEO2 PROMPTS — generate these animation clips")
+    print("═" * 70)
+    for bid, scene, narr, dur in hook_beats:
+        layout = scene.get("data", {}).get("layout", "unknown")
+        prompt = (
+            f"Portrait video, 1080x1920, {dur} seconds, black background, no text, no UI.\n"
+            f"Topic: {topic_title}\n"
+            f"Scene: {layout} beat — visually represents \"{narr}\"\n"
+            f"Style: dark cinematic, neon cyan accent #00E5FF, technical/sci-fi aesthetic. "
+            f"Slow camera push-in. Ambient particle drift. No cuts. Loop-friendly ending."
+        )
+        prompts.append(f"[{bid}]\n{prompt}")
+        print(f"\n  [{bid}]")
+        print(f"  {prompt}\n")
+    print("═" * 70 + "\n")
+
+    # Save for notifier to pick up
+    veo2_path = os.path.join(OUTPUT_DIR, "veo2_prompts.txt")
+    with open(veo2_path, "w") as f:
+        f.write(f"🎬 Veo2 prompts — {topic_title}\n\n")
+        f.write("\n\n---\n\n".join(prompts))
+
+
 def _compositor_pause() -> str:
     """
     Pause pipeline before animator. Print all context file paths so the user
-    can feed them to Claude and generate a custom CustomVideo.tsx.
+    can feed them to Claude and generate a custom render artifact.
     Returns the path where the file must be dropped.
     """
     import re as _re
@@ -217,7 +268,7 @@ def _compositor_pause() -> str:
     ) if timing_data else 0
 
     print("\n" + "═" * 70)
-    print("  ⏸  COMPOSITOR PAUSE  —  generate a custom CustomVideo.tsx")
+    print("  ⏸  COMPOSITOR PAUSE  —  generate a custom render composition")
     print("═" * 70)
     print(f"\n  TOPIC: {topic_title}")
     print(f"  DURATION: {total_dur:.1f}s\n")
@@ -241,8 +292,13 @@ def _compositor_pause() -> str:
 
     print("  ─────────────────────────────────────────────────────────────")
 
+    render_backend = os.environ.get("RENDER_BACKEND", "").strip().lower()
+    use_hyperframes_compositor = render_backend in {"hyperframes", "both"}
+
     # Use drop_path written by brief_generator if available
     drop_path_file = os.path.join(OUTPUT_DIR, "drop_path.txt")
+    if use_hyperframes_compositor:
+        drop_path_file = os.path.join(OUTPUT_DIR, "hyperframes_drop_path.txt")
     if os.path.exists(drop_path_file):
         with open(drop_path_file) as f:
             drop_path = f.read().strip()
@@ -250,6 +306,8 @@ def _compositor_pause() -> str:
 
     # Print full compositor_prompt.md inline if brief_generator already ran
     prompt_path = os.path.join(OUTPUT_DIR, "compositor_prompt.md")
+    if use_hyperframes_compositor:
+        prompt_path = os.path.join(OUTPUT_DIR, "hyperframes_compositor_prompt.md")
     if os.path.exists(prompt_path):
         print("\n" + "═" * 70)
         print("  ANIMATION BRIEF — paste everything below into your Claude session:")
@@ -257,11 +315,21 @@ def _compositor_pause() -> str:
         with open(prompt_path) as f:
             print(f.read())
         print("═" * 70)
-        print(f"\n  Full brief also at: {os.path.join(OUTPUT_DIR, 'animation_brief.json')}")
+        brief_path = os.path.join(OUTPUT_DIR, "animation_brief.json")
+        if use_hyperframes_compositor:
+            brief_path = os.path.join(OUTPUT_DIR, "hyperframes_custom_brief.json")
+        print(f"\n  Full brief also at: {brief_path}")
         print(f"\n  DROP FILE HERE:  {drop_path}\n")
+
+        # ── Veo2 prompts for animation_hook beats ────────────────────────────
+        if not use_hyperframes_compositor:
+            _print_veo2_prompts(topic_title, narration_data, timing_data)
     else:
         print("  Prompt Claude with the TOPIC + NARRATION above to generate")
-        print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
+        if use_hyperframes_compositor:
+            print("  a self-contained HyperFrames index.html composition.")
+        else:
+            print("  a self-contained CustomVideo.tsx (no props, all data hardcoded).")
         print(f"\n  Drop the file here when ready:")
         print(f"\n    {drop_path}\n")
         print("═" * 70)
@@ -277,26 +345,31 @@ def _compositor_pause() -> str:
         print("  Drop the file there and re-run with --stage animator", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\n  ✅ Found CustomVideo.tsx — continuing to render.\n")
+    if use_hyperframes_compositor:
+        print(f"\n  ✅ Found HyperFrames index.html — continuing to render.\n")
+    else:
+        print(f"\n  ✅ Found CustomVideo.tsx — continuing to render.\n")
     print("═" * 60 + "\n")
-    os.environ["COMPOSITOR_FILE"] = drop_path
+    if use_hyperframes_compositor:
+        print(f"[compositor] Using HyperFrames custom composition → {drop_path}")
+        os.environ["HYPERFRAMES_CUSTOM_COMPOSITION"] = drop_path
+    else:
+        os.environ["COMPOSITOR_FILE"] = drop_path
     return drop_path
 
 
-def _studio_pause():
+def _studio_pause() -> bool:
     """
-    Launch Remotion Studio so the user can preview + scrub the rendered video,
-    adjust timing, and verify audio sync before sending to Telegram.
-    Blocks until the user presses Enter.
+    Launch Remotion Studio so the user can preview + scrub the rendered video.
+    Returns True to send to Telegram, False to skip notifier.
     """
     import subprocess
-    import threading
 
     remotion_dir = os.path.join(os.path.dirname(__file__), "remotion")
     video_path   = os.path.join(OUTPUT_DIR, "video.mp4")
 
     print("\n" + "═" * 70)
-    print("  🎬  STUDIO REVIEW  —  inspect video before sending to Telegram")
+    print("  STUDIO REVIEW  —  inspect video before sending to Telegram")
     print("═" * 70)
 
     if os.path.exists(video_path):
@@ -305,8 +378,7 @@ def _studio_pause():
     print("\n  Starting Remotion Studio...")
     print("  Browser will open at http://localhost:3000\n")
     print("  • Scrub timeline to check audio sync")
-    print("  • Verify beat timing and transitions")
-    print("  • Press Ctrl+C in this terminal to kill Studio when done\n")
+    print("  • Verify beat timing and transitions\n")
     print("═" * 70)
 
     proc = None
@@ -330,8 +402,20 @@ def _studio_pause():
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        print("\n[studio] Closed. Continuing to notifier.\n")
-        print("═" * 60 + "\n")
+        print("\n[studio] Closed.\n")
+
+    # Explicit send confirmation — bug fix: previously sent regardless of input
+    print("═" * 70)
+    try:
+        ans = input("  Send video to Telegram? [y/n] → ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        ans = "n"
+    print("═" * 70 + "\n")
+
+    if ans != "y":
+        print("[notifier] Skipped — video saved at output/video.mp4")
+        return False
+    return True
 
 
 def _apply_narration_override(narration_arg: str):
@@ -378,22 +462,10 @@ def run_stage(name: str):
     from pipeline.logger import get as get_log
     get_log().info(f"Stage START: {name}")
     print(f"\n--- Running: {name} ---")
-    if name == "scraper":
-        from pipeline.scraper import main
-    elif name == "ranker":
-        from pipeline.ranker import main
-    elif name == "content_generator":
+    if name == "content_generator":
         from pipeline.content_generator import main
-    elif name == "scripter":
-        from pipeline.scripter import main
     elif name == "animator":
         from pipeline.animator import main
-    elif name == "verifier":
-        from pipeline.verifier import main
-    elif name == "scene_planner":
-        from pipeline.scene_planner import main
-    elif name == "param_extractor":
-        from pipeline.param_extractor import main
     elif name == "narrator":
         from pipeline.narrator import main
     elif name == "word_aligner":
@@ -409,12 +481,18 @@ def run_stage(name: str):
 
 def main():
     parser = argparse.ArgumentParser(description="adamax-content-engine pipeline")
-    parser.add_argument("--stage", choices=STAGES + ["content_generator", "brief_generator", "notifier"], help="Run a single stage")
+    parser.add_argument("--stage", choices=STAGES, help="Run a single stage")
     parser.add_argument(
         "--provider",
         choices=["claude", "openrouter", "anthropic", "gemini", "handoff"],
     )
     parser.add_argument("--model", help="Override OpenRouter model for all stages")
+    parser.add_argument(
+        "--renderer",
+        choices=["remotion", "hyperframes", "both"],
+        default="remotion",
+        help="Render backend for the animator stage.",
+    )
     parser.add_argument("--handoff-animator", action="store_true")
     parser.add_argument("--hop", action="store_true")
     parser.add_argument("--single-shot", action="store_true")
@@ -433,8 +511,8 @@ def main():
     parser.add_argument(
         "--custom", action="store_true",
         help=(
-            "Skip scraper + ranker. Provide topic via --title and --summary. "
-            "Runs single-shot content_generator directly."
+            "Provide topic via --title and --summary. "
+            "Runs content_generator directly."
         ),
     )
     parser.add_argument("--title",   default="", help="Topic title (required with --custom)")
@@ -448,7 +526,7 @@ def main():
             "JSON string or path to a .json file with custom spoken narration. "
             "Bypasses LLM narration rewrite. "
             'Expected keys: "hook", "concept_1", "concept_2", "takeaway_cta". '
-            "See BRIEF_PROMPT_V2.md for the exact format."
+            "See legacy/prompts/BRIEF_PROMPT_V2.md for the exact format."
         ),
     )
     parser.add_argument(
@@ -458,7 +536,7 @@ def main():
             "Custom voice delivery instruction for Gemini TTS. "
             "Replaces the default VOICE_DIRECTIVE. "
             'Example: --tone "deadpan and dry, like a skeptical senior engineer who has seen every hype cycle" '
-            "See BRIEF_PROMPT_V2.md for tone examples."
+            "See legacy/prompts/BRIEF_PROMPT_V2.md for tone examples."
         ),
     )
 
@@ -467,11 +545,15 @@ def main():
         "--compositor", action="store_true",
         help=(
             "Pause after narrator, print context file paths + drop directory, "
-            "wait for you to paste a custom CustomVideo.tsx, then continue to render."
+            "wait for you to paste a custom compositor artifact, then continue to render."
         ),
     )
 
     # ── Intervention checkpoint ───────────────────────────────────────────────
+    parser.add_argument(
+        "--no-notify", action="store_true", dest="no_notify",
+        help="Skip Telegram notification entirely — video saved to output/video.mp4 only.",
+    )
     parser.add_argument(
         "--checkpoint", action="store_true",
         help=(
@@ -494,12 +576,15 @@ def main():
         os.environ.setdefault("GEMINI_MODEL_NARRATOR",           "gemini-2.5-flash-lite")
         os.environ.setdefault("GEMINI_MODEL_PARAM_EXTRACTOR",   "gemini-2.5-flash-lite")
         os.environ.setdefault("GEMINI_MODEL_ANIMATOR",           "gemini-2.5-flash-lite")
-        # content_generator intentionally stays on gemini-2.5-flash — flash-lite
-        # cannot reliably follow the word budget + field constraints simultaneously.
-        os.environ.setdefault("GEMINI_MODEL_CONTENT_GENERATOR", "gemini-2.5-flash")
+        # content_generator uses flash when generating narration from scratch.
+        # With --narration override it only structures data — flash-lite is enough
+        # and avoids 403s on keys without gemini-2.5-flash project access.
+        # The actual model selection is done in content_generator.py based on NARRATION_OVERRIDE.
 
     if args.provider:
         apply_provider(args.provider, args.model)
+
+    os.environ["RENDER_BACKEND"] = args.renderer
 
     if args.handoff_animator:
         os.environ["FORCE_PROVIDER_ANIMATOR"] = "handoff"
@@ -544,6 +629,13 @@ def main():
             sys.exit(1)
         _write_custom_topic(args.title, args.summary)
         os.environ["PIPELINE_MODE"] = "single_shot"
+    elif not args.stage and not os.path.exists(TOPIC_PATH):
+        print(
+            "[ERROR] No topic.json found. Use --custom --title ... --summary ... "
+            "or resume from a later stage with existing outputs.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     from pipeline.logger import setup as log_setup
     log = log_setup()
@@ -565,6 +657,7 @@ def main():
             pass
 
     if getattr(args, "single_shot", False):
+        print("[warn] --single-shot is now the default content generation path.")
         os.environ["PIPELINE_MODE"] = "single_shot"
 
     # ── Stage selection ───────────────────────────────────────────────────────
@@ -572,15 +665,11 @@ def main():
         stages_to_run = [args.stage]
     elif args.custom:
         stages_to_run = STAGES_CUSTOM
-    elif getattr(args, "single_shot", False):
-        stages_to_run = STAGES_SINGLE_SHOT
     else:
         stages_to_run = STAGES
     run_type = args.stage if args.stage else "full"
 
     # Checkpoint fires after content generation, before TTS + render.
-    # Content stages = everything up to and including content_generator /
-    # param_extractor. Post-content stages = narrator onwards.
     POST_CONTENT = {"narrator", "word_aligner", "animator", "notifier"}
     checkpoint_needed = args.checkpoint and not args.stage
 
@@ -613,7 +702,11 @@ def main():
 
         # ── Studio review: open Remotion Studio after animator, before notifier ──
         if stage == "notifier":
-            _studio_pause()
+            if args.no_notify:
+                print("[notifier] Skipped — --no-notify flag set.")
+                continue
+            if not _studio_pause():
+                continue
 
         # ── Narration override: write spoken_narration.json after content stage ─
         if args.narration and stage == "content_generator":

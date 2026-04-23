@@ -6,6 +6,10 @@ import { LayoutRenderer } from "./LayoutRenderer";
 import { CustomVideo, CustomVideoConfig } from "./CustomVideo";
 import { HookR3F } from "./layouts/HookR3F";
 import { SampleMVP, SampleMVPConfig } from "./SampleMVP";
+import { ThemeTestHook } from "./ThemeTest";
+import { PhosphorDemo } from "./PhosphorDemo";
+import { TemplateMVP_Infographic, TemplateMVP_ThreeJS, TemplateMVP_Combined } from "./TemplateMVP";
+import { QwenPawCPU, QwenPawCPUConfig } from "./QwenPawCPU";
 import type { RemotionProps, BeatLayout, LayoutNode } from "./types";
 
 const FPS     = 30;
@@ -237,11 +241,66 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={dynamicDuration}
       />
 
-      {/* Phase 3 gate — R3F metallic hook pilot. Inspect PBR lighting + entrance spring.
-          Run: cd remotion && npx remotion render src/index.ts Phase3Test /tmp/phase3_test.mp4 */}
+      {/* Phase 3 gate — R3F metallic hook pilot */}
       <Composition
         id="Phase3Test"
         component={Phase3TestComposition}
+        durationInFrames={150}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+
+      {/* Phosphor theme MVPs */}
+      <Composition
+        id="ThemeTest"
+        component={ThemeTestHook as AnyComponent}
+        durationInFrames={105}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="PhosphorDemo"
+        component={PhosphorDemo as AnyComponent}
+        durationInFrames={60}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+
+      {/* Template dir comparison — combined 10s video, infographic then threejs */}
+      <Composition
+        id="TemplateMVP-Combined"
+        component={TemplateMVP_Combined as AnyComponent}
+        durationInFrames={120}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+
+      {/* QwenPaw CPU die — standalone 3D bg loop for beat_2 composite */}
+      <Composition
+        id="QwenPawCPU"
+        component={QwenPawCPU as AnyComponent}
+        durationInFrames={QwenPawCPUConfig.durationInFrames}
+        fps={QwenPawCPUConfig.fps}
+        width={QwenPawCPUConfig.width}
+        height={QwenPawCPUConfig.height}
+      />
+
+      {/* Template dir comparison — individual renders */}
+      <Composition
+        id="TemplateMVP-Infographic"
+        component={TemplateMVP_Infographic as AnyComponent}
+        durationInFrames={150}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="TemplateMVP-ThreeJS"
+        component={TemplateMVP_ThreeJS as AnyComponent}
         durationInFrames={150}
         fps={30}
         width={1080}

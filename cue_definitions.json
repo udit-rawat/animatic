@@ -23,28 +23,28 @@
   ],
   "word_cues": [
     {
-      "label": "problem_reveal",
-      "trigger_word": "wrong",
-      "occurrence": 0,
+      "label": "metric_reveal",
+      "trigger_word": "month",
+      "occurrence": 1,
       "offset_frames": -12
     },
     {
-      "label": "graph_show",
-      "trigger_word": "graph",
-      "occurrence": 0,
-      "offset_frames": 0
+      "label": "split_enter",
+      "trigger_word": "free",
+      "occurrence": 1,
+      "offset_frames": -10
     },
     {
-      "label": "tokens_slash",
-      "trigger_word": "slashes",
-      "occurrence": 0,
-      "offset_frames": 0
+      "label": "insight_drop",
+      "trigger_word": "agents",
+      "occurrence": -1,
+      "offset_frames": -8
     },
     {
       "label": "takeaway_flash",
-      "trigger_word": "Instantly",
+      "trigger_word": "OpenManus",
       "occurrence": 0,
-      "offset_frames": 0
+      "offset_frames": -10
     }
   ]
 }

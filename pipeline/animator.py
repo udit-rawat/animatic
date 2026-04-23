@@ -36,6 +36,7 @@ AUDIO_INPUT   = os.path.join(_ROOT, "output", "narration.wav")
 PROPS_PATH    = os.path.join(_ROOT, "output", "remotion_props.json")
 OUTPUT_VIDEO  = os.path.join(_ROOT, "output", "video.mp4")
 REMOTION_DIR  = os.path.join(_ROOT, "remotion")
+VIDEO_SPEC    = os.path.join(_ROOT, "output", "video_spec.json")
 
 FPS = 30
 
@@ -320,6 +321,20 @@ def run_remotion_custom(compositor_file: str, output_path: str) -> tuple[bool, s
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    render_backend = os.environ.get("RENDER_BACKEND", "").strip().lower()
+    output_video = os.environ.get("ANIMATOR_OUTPUT_PATH", OUTPUT_VIDEO).strip() or OUTPUT_VIDEO
+    if render_backend == "hyperframes":
+        print("[animator] RENDER_BACKEND=hyperframes — delegating to pipeline.hyper_animator")
+        from pipeline.hyper_animator import main as hyper_main
+        return hyper_main()
+    if render_backend == "both":
+        print("[animator] RENDER_BACKEND=both — delegating to pipeline.render_parity")
+        from pipeline.render_parity import main as parity_main
+        return parity_main()
+
+    if os.path.exists(VIDEO_SPEC):
+        print("[animator] video_spec.json present — Remotion inputs are currently derived artifacts")
+
     # ── Load inputs ──────────────────────────────────────────────────────────
     with open(PARAMS_INPUT) as f:
         params = json.load(f)
@@ -391,26 +406,26 @@ def main():
     print(f"✓ Props written → {PROPS_PATH}")
 
     # ── Render — compositor / local / Lambda ─────────────────────────────────
-    os.makedirs(os.path.dirname(OUTPUT_VIDEO), exist_ok=True)
+    os.makedirs(os.path.dirname(output_video), exist_ok=True)
 
     compositor_file = os.environ.get("COMPOSITOR_FILE", "").strip()
     if compositor_file and os.path.exists(compositor_file):
         print(f"[animator] Compositor mode — rendering CustomVideo from {compositor_file}")
-        success, log = run_remotion_custom(compositor_file, OUTPUT_VIDEO)
+        success, log = run_remotion_custom(compositor_file, output_video)
     else:
         use_lambda = os.environ.get("USE_REMOTION_LAMBDA", "").strip() == "1"
         if use_lambda:
             print("[animator] USE_REMOTION_LAMBDA=1 — using @remotion/lambda")
-            success, log = run_remotion_lambda(PROPS_PATH, OUTPUT_VIDEO)
+            success, log = run_remotion_lambda(PROPS_PATH, output_video)
         else:
-            success, log = run_remotion(PROPS_PATH, OUTPUT_VIDEO)
+            success, log = run_remotion(PROPS_PATH, output_video)
 
     if not success:
         raise RuntimeError(f"Remotion render failed:\n{log}")
 
-    size_mb = os.path.getsize(OUTPUT_VIDEO) / 1_000_000
-    print(f"\n✓ Video saved → {OUTPUT_VIDEO}  ({size_mb:.1f} MB)")
-    return OUTPUT_VIDEO
+    size_mb = os.path.getsize(output_video) / 1_000_000
+    print(f"\n✓ Video saved → {output_video}  ({size_mb:.1f} MB)")
+    return output_video
 
 
 if __name__ == "__main__":

@@ -1,12 +1,12 @@
 /**
  * _shared.tsx — design tokens, shared primitives, motion system.
  *
- * Palette: "Neon Cyber" — high-contrast, single signal accent
- *   cyan   → #00E5FF  Cyber Cyan   (primary anchor: borders, connectors, structure)
- *   yellow → #CCFF00  Acid Volt    (signal accent: ONE hero element per screen only)
+ * Palette: "Deep Winter Minimalist" — premium, high-contrast, no neon
+ *   cyan   → #2563EB  Cobalt Blue  (structural accents, key data)
+ *   yellow → #D1D5DB  Cool Silver  (secondary labels, muted context)
  *   green  → #10B981  Emerald      (positive metrics)
- *   red    → #FF3366  Radium Red   (negative metrics, bottlenecks)
- *   white  → #F9FAFB
+ *   red    → #E11D48  Deep Ruby    (negative metrics, critical info)
+ *   white  → #FFFFFF  Icy White    (all primary display text)
  *
  * Motion tiers (see springIn.ts for spring configs):
  *   HEAVY  — hook + takeaway hero elements. Visible overshoot.
@@ -30,16 +30,16 @@ import type { NodeColor } from "../types";
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
 export const COLOR: Record<NodeColor, string> = {
-  cyan:   "#00E5FF",   // Cyber Cyan  — primary anchor
-  yellow: "#CCFF00",   // Acid Volt   — signal accent (use for ONE element per screen)
+  cyan:   "#2563EB",   // Cobalt Blue — structural accents, key data elements
+  yellow: "#D1D5DB",   // Cool Silver — secondary labels, muted context
   green:  "#10B981",   // Emerald     — positive metrics
-  red:    "#FF3366",   // Radium Red  — negative metrics / bottlenecks
-  white:  "#F9FAFB",
+  red:    "#E11D48",   // Deep Ruby   — negative metrics, critical info
+  white:  "#FFFFFF",   // Icy White   — all primary display text
 };
 
-export const VIOLET = "#8B5CF6"; // Deep Violet — ambient backgrounds, particle tint
+export const VIOLET = "#1E3A5F"; // Deep Navy — ambient backgrounds, particle tint
 
-export const FONT = "'Inter', 'system-ui', sans-serif";
+export const FONT = "'Inter', 'Space Grotesk', sans-serif";
 
 // ── Broadcast-grade typography styles ─────────────────────────────────────────
 // Apply to all text elements for optical precision matching broadcast graphics.
@@ -68,11 +68,11 @@ const det  = (seed: number) => frac(Math.sin(seed) * 43758.5453);
 export const PARTICLE_FIELD = Array.from({ length: 40 }, (_, i) => ({
   x:        det(i * 127.1) * 1080,
   y:        det(i * 311.7 + 99) * 1920,
-  size:     1 + Math.round(det(i * 74.3 + 33) * 1.5), // 1–2 px
-  xFreq:    0.007 + det(i * 53.1) * 0.005,             // X-axis sine frequency
-  xAmp:     18 + det(i * 91.3) * 28,                   // X-axis amplitude (px)
-  blurred:  i % 2 === 0,                               // faux depth-of-field
-  isCyan:   i % 3 !== 2,                               // 2/3 cyan, 1/3 violet
+  size:     1 + Math.round(det(i * 74.3 + 33) * 1.5),
+  xFreq:    0.007 + det(i * 53.1) * 0.005,
+  xAmp:     18 + det(i * 91.3) * 28,
+  blurred:  i % 2 === 0,
+  isCyan:   i % 3 !== 2,                               // 2/3 cobalt, 1/3 navy
 }));
 
 // ── ParticleBackground ────────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ export const TelemetryFrame: React.FC<{ frame: number }> = ({ frame }) => {
 
     // Border stroke
     ctx.save();
-    ctx.strokeStyle = `rgba(0,229,255,${borderOpacity})`;
+    ctx.strokeStyle = `rgba(37,99,235,${borderOpacity})`; // Cobalt Blue #2563EB
     ctx.lineWidth   = 1;
 
     if (isTransition) {
@@ -198,7 +198,7 @@ export const TelemetryFrame: React.FC<{ frame: number }> = ({ frame }) => {
       const streakCx = (streakPct / 100) * 1080;
       const grad = ctx.createLinearGradient(streakCx - 60, 0, streakCx + 60, 0);
       grad.addColorStop(0,   "transparent");
-      grad.addColorStop(0.5, `rgba(204,255,0,${streakOpacity})`);   // CCFF00 Acid Volt
+      grad.addColorStop(0.5, `rgba(37,99,235,${streakOpacity})`);    // #2563EB Cobalt Blue
       grad.addColorStop(1,   "transparent");
 
       ctx.save();

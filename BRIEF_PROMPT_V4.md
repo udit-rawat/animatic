@@ -112,6 +112,8 @@ If the hook does not have a number, brand, or runnable noun in the first 3 words
 
 **Visual rule: Frame 0 must have text.** If the first frame is a logo or blank screen, the hook fails. Text must render before 0.3 seconds. Brief animations that start with words, not intros.
 
+**Hero value rule: beat_1 `hero_value` must be the product/repo name — never a metric.** The metric goes in `hero_label`. Voice says the name first, screen shows the name first. Viewer must know WHAT in the first frame before they know HOW MUCH.
+
 **Formula A — The cost punch:**
 `[what they pay now] → [what just changed] → [the number that makes it real]`
 > "You are paying twenty dollars a month for browser automation that breaks every week, and AllenAI just open-sourced something that runs on your laptop for free."
@@ -222,11 +224,12 @@ If under 50: add one concrete number or consequence to concept_2.
 ## PIPELINE PAUSE FLOW
 
 The `--compositor` flag means the pipeline will:
-1. Run all stages (TTS, timing, layout generation, brief_generator)
+1. Run `content_generator` and write structured content outputs
 2. Pause and show the **exact narration going to TTS** — you confirm before audio is generated
-3. After TTS + brief_generator: pause again and **print the full animation brief inline** — no cat command needed
-4. **Copy the entire brief block and paste it into a Claude session** — Claude reads it and writes CustomVideo.tsx
-5. Drop the file at the exact path printed at the bottom of the brief, press Enter, pipeline renders
+3. Run TTS, timing extraction, and `brief_generator`
+4. Pause again and **print the full animation brief inline** — no cat command needed
+5. **Copy the full brief block and paste it into a Claude session** — Claude writes `CustomVideo.tsx`
+6. Drop the file at the exact path printed at the bottom of the brief, press Enter, pipeline renders
 
 ---
 
@@ -247,7 +250,7 @@ When you receive an animation brief, your role is **coder, not creative director
 **What you write:**
 - ONE file: `CustomVideo.tsx`
 - Self-contained — no external props, all data hardcoded from the brief
-- Imports only from `remotion`, `react`, `./layouts/`
+- Imports only from `remotion`, `react`, and `./layouts/`
 - Each beat wrapped in `<Sequence from={beatStartFrame} durationInFrames={duration}>`
 - Drop it at the exact path printed at the bottom of the brief
 

@@ -29,6 +29,8 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from pipeline.video_spec import build_video_spec, write_video_spec
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
 _ROOT       = os.path.join(os.path.dirname(__file__), "..")
@@ -628,9 +630,13 @@ def _generate_gemini(topic: dict, max_retries: int) -> VideoPayload:
     if not keys:
         raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS not set.")
 
-    # content_generator uses the full flash model — flash-lite lacks the instruction
-    # following capacity to reliably hit the word budget + field constraints simultaneously.
-    model_name = os.environ.get("GEMINI_MODEL_CONTENT_GENERATOR", "gemini-2.5-flash")
+    # When narration is pre-supplied (NARRATION_OVERRIDE=1), content_generator only
+    # needs to structure data — flash-lite is sufficient and avoids project-level 403s
+    # on keys that don't have gemini-2.5-flash access. Full flash only needed when
+    # generating narration from scratch (word budget + field constraints).
+    narration_override = os.environ.get("NARRATION_OVERRIDE") == "1"
+    default_model = "gemini-2.5-flash-lite" if narration_override else "gemini-2.5-flash"
+    model_name = os.environ.get("GEMINI_MODEL_CONTENT_GENERATOR", default_model)
     print(f"[content_generator] Gemini  model={model_name}  keys={len(keys)}  max_retries={max_retries}")
 
     last_err = None
@@ -1047,7 +1053,7 @@ def _build_cue_definitions(payload: VideoPayload) -> dict:
 
 
 def save_outputs(payload: VideoPayload, topic: dict) -> None:
-    """Write all four pipeline files from a validated VideoPayload."""
+    """Write legacy pipeline files plus renderer-neutral video_spec.json."""
     os.makedirs(os.path.join(_ROOT, "output"), exist_ok=True)
 
     script  = _build_script_json(payload, topic)
@@ -1055,6 +1061,14 @@ def save_outputs(payload: VideoPayload, topic: dict) -> None:
     params  = _build_params_json(payload)
     plan    = _build_scene_plan()
     cues    = _build_cue_definitions(payload)
+    spec    = build_video_spec(
+        topic=topic,
+        script=script,
+        spoken=spoken,
+        params=params,
+        scene_plan=plan,
+        cues=cues,
+    )
 
     for path, data in [
         (SCRIPT_OUT, script),
@@ -1066,6 +1080,9 @@ def save_outputs(payload: VideoPayload, topic: dict) -> None:
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
         print(f"  ✓ {os.path.relpath(path, _ROOT)}")
+
+    write_video_spec(spec)
+    print("  ✓ output/video_spec.json")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1091,7 +1108,10 @@ def main():
         topic = {"title": " ".join(sys.argv[2:]), "summary": ""}
     else:
         if not os.path.exists(TOPIC_PATH):
-            raise RuntimeError(f"topic.json not found at {TOPIC_PATH}. Run scraper + ranker first.")
+            raise RuntimeError(
+                f"topic.json not found at {TOPIC_PATH}. "
+                "Use --custom --title ... --summary ... or create topic.json first."
+            )
         with open(TOPIC_PATH) as f:
             topic = json.load(f)
 

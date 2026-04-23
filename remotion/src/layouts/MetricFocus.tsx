@@ -58,7 +58,7 @@ export const MetricFocus: React.FC<{ data: MetricFocusData }> = ({ data }) => {
       boxSizing:      "border-box",
       justifyContent: "center",
       fontFamily:     FONT,
-      background:     "radial-gradient(ellipse at 50% 40%, #111 0%, #0A0A0A 70%)",
+      background:     "linear-gradient(180deg, #111112 0%, #080809 100%)",
       position:       "relative",
       overflow:       "hidden",
     }}>

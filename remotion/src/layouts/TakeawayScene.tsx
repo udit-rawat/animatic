@@ -160,7 +160,7 @@ export const TakeawayScene: React.FC<{
     <div style={{
       width:     "100%",
       height:    "100%",
-      background:"radial-gradient(ellipse at 50% 60%, #111 0%, #0A0A0A 70%)",
+      background:"linear-gradient(180deg, #111112 0%, #080809 100%)",
       position:  "relative",
       overflow:  "hidden",
       fontFamily: FONT,
