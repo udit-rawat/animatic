@@ -1,146 +1,172 @@
 # adamax-content-engine
 
-AdaMax video pipeline for short technical AI reels.
+Short-form technical reel production workspace for `@ada.max24`.
 
-Current live path:
+The project is transitioning away from the old end-to-end automated pipeline and toward a lean HyperFrames-first reel system:
+
+```text
+reel spec -> Gemini TTS -> HyperFrames composition -> final MP4
+```
+
+The old pipeline still exists in this branch for reference, but it is no longer the direction of the project.
+
+## Current Direction
+
+The active production style is hand-authored HyperFrames:
+
+- one reel concept
+- one source spec
+- one reusable TTS runner
+- one reusable render command
+- final MP4 output
+- generated narration and render artifacts kept out of git
+
+Recent finished reels live under `output/hyperframes_custom/` and serve as visual references:
+
+- `2026-04-24_memory-wall-hf`
+- `2026-04-25_spotify-blend-hf`
+- `2026-04-25_iphone-portrait-hf`
+
+The next refactor should collapse the current reel-specific scripts into one generic spec-driven workflow.
+
+## Target Workflow
+
+The desired shape is:
+
+```text
+reels/current/
+  spec.json
+  index.html
+
+scripts/
+  generate_tts.py
+  render_hyperframes.py
+  new_reel.py
+
+cache/
+  tts/
+  renders/
+  old_specs/
+
+output/final/
+  <slug>.mp4
+```
+
+The source of truth should be `spec.json`. It should define the slug, title, duration, FPS, voice, narration segments, composition directory, and output path.
+
+Example shape:
+
+```json
+{
+  "slug": "iphone-portrait",
+  "title": "iPhone Portrait Mode",
+  "duration": 25.2,
+  "fps": 60,
+  "voice": "Aoede",
+  "tts_provider": "gemini",
+  "composition_dir": "reels/current",
+  "output_file": "output/final/iphone_portrait.mp4",
+  "segments": [
+    {
+      "id": "hook",
+      "start": 0.35,
+      "duration": 3.2,
+      "text": "This is why iPhone portrait mode beats Android."
+    }
+  ]
+}
+```
+
+## Current Temporary State
+
+Until the refactor lands, the repo still contains reel-specific helper scripts:
+
+- `scripts/generate_memory_wall_hyperframes_gemini_tts.py`
+- `scripts/generate_spotify_blend_hyperframes_gemini_tts.py`
+- `scripts/generate_iphone_portrait_hyperframes_gemini_tts.py`
+
+These should be treated as migration scaffolding, not the final architecture.
+
+The minimal active shared code for TTS is:
+
+- `pipeline/narrator.py`
+- `pipeline/claude_client.py`
+- `pipeline/quota.py`
+- `pipeline/logger.py`
+- `pipeline/video_spec.py`
+
+## Visual System
+
+Use `ANIMATION_PLAYBOOK.md` as the style memory for future reels.
+
+Current high-performing direction:
+
+- premium product-demo clarity
+- object-based explanation
+- strong safe-area alignment
+- restrained motion
+- no neon/cyberpunk defaults
+- no flashy transitions
+- no text-first infographic slabs unless the concept demands it
+
+The old README image/diagram has been intentionally removed. A new architecture diagram should be added after the spec-driven workflow is implemented.
+
+## Legacy Pipeline
+
+The previous pipeline path was:
 
 ```text
 custom topic -> content_generator -> narrator -> word_aligner
             -> brief_generator -> compositor pause -> animator -> notifier
 ```
 
-The repo is in transition:
-- current renderer: Remotion
-- next renderer target: HyperFrames
-- archived legacy pipeline: scraper/ranker/multi-stage generation
+That path produced many intermediate files in `output/` and depended heavily on Remotion or compositor-generated `CustomVideo.tsx` files.
 
-## Current workflow
+It is still present for now, but should be archived after the new HyperFrames workflow is stable.
 
-### 1. Custom topic run
+Legacy areas:
 
-Provide title + summary, optionally override narration + tone.
-
-```bash
-python run.py --gemini --custom \
-  --title "Self-Host ChatGPT UI With Open WebUI" \
-  --summary "Open WebUI runs a ChatGPT-style interface locally with Ollama..." \
-  --tone "Calm and measured. Speak like a senior engineer." \
-  --narration '{"hook":"ChatGPT. Self-hosted. Free.","concept_1":"...","concept_2":"...","takeaway_cta":"Save this. You will need the command later."}'
-```
-
-### 2. Compositor mode
-
-This is the main quality path today.
-
-```bash
-python run.py --gemini --custom --compositor \
-  --title "..." \
-  --summary "..." \
-  --tone "..." \
-  --narration '{...}'
-```
-
-What happens:
-1. `content_generator` writes structured content outputs into `output/`
-2. `narrator` shows the final spoken narration for approval, then generates TTS
-3. `word_aligner` optionally adds word timestamps
-4. `brief_generator` writes animation brief files and the compositor prompt
-5. pipeline pauses and prints the full compositor brief inline
-6. you paste that into Claude and get a bespoke `CustomVideo.tsx`
-7. drop the file at the printed path, press Enter, pipeline renders
-8. `notifier` can send the result to Telegram
-
-### 3. Resume from a stage
-
-```bash
-python run.py --gemini --custom --compositor --stage narrator --title "..."
-python run.py --gemini --custom --compositor --stage brief_generator --title "..."
-python run.py --gemini --custom --compositor --stage animator --title "..."
-```
-
-## Active stages
-
-| Stage | File | What it does |
-|---|---|---|
-| `content_generator` | `pipeline/content_generator.py` | Single structured LLM call -> script + spoken narration + scene data + cue definitions |
-| `narrator` | `pipeline/narrator.py` | Gemini TTS + timing JSON |
-| `word_aligner` | `pipeline/word_aligner.py` | Optional Whisper word timestamps |
-| `brief_generator` | `pipeline/brief_generator.py` | Builds animation brief + compositor prompt + drop path |
-| `animator` | `pipeline/animator.py` | Current Remotion render bridge |
-| `notifier` | `pipeline/notifier.py` | Telegram delivery + run summary |
-
-## Output contract today
-
-Main generated artifacts:
-
-- `output/topic.json`
-- `output/script.json`
-- `output/spoken_narration.json`
-- `output/params.json`
-- `output/scene_plan.json`
-- `output/narration.wav`
-- `output/narration_timing.json`
-- `output/word_timings.json`
-- `output/animation_brief.json`
-- `output/compositor_prompt.md`
-- `output/drop_path.txt`
-- `output/video.mp4`
-
-## Current renderer state
-
-Remotion is still the live render layer.
-
-Two render paths still exist:
-- template render via `VideoComposition`
-- bespoke render via compositor-generated `CustomVideo.tsx`
-
-The codebase is moving away from Remotion-specific authoring toward a future
-renderer-neutral spec and a HyperFrames backend, but that migration is not done
-yet.
-
-## Legacy code
-
-Archived phase-1 legacy pipeline lives under:
-
+- `remotion/`
+- `renderers/`
+- most of `pipeline/`
 - `legacy/phase1-pipeline/`
-
-That archive contains:
-- `scraper.py`
-- `ranker.py`
-- `scripter.py`
-- `verifier.py`
-- `scene_planner.py`
-- `param_extractor.py`
-
-These are no longer wired into `run.py`.
+- generated files under `output/`
 
 ## Environment
 
-See [.env.example](/Users/uditrawat/Desktop/experiment/adamax-content-engine/.env.example:1).
+See `.env.example`.
 
 Minimum active setup:
-- `GEMINI_API_KEY` or `GEMINI_API_KEYS`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
 
-Renderer prerequisites for current Remotion path:
-
-```bash
-cd remotion && npm install
+```text
+GEMINI_API_KEY or GEMINI_API_KEYS
 ```
 
-Python deps:
+Optional legacy setup:
+
+```text
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+OPENROUTER_API_KEY
+ANTHROPIC_API_KEY
+```
+
+Python dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Optional:
-- `openai-whisper` for word timestamps
-- OpenRouter / Anthropic keys for fallback provider modes
+HyperFrames rendering currently uses the local HyperFrames CLI.
 
-## Repo notes
+## Git Hygiene
 
-- `BRIEF_PROMPT_V4.md` is the active prompt file
-- older prompt versions were moved to `legacy/prompts/`
-- docs still tied to Remotion should be treated as current-state, not future-state
+Generated artifacts should stay out of source control:
+
+- TTS chunks
+- rendered MP4/MOV files
+- temporary narration WAV files
+- cache directories
+- old output JSON from previous runs
+
+Tracked files should represent source of truth: specs, composition HTML, reusable scripts, and documentation.
