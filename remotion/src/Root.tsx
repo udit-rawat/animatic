@@ -10,6 +10,11 @@ import { ThemeTestHook } from "./ThemeTest";
 import { PhosphorDemo } from "./PhosphorDemo";
 import { TemplateMVP_Infographic, TemplateMVP_ThreeJS, TemplateMVP_Combined } from "./TemplateMVP";
 import { QwenPawCPU, QwenPawCPUConfig } from "./QwenPawCPU";
+import {
+  MemoryWallReel,
+  MemoryWallReelConfig,
+  MemoryWallReelDefaultProps,
+} from "./MemoryWallReel";
 import type { RemotionProps, BeatLayout, LayoutNode } from "./types";
 
 const FPS     = 30;
@@ -217,6 +222,17 @@ export const RemotionRoot: React.FC = () => {
         fps={CustomVideoConfig.fps}
         width={CustomVideoConfig.width}
         height={CustomVideoConfig.height}
+      />
+
+      <Composition
+        id="MemoryWallReel"
+        component={MemoryWallReel as AnyComponent}
+        durationInFrames={MemoryWallReelConfig.durationInFrames}
+        fps={MemoryWallReelConfig.fps}
+        width={MemoryWallReelConfig.width}
+        height={MemoryWallReelConfig.height}
+        defaultProps={MemoryWallReelDefaultProps as unknown as Record<string, unknown>}
+        calculateMetadata={dynamicDuration}
       />
 
       {/* SampleMVP — KV Cache 10s demo: HookR3F + GlassmorphBeat + camera pan */}
