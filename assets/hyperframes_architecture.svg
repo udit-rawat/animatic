@@ -1,0 +1,183 @@
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+    
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#6b7280" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" font-size="20" font-weight="600" fill="#1f2937" text-anchor="middle">
+    HyperFrames-First Reel System
+  </text>
+  
+  <!-- Source of Truth Box -->
+  <g filter="url(#shadow)">
+    <rect x="280" y="60" width="240" height="120" rx="8" fill="#f9fafb" stroke="#3b82f6" stroke-width="2"/>
+    <text x="400" y="85" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">
+      Source of Truth (tracked)
+    </text>
+    
+    <!-- spec.json -->
+    <rect x="295" y="100" width="100" height="60" rx="6" fill="#ffffff" stroke="#d1d5db"/>
+    <text x="345" y="120" font-size="11" font-weight="600" fill="#1f2937" text-anchor="middle">
+      spec.json
+    </text>
+    <text x="345" y="135" font-size="9" fill="#6b7280" text-anchor="middle">slug, title</text>
+    <text x="345" y="148" font-size="9" fill="#6b7280" text-anchor="middle">duration, fps</text>
+    <text x="345" y="161" font-size="9" fill="#6b7280" text-anchor="middle">segments</text>
+    
+    <!-- index.html -->
+    <rect x="405" y="100" width="100" height="60" rx="6" fill="#ffffff" stroke="#d1d5db"/>
+    <text x="455" y="120" font-size="11" font-weight="600" fill="#1f2937" text-anchor="middle">
+      index.html
+    </text>
+    <text x="455" y="135" font-size="9" fill="#6b7280" text-anchor="middle">animation</text>
+    <text x="455" y="148" font-size="9" fill="#6b7280" text-anchor="middle">layout</text>
+    <text x="455" y="161" font-size="9" fill="#6b7280" text-anchor="middle">visuals</text>
+  </g>
+
+  <!-- Arrow down to TTS -->
+  <path d="M 345 180 L 345 220" stroke="#6b7280" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+  
+  <!-- TTS Generation -->
+  <g filter="url(#shadow)">
+    <rect x="240" y="220" width="210" height="90" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="2"/>
+    <text x="345" y="242" font-size="13" font-weight="600" fill="#1f2937" text-anchor="middle">
+      generate_tts.py
+    </text>
+    <text x="345" y="262" font-size="10" fill="#374151" text-anchor="middle">
+      reads spec.segments
+    </text>
+    <text x="345" y="278" font-size="10" fill="#374151" text-anchor="middle">
+      calls Gemini TTS API
+    </text>
+    <text x="345" y="294" font-size="10" fill="#374151" text-anchor="middle">
+      writes narration.wav + timing
+    </text>
+  </g>
+
+  <!-- Arrow to Generated Assets -->
+  <path d="M 345 310 L 345 350" stroke="#6b7280" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+
+  <!-- Generated Assets (ignored) -->
+  <g filter="url(#shadow)">
+    <rect x="245" y="350" width="200" height="80" rx="8" fill="#fefce8" stroke="#d1d5db" stroke-width="2" stroke-dasharray="4,4"/>
+    <text x="345" y="372" font-size="12" font-weight="600" fill="#374151" text-anchor="middle">
+      Generated (git-ignored)
+    </text>
+    <text x="345" y="390" font-size="10" fill="#6b7280" text-anchor="middle">
+      narration.wav
+    </text>
+    <text x="345" y="405" font-size="10" fill="#6b7280" text-anchor="middle">
+      narration_timing.json
+    </text>
+    <text x="345" y="420" font-size="10" fill="#6b7280" text-anchor="middle">
+      cache/tts/
+    </text>
+  </g>
+
+  <!-- Arrow from spec to render -->
+  <path d="M 455 180 L 455 220" stroke="#6b7280" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+
+  <!-- Render Process -->
+  <g filter="url(#shadow)">
+    <rect x="360" y="220" width="190" height="110" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="2"/>
+    <text x="455" y="242" font-size="13" font-weight="600" fill="#1f2937" text-anchor="middle">
+      render_hyperframes.py
+    </text>
+    <text x="455" y="262" font-size="10" fill="#374151" text-anchor="middle">
+      copies to cache/render_work
+    </text>
+    <text x="455" y="278" font-size="10" fill="#374151" text-anchor="middle">
+      injects spec.duration
+    </text>
+    <text x="455" y="294" font-size="10" fill="#374151" text-anchor="middle">
+      runs HyperFrames CLI
+    </text>
+    <text x="455" y="310" font-size="10" fill="#374151" text-anchor="middle">
+      outputs final MP4
+    </text>
+  </g>
+
+  <!-- Arrow to Final Output -->
+  <path d="M 455 330 L 455 450" stroke="#6b7280" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+
+  <!-- Final Output -->
+  <g filter="url(#shadow)">
+    <rect x="360" y="450" width="190" height="70" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+    <text x="455" y="472" font-size="13" font-weight="600" fill="#1f2937" text-anchor="middle">
+      Final Deliverable
+    </text>
+    <text x="455" y="492" font-size="11" fill="#374151" text-anchor="middle">
+      output/final/
+    </text>
+    <text x="455" y="508" font-size="11" fill="#374151" text-anchor="middle">
+      &lt;slug&gt;.mp4
+    </text>
+  </g>
+
+  <!-- Workflow Pipeline Label -->
+  <text x="50" y="130" font-size="11" font-weight="600" fill="#6b7280" text-anchor="start">
+    Workflow:
+  </text>
+  <text x="50" y="150" font-size="10" fill="#9ca3af" text-anchor="start">
+    1. Define spec
+  </text>
+  <text x="50" y="270" font-size="10" fill="#9ca3af" text-anchor="start">
+    2. Generate TTS
+  </text>
+  <text x="50" y="480" font-size="10" fill="#9ca3af" text-anchor="start">
+    3. Render video
+  </text>
+
+  <!-- Key Principles -->
+  <g>
+    <text x="600" y="100" font-size="11" font-weight="600" fill="#6b7280">
+      Principles:
+    </text>
+    <text x="600" y="120" font-size="9" fill="#9ca3af">
+      • Spec controls timing
+    </text>
+    <text x="600" y="136" font-size="9" fill="#9ca3af">
+      • HTML controls visuals
+    </text>
+    <text x="600" y="152" font-size="9" fill="#9ca3af">
+      • Scripts are generic
+    </text>
+    <text x="600" y="168" font-size="9" fill="#9ca3af">
+      • Cache is disposable
+    </text>
+    <text x="600" y="184" font-size="9" fill="#9ca3af">
+      • No per-reel scripts
+    </text>
+  </g>
+
+  <!-- Recent Examples -->
+  <g>
+    <rect x="590" y="210" width="180" height="100" rx="6" fill="#fefce8" stroke="#d1d5db"/>
+    <text x="680" y="230" font-size="11" font-weight="600" fill="#374151" text-anchor="middle">
+      Recent Reels:
+    </text>
+    <text x="680" y="250" font-size="9" fill="#6b7280" text-anchor="middle">
+      memory-wall-hf
+    </text>
+    <text x="680" y="265" font-size="9" fill="#6b7280" text-anchor="middle">
+      spotify-blend-hf
+    </text>
+    <text x="680" y="280" font-size="9" fill="#6b7280" text-anchor="middle">
+      iphone-portrait-hf
+    </text>
+    <text x="680" y="298" font-size="8" fill="#9ca3af" text-anchor="middle">
+      (visual references)
+    </text>
+  </g>
+
+  <!-- Bottom tagline -->
+  <text x="400" y="570" font-size="10" fill="#9ca3af" text-anchor="middle" font-style="italic">
+    Spec-driven • File-based • No per-reel scaffolding
+  </text>
+</svg>
