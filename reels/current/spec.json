@@ -1,0 +1,40 @@
+{
+  "slug": "current-reel",
+  "title": "Current Reel",
+  "duration": 12.0,
+  "fps": 60,
+  "voice": "Aoede",
+  "tts_provider": "gemini",
+  "composition_dir": "reels/current",
+  "output_file": "output/final/current-reel.mp4",
+  "render": {
+    "quality": "high",
+    "crf": 6,
+    "workers": 1
+  },
+  "audio": {
+    "sample_rate": 24000,
+    "channels": 1,
+    "mastering": true
+  },
+  "segments": [
+    {
+      "id": "hook",
+      "start": 0.35,
+      "duration": 3.2,
+      "text": "Replace this line with the opening narration."
+    },
+    {
+      "id": "middle",
+      "start": 3.95,
+      "duration": 4.0,
+      "text": "Replace this line with the core explanation."
+    },
+    {
+      "id": "cta",
+      "start": 8.35,
+      "duration": 2.8,
+      "text": "Replace this line with the final takeaway."
+    }
+  ]
+}

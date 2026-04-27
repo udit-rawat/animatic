@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Current Reel</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --bg: #f7f7f4;
+        --surface: #ffffff;
+        --text: #111111;
+        --muted: #5f6b76;
+        --border: #e7ebf0;
+        --blue: #2563ff;
+        --safe-left: 72px;
+        --safe-right: 208px;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      [data-composition-id="current-reel"] {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 50% 18%, rgba(37, 99, 255, 0.08), transparent 34%),
+          linear-gradient(180deg, #fbfbfa 0%, #f7f7f4 100%);
+      }
+
+      .grid {
+        position: absolute;
+        inset: 0;
+        opacity: 0.42;
+        background-image:
+          linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(17, 17, 17, 0.035) 1px, transparent 1px);
+        background-size: 72px 72px;
+      }
+
+      .stage {
+        position: absolute;
+        left: var(--safe-left);
+        right: var(--safe-right);
+        top: 312px;
+        height: 920px;
+        display: grid;
+        place-items: center;
+      }
+
+      .card {
+        width: 760px;
+        min-height: 420px;
+        padding: 54px;
+        border-radius: 42px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: 0 28px 70px rgba(15, 23, 42, 0.11);
+        transform: rotateX(3deg) rotateY(-5deg) rotate(-1deg);
+      }
+
+      .kicker {
+        color: var(--blue);
+        font-size: 24px;
+        font-weight: 760;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .headline {
+        margin-top: 28px;
+        font-size: 78px;
+        font-weight: 820;
+        line-height: 0.94;
+        letter-spacing: -0.06em;
+      }
+
+      .subline {
+        margin-top: 30px;
+        max-width: 570px;
+        color: var(--muted);
+        font-size: 31px;
+        font-weight: 560;
+        line-height: 1.18;
+      }
+
+      .handle-tag {
+        position: absolute;
+        left: 50%;
+        bottom: 236px;
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 28px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid var(--border);
+        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+        transform: translateX(-50%);
+        color: #4b5563;
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--blue);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="current-reel"
+      data-start="0"
+      data-duration="12"
+      data-width="1080"
+      data-height="1920"
+    >
+      <audio
+        id="narration"
+        data-start="0"
+        data-duration="12"
+        data-track-index="0"
+        src="narration.wav"
+        data-volume="1"
+      ></audio>
+
+      <div class="grid"></div>
+      <div class="stage">
+        <div class="card">
+          <div class="kicker">Spec Driven Reel</div>
+          <div class="headline">Replace the spec. Keep the pipeline.</div>
+          <div class="subline">This tracked composition is a starter. Edit the HTML for the reel, and let the spec drive TTS and render output.</div>
+        </div>
+      </div>
+      <div class="handle-tag"><div class="dot"></div><div>@ada.max24</div></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      tl.from(".card", { y: 34, opacity: 0, scale: 0.98, duration: 0.7, ease: "power3.out" }, 0.2);
+      tl.from(".handle-tag", { y: 18, opacity: 0, duration: 0.45, ease: "power2.out" }, 0.8);
+      window.__timelines["current-reel"] = tl;
+    </script>
+  </body>
+</html>

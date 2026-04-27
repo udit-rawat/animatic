@@ -1,5 +1,6 @@
 .env
 output/
+cache/
 manim_scripts/
 __pycache__/
 *.pyc
@@ -18,3 +19,6 @@ remotion/public/token_counter.mov
 remotion/public/ token_counter.mov
 remotion/public/token_counter.mp4
 remotion/out/
+reels/current/narration*.wav
+reels/current/narration_timing.json
+reels/current/gemini_tts_chunks*/
