@@ -29,9 +29,9 @@ Recent finished reels live under `output/hyperframes_custom/` and serve as visua
 
 The next refactor should collapse the current reel-specific scripts into one generic spec-driven workflow.
 
-## Target Workflow
+## Active Spec-Driven Workflow
 
-The desired shape is:
+The new workflow is intentionally small:
 
 ```text
 reels/current/
@@ -52,7 +52,7 @@ output/final/
   <slug>.mp4
 ```
 
-The source of truth should be `spec.json`. It should define the slug, title, duration, FPS, voice, narration segments, composition directory, and output path.
+The source of truth is `reels/current/spec.json`. It defines the slug, title, duration, FPS, voice, narration segments, composition directory, and output path.
 
 Example shape:
 
@@ -77,6 +77,35 @@ Example shape:
 }
 ```
 
+### Commands
+
+Create or replace the current reel spec:
+
+```bash
+python scripts/new_reel.py --title "iPhone Portrait Mode" --slug iphone-portrait --force
+```
+
+Generate Gemini TTS from the spec:
+
+```bash
+python scripts/generate_tts.py --spec reels/current/spec.json
+```
+
+Render the current HyperFrames composition:
+
+```bash
+python scripts/render_hyperframes.py --spec reels/current/spec.json
+```
+
+Validate without external calls:
+
+```bash
+python scripts/generate_tts.py --spec reels/current/spec.json --validate-only
+python scripts/render_hyperframes.py --spec reels/current/spec.json --dry-run
+```
+
+Generated audio is written next to the composition for HyperFrames to consume, but stays ignored by git. Raw TTS chunks and render workspaces go under `cache/`.
+
 ## Current Temporary State
 
 Until the refactor lands, the repo still contains reel-specific helper scripts:
@@ -86,6 +115,8 @@ Until the refactor lands, the repo still contains reel-specific helper scripts:
 - `scripts/generate_iphone_portrait_hyperframes_gemini_tts.py`
 
 These should be treated as migration scaffolding, not the final architecture.
+
+Use the generic scripts for all new reels. Only use the reel-specific scripts to reproduce an old reel exactly.
 
 The minimal active shared code for TTS is:
 
