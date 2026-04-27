@@ -106,6 +106,44 @@ python scripts/render_hyperframes.py --spec reels/current/spec.json --dry-run
 
 Generated audio is written next to the composition for HyperFrames to consume, but stays ignored by git. Raw TTS chunks and render workspaces go under `cache/`.
 
+## Architecture
+
+The active system is deliberately file-driven. The spec owns timing and outputs; the HTML owns visuals; the scripts only translate the spec into generated assets.
+
+```text
+                 tracked source
+┌────────────────────────────────────────────┐
+│ reels/current/spec.json                    │
+│ - slug, title, duration, fps               │
+│ - voice + TTS provider                     │
+│ - narration segment timing                 │
+│ - composition dir + final output path      │
+└─────────────────────┬──────────────────────┘
+                      │
+                      ├── scripts/generate_tts.py
+                      │   ├── reads spec.segments
+                      │   ├── calls Gemini TTS
+                      │   ├── writes reels/current/narration.wav
+                      │   └── writes reels/current/narration_timing.json
+                      │
+                      └── scripts/render_hyperframes.py
+                          ├── copies composition to cache/render_work/<slug>
+                          ├── injects spec.duration into HyperFrames HTML
+                          ├── runs HyperFrames CLI
+                          └── writes output/final/<slug>.mp4
+```
+
+Responsibility boundaries:
+
+- `spec.json` controls narration timing, render settings, and output paths.
+- `index.html` controls the animation, layout, styling, and visual timeline.
+- `generate_tts.py` must not know about individual reels.
+- `render_hyperframes.py` must not know about individual reels.
+- `cache/` is disposable and can be regenerated.
+- `output/final/` contains deliverables, not source of truth.
+
+This prevents the old failure mode where each reel created a new bespoke TTS script, a new render command, and a new output convention.
+
 ## Current Temporary State
 
 Until the refactor lands, the repo still contains reel-specific helper scripts:
