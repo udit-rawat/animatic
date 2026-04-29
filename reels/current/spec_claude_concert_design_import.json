@@ -1,0 +1,65 @@
+{
+  "slug": "claude-concert-design-import-v1",
+  "title": "Claude Can Run Concert Visuals Now",
+  "duration": 33.5,
+  "fps": 30,
+  "voice": "Aoede",
+  "tts_provider": "gemini",
+  "composition_dir": "output/hyperframes_custom/2026-04-30_claude-concert-design-import",
+  "output_file": "output/claude_concert_design_import_v1_33_5s.mp4",
+  "audio_file": "narration.wav",
+  "render": {
+    "quality": "high",
+    "crf": 6,
+    "workers": 1
+  },
+  "audio": {
+    "sample_rate": 24000,
+    "channels": 1,
+    "mastering": true
+  },
+  "segments": [
+    {
+      "id": "hook",
+      "start": 0.0,
+      "duration": 4.6,
+      "text": "Claude can run concert visuals now."
+    },
+    {
+      "id": "prompt_to_cue",
+      "start": 4.6,
+      "duration": 4.6,
+      "text": "Type one line, and it turns into a live cue inside the show."
+    },
+    {
+      "id": "actual_show_control",
+      "start": 9.2,
+      "duration": 4.8,
+      "text": "Not a render. Actual show control, with outputs, routing, and live signal."
+    },
+    {
+      "id": "clips_layers_transitions",
+      "start": 14.0,
+      "duration": 4.8,
+      "text": "Prompts can build clips, stack layers, and fade transitions on beat."
+    },
+    {
+      "id": "whole_venue",
+      "start": 18.8,
+      "duration": 4.6,
+      "text": "Then scale it from one screen to the whole venue."
+    },
+    {
+      "id": "patch_logic",
+      "start": 23.4,
+      "duration": 5.0,
+      "text": "Claude can patch the logic too, repair broken routes, and smooth the handoff."
+    },
+    {
+      "id": "director",
+      "start": 28.4,
+      "duration": 5.1,
+      "text": "AI runs the system. You run the taste. Prompt the rig. Direct the show."
+    }
+  ]
+}
