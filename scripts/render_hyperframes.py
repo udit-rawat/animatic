@@ -54,6 +54,10 @@ def render(spec_path: str, dry_run: bool = False) -> Path:
     index_path = work_dir / "index.html"
     html = index_path.read_text()
     html = re.sub(r'data-duration="[^"]+"', f'data-duration="{duration}"', html)
+    audio_file = spec.get("audio_file")
+    if audio_file:
+        html = re.sub(r'src="narration_[ab]\.wav"', f'src="{audio_file}"', html)
+        html = re.sub(r'src="narration\.wav"', f'src="{audio_file}"', html)
     index_path.write_text(html)
 
     command = [
