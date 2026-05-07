@@ -1,12 +1,13 @@
 {
-  "slug": "current-reel",
-  "title": "Current Reel",
-  "duration": 12.0,
-  "fps": 60,
+  "slug": "claude-blender-hf-v1",
+  "title": "Claude Just Hijacked Blender",
+  "duration": 32,
+  "fps": 30,
   "voice": "Aoede",
   "tts_provider": "gemini",
-  "composition_dir": "reels/current",
-  "output_file": "output/final/current-reel.mp4",
+  "composition_dir": "output/hyperframes_custom/2026-04-29_claude-blender-hf",
+  "output_file": "output/claude_blender_hijacked_v1_32s.mp4",
+  "audio_file": "narration.wav",
   "render": {
     "quality": "high",
     "crf": 6,
@@ -20,21 +21,45 @@
   "segments": [
     {
       "id": "hook",
-      "start": 0.35,
-      "duration": 3.2,
-      "text": "Replace this line with the opening narration."
+      "start": 0,
+      "duration": 2.6,
+      "text": "Claude just hijacked Blender."
     },
     {
-      "id": "middle",
-      "start": 3.95,
-      "duration": 4.0,
-      "text": "Replace this line with the core explanation."
+      "id": "one_sentence",
+      "start": 2.6,
+      "duration": 3.8,
+      "text": "You type one sentence. It starts building the scene for you."
     },
     {
-      "id": "cta",
-      "start": 8.35,
-      "duration": 2.8,
-      "text": "Replace this line with the final takeaway."
+      "id": "real_blender",
+      "start": 6.4,
+      "duration": 4.4,
+      "text": "Not an image. Actual Blender, through its Python API."
+    },
+    {
+      "id": "prompt_menus",
+      "start": 10.8,
+      "duration": 4.8,
+      "text": "So instead of digging through menus, you prompt the room, the shader, even the rig."
+    },
+    {
+      "id": "debug_tools",
+      "start": 15.6,
+      "duration": 5.2,
+      "text": "Anthropic says it can read scenes, debug setups, and drop new tools straight into Blender."
+    },
+    {
+      "id": "shift",
+      "start": 20.8,
+      "duration": 5.8,
+      "text": "That is the shift. AI is not drawing the result. It is operating the software."
+    },
+    {
+      "id": "finish_like_pro",
+      "start": 26.6,
+      "duration": 5.4,
+      "text": "Prompt the first draft. Then finish it like a pro."
     }
   ]
 }

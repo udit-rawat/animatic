@@ -81,11 +81,18 @@ def _atempo_filter(speed: float) -> str:
     return ",".join(f"atempo={factor:.6f}" for factor in factors)
 
 
-def _fit_pcm(pcm: bytes, target_seconds: float, sample_rate: int, channels: int, tmp_prefix: str) -> bytes:
+def _fit_pcm(
+    pcm: bytes,
+    target_seconds: float,
+    sample_rate: int,
+    channels: int,
+    tmp_prefix: str,
+    stretch_short: bool = False,
+) -> bytes:
     raw_duration = _pcm_duration(pcm, sample_rate)
     if raw_duration <= 0:
         return _resize_pcm_linear(pcm, target_seconds, sample_rate)
-    if raw_duration <= target_seconds + 0.03:
+    if raw_duration <= target_seconds + 0.03 and not stretch_short:
         return pcm
 
     speed = raw_duration / target_seconds
@@ -210,7 +217,14 @@ def generate(spec_path: str, validate_only: bool = False) -> None:
 
         raw_duration = _pcm_duration(raw_pcm, sample_rate)
         target_duration = float(segment["duration"])
-        synced_pcm = _fit_pcm(raw_pcm, target_duration, sample_rate, channels, f"{spec['slug']}_tts_")
+        synced_pcm = _fit_pcm(
+            raw_pcm,
+            target_duration,
+            sample_rate,
+            channels,
+            f"{spec['slug']}_tts_",
+            stretch_short=bool(audio_cfg.get("stretch_short_segments", False)),
+        )
         synced_duration = _pcm_duration(synced_pcm, sample_rate)
         start = float(segment["start"])
         _overlay(canvas, synced_pcm, start, sample_rate)
