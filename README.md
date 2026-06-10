@@ -1,207 +1,59 @@
 # adamax-content-engine
 
-Short-form technical reel production workspace for `@ada.max24`.
-
-The project is transitioning away from the old end-to-end automated pipeline and toward a lean HyperFrames-first reel system:
-
-```text
-reel spec -> Gemini TTS -> HyperFrames composition -> final MP4
-```
-
-The old pipeline still exists in this branch for reference, but it is no longer the direction of the project.
-
-## Current Direction
-
-The active production style is hand-authored HyperFrames:
-
-- one reel concept
-- one source spec
-- one reusable TTS runner
-- one reusable render command
-- final MP4 output
-- generated narration and render artifacts kept out of git
-
-Recent finished reels live under `output/hyperframes_custom/` and serve as visual references:
-
-- `2026-04-24_memory-wall-hf`
-- `2026-04-25_spotify-blend-hf`
-- `2026-04-25_iphone-portrait-hf`
-
-The next refactor should collapse the current reel-specific scripts into one generic spec-driven workflow.
-
-## Active Spec-Driven Workflow
-
-The new workflow is intentionally small:
+**A spec-driven engine for AI-narrated motion-graphic reels.**
+One JSON spec in → one fully animated, voice-synced 1080×1920 explainer video out.
 
 ```text
-reels/current/
-  spec.json
-  index.html
-
-scripts/
-  generate_tts.py
-  render_hyperframes.py
-  new_reel.py
-
-cache/
-  tts/
-  renders/
-  old_specs/
-
-output/final/
-  <slug>.mp4
+spec.json ──► Gemini TTS ──────► HyperFrames / GSAP ──► MP4
+             (segment-locked      (single-file HTML       (deterministic
+              narration)           composition)            render + QA)
 ```
 
-The source of truth is `reels/current/spec.json`. It defines the slug, title, duration, FPS, voice, narration segments, composition directory, and output path.
+## Core ideas
 
-Example shape:
+- **The spec is the single source of truth.** One JSON file defines the narration text, per-scene timing, voice, fps and output path — and drives TTS, composition and render from end to end.
+- **Narration-locked animation.** Audio is generated per scene segment and fitted to the spec's timing (never stretched more than ~8%). Every animation beat is keyed to a segment start, so visuals hit exactly when the words land.
+- **Compositions are plain HTML + GSAP.** A reel is a single inspectable file — no proprietary editor, no hidden state, no `Math.random()`. The same spec renders the same video every time.
+- **QA is part of the pipeline, not an afterthought.** Lint → frame snapshots → render → ffprobe + frame extraction checks. Catching layout collisions before render keeps re-renders rare and cheap.
+- **Per-segment TTS caching.** Re-timing or re-rendering a reel costs zero additional API calls; only changed narration text is re-synthesized.
 
-```json
-{
-  "slug": "iphone-portrait",
-  "title": "iPhone Portrait Mode",
-  "duration": 25.2,
-  "fps": 60,
-  "voice": "Aoede",
-  "tts_provider": "gemini",
-  "composition_dir": "reels/current",
-  "output_file": "output/final/iphone_portrait.mp4",
-  "segments": [
-    {
-      "id": "hook",
-      "start": 0.35,
-      "duration": 3.2,
-      "text": "This is why iPhone portrait mode beats Android."
-    }
-  ]
-}
-```
+## Core outcomes
 
-### Commands
+- 30–45 second technical explainer reels with restrained, keynote-style motion design — produced start-to-finish in a single sitting
+- Instagram-safe layouts by construction (content kept inside the 72–850 × 220–1500 safe box at 1080×1920)
+- Three commands from idea to deliverable: scaffold → voice → render
 
-Create or replace the current reel spec:
-
-```bash
-python scripts/new_reel.py --title "iPhone Portrait Mode" --slug iphone-portrait --force
-```
-
-Generate Gemini TTS from the spec:
-
-```bash
-python scripts/generate_tts.py --spec reels/current/spec.json
-```
-
-Render the current HyperFrames composition:
-
-```bash
-python scripts/render_hyperframes.py --spec reels/current/spec.json
-```
-
-Validate without external calls:
-
-```bash
-python scripts/generate_tts.py --spec reels/current/spec.json --validate-only
-python scripts/render_hyperframes.py --spec reels/current/spec.json --dry-run
-```
-
-Generated audio is written next to the composition for HyperFrames to consume, but stays ignored by git. Raw TTS chunks and render workspaces go under `cache/`.
-
-## Architecture
-
-![HyperFrames-first reel architecture](assets/hyperframes_architecture.svg)
-
-## Current Temporary State
-
-Until the refactor lands, the repo still contains reel-specific helper scripts:
-
-- `scripts/generate_memory_wall_hyperframes_gemini_tts.py`
-- `scripts/generate_spotify_blend_hyperframes_gemini_tts.py`
-- `scripts/generate_iphone_portrait_hyperframes_gemini_tts.py`
-
-These should be treated as migration scaffolding, not the final architecture.
-
-Use the generic scripts for all new reels. Only use the reel-specific scripts to reproduce an old reel exactly.
-
-The minimal active shared code for TTS is:
-
-- `pipeline/narrator.py`
-- `pipeline/claude_client.py`
-- `pipeline/quota.py`
-- `pipeline/logger.py`
-- `pipeline/video_spec.py`
-
-## Visual System
-
-Use `ANIMATION_PLAYBOOK.md` as the style memory for future reels.
-
-Current high-performing direction:
-
-- premium product-demo clarity
-- object-based explanation
-- strong safe-area alignment
-- restrained motion
-- no neon/cyberpunk defaults
-- no flashy transitions
-- no text-first infographic slabs unless the concept demands it
-
-The old README image/diagram has been intentionally removed. A new architecture diagram should be added after the spec-driven workflow is implemented.
-
-## Legacy Pipeline
-
-The previous pipeline path was:
-
-```text
-custom topic -> content_generator -> narrator -> word_aligner
-            -> brief_generator -> compositor pause -> animator -> notifier
-```
-
-That path produced many intermediate files in `output/` and depended heavily on Remotion or compositor-generated `CustomVideo.tsx` files.
-
-It is still present for now, but should be archived after the new HyperFrames workflow is stable.
-
-Legacy areas:
-
-- `remotion/`
-- `renderers/`
-- most of `pipeline/`
-- `legacy/phase1-pipeline/`
-- generated files under `output/`
-
-## Environment
-
-See `.env.example`.
-
-Minimum active setup:
-
-```text
-GEMINI_API_KEY or GEMINI_API_KEYS
-```
-
-Optional legacy setup:
-
-```text
-TELEGRAM_BOT_TOKEN
-TELEGRAM_CHAT_ID
-OPENROUTER_API_KEY
-ANTHROPIC_API_KEY
-```
-
-Python dependencies:
+## Quickstart
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env                # add your GEMINI_API_KEY(S)
+
+python scripts/new_reel.py --title "My Reel"                            # scaffold spec + composition
+python scripts/generate_tts.py --spec reels/current/spec.json          # segment-locked narration
+python scripts/render_hyperframes.py --spec reels/current/spec.json    # final MP4
 ```
 
-HyperFrames rendering currently uses the local HyperFrames CLI.
+| Path | What it is |
+| --- | --- |
+| `reels/current/` | The active reel: `spec.json` + `index.html` composition |
+| `scripts/` | Spec scaffolding, TTS generation, render entry points |
+| `pipeline/` | Topic ranking, scripting, narration and delivery stages |
+| `renderers/hyperframes/` | HyperFrames render bridge and helpers |
+| `remotion/` | Earlier Remotion-based rendering engine (still functional) |
+| `specs/` | The reel spec JSON schema |
 
-## Git Hygiene
+## Project history
 
-Generated artifacts should stay out of source control:
+This repo has been through four distinct lives:
 
-- TTS chunks
-- rendered MP4/MOV files
-- temporary narration WAV files
-- cache directories
-- old output JSON from previous runs
+1. **Autonomous daily pipeline.** A fully hands-off loop: scrape sources → rank topics with an LLM → write a structured script → fact-check → plan scenes → render with Remotion → deliver to Telegram. Ran once a day, end to end.
+2. **Generative motion engine.** Fixed video templates were replaced by a recursive `LayoutNode` JSON renderer, a virtual-canvas camera with spring physics, audio-reactive styling and CRT post-processing.
+3. **Gemini-native rebuild.** Multi-key rotation, TTS voice work and quota-aware clients moved the whole stack onto free-tier Gemini.
+4. **Spec-driven reels (today).** Automation kept where it pays — narration, timing, rendering, QA — and human craft kept where it matters: the story and the motion design. Less pipeline, better reels.
 
-Tracked files should represent source of truth: specs, composition HTML, reusable scripts, and documentation.
+## See it running in the wild
+
+Every reel this engine produces is published here:
+
+**📹 Instagram → [instagram.com/ada.max24](https://www.instagram.com/ada.max24)**

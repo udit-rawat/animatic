@@ -23,3 +23,13 @@ reels/current/narration*.wav
 reels/current/narration_timing.json
 reels/current/gemini_tts_chunks*/
 reels/current/spec_*.json
+
+# internal docs (kept local only)
+CLAUDE.md
+AGENTS.md
+ANIMATION_PLAYBOOK.md
+REEL_PRODUCTION_DETERMINISTIC_PLAYBOOK.md
+BRIEF_PROMPT_V4.md
+SCRIPT.md
+DESIGN.md
+legacy/
