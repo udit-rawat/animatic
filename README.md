@@ -1,4 +1,4 @@
-# adamax-content-engine
+# Animatic
 
 **A spec-driven engine for AI-narrated motion-graphic reels.**
 One JSON spec in → one fully animated, voice-synced 1080×1920 explainer video out.
