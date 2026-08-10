@@ -19,6 +19,7 @@ remotion/public/token_counter.mov
 remotion/public/ token_counter.mov
 remotion/public/token_counter.mp4
 remotion/out/
+renders/
 reels/current/narration*.wav
 reels/current/narration_timing.json
 reels/current/gemini_tts_chunks*/
