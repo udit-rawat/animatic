@@ -31,21 +31,25 @@ Ranker integration:
   get_layout_scores()  → dict[layout_name, avg_score]  used by ranker as soft prior
   get_topic_signals()  → list of (keyword, avg_score)  used to boost similar topics
 """
+
 import json
 import os
 import re
 from datetime import date
 from typing import Optional
 
-ANALYTICS_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "analytics.json")
-TOPIC_PATH     = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
-PARAMS_PATH    = os.path.join(os.path.dirname(__file__), "..", "output", "params.json")
+ANALYTICS_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "analytics.json"
+)
+TOPIC_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
+PARAMS_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "params.json")
 
 # Minimum entries before scores are used as a signal
 MIN_ENTRIES_FOR_SIGNAL = 5
 
 
 # ── Storage helpers ───────────────────────────────────────────────────────────
+
 
 def _load() -> list[dict]:
     if not os.path.exists(ANALYTICS_PATH):
@@ -66,11 +70,11 @@ def _slug(title: str, posted_at: str) -> str:
 
 
 def _compute_score(entry: dict) -> float:
-    wt     = entry.get("watch_time_pct", 0) or 0
-    saves  = entry.get("saves", 0)          or 0
-    likes  = entry.get("likes", 0)          or 0
-    shares = entry.get("shares", 0)         or 0
-    v48    = entry.get("views_48h", 0)      or 0
+    wt = entry.get("watch_time_pct", 0) or 0
+    saves = entry.get("saves", 0) or 0
+    likes = entry.get("likes", 0) or 0
+    shares = entry.get("shares", 0) or 0
+    v48 = entry.get("views_48h", 0) or 0
     return round(
         (wt * 1.5) + (saves * 2.0) + (likes * 0.5) + (shares * 1.0) + (v48 / 20),
         2,
@@ -91,9 +95,9 @@ def create_skeleton():
     Backward compatible: existing entries with the same id are not overwritten.
     Entries without hook/generated_at fields are simply missing those keys — no breakage.
     """
-    topic_title  = None
+    topic_title = None
     beat2_layout = "unknown"
-    hook         = None
+    hook = None
 
     if os.path.exists(TOPIC_PATH):
         with open(TOPIC_PATH) as f:
@@ -121,20 +125,20 @@ def create_skeleton():
         return
 
     skeleton = {
-        "id":             entry_id,
-        "topic":          topic_title,
-        "layout":         beat2_layout,
-        "hook":           hook,
-        "generated_at":   today,
-        "posted_at":      None,
-        "views_24h":      None,
-        "views_48h":      None,
-        "views_72h":      None,
+        "id": entry_id,
+        "topic": topic_title,
+        "layout": beat2_layout,
+        "hook": hook,
+        "generated_at": today,
+        "posted_at": None,
+        "views_24h": None,
+        "views_48h": None,
+        "views_72h": None,
         "watch_time_pct": None,
-        "likes":          None,
-        "saves":          None,
-        "shares":         None,
-        "score":          None,
+        "likes": None,
+        "saves": None,
+        "shares": None,
+        "score": None,
     }
     entries.append(skeleton)
     _save(entries)
@@ -143,9 +147,10 @@ def create_skeleton():
 
 # ── Read last unlogged video from output files ────────────────────────────────
 
+
 def _last_video_info() -> Optional[dict]:
     """Return topic + layout for the last pipeline run, if files exist."""
-    topic_title  = None
+    topic_title = None
     beat2_layout = None
 
     if os.path.exists(TOPIC_PATH):
@@ -170,6 +175,7 @@ def _already_logged(topic: str, posted_at: str, entries: list[dict]) -> bool:
 
 
 # ── Interactive logging ───────────────────────────────────────────────────────
+
 
 def _prompt_int(label: str, required: bool = False) -> Optional[int]:
     while True:
@@ -207,8 +213,8 @@ def log_stats_interactive():
     print("  VIDEO PERFORMANCE LOG")
     print("═" * 56)
 
-    entries  = _load()
-    pending  = [e for e in entries if e.get("posted_at") is None]
+    entries = _load()
+    pending = [e for e in entries if e.get("posted_at") is None]
 
     if pending:
         print(f"\n  {len(pending)} pending video(s) awaiting KPIs:\n")
@@ -219,14 +225,18 @@ def log_stats_interactive():
             if hook_preview:
                 print(f"     {hook_preview}")
         print()
-        choice = input(f"  Select video to log [1-{len(pending)}, or 0 for manual entry] → ").strip()
+        choice = input(
+            f"  Select video to log [1-{len(pending)}, or 0 for manual entry] → "
+        ).strip()
         if choice.isdigit() and 1 <= int(choice) <= len(pending):
             skeleton = pending[int(choice) - 1]
-            topic    = skeleton["topic"]
-            layout   = skeleton["layout"]
+            topic = skeleton["topic"]
+            layout = skeleton["layout"]
         else:
-            topic  = input("  Topic title: ").strip()
-            layout = input("  Beat-2 layout (e.g. BarComparison): ").strip() or "unknown"
+            topic = input("  Topic title: ").strip()
+            layout = (
+                input("  Beat-2 layout (e.g. BarComparison): ").strip() or "unknown"
+            )
     else:
         info = _last_video_info()
         if info:
@@ -235,17 +245,21 @@ def log_stats_interactive():
             print(f"    Layout : {info['layout']}")
             use_last = input("\n  Log stats for this video? [y/n] → ").strip().lower()
             if use_last == "y":
-                topic  = info["topic"]
+                topic = info["topic"]
                 layout = info["layout"]
             else:
-                topic  = input("  Topic title: ").strip()
-                layout = input("  Beat-2 layout (e.g. BarComparison): ").strip() or "unknown"
+                topic = input("  Topic title: ").strip()
+                layout = (
+                    input("  Beat-2 layout (e.g. BarComparison): ").strip() or "unknown"
+                )
         else:
-            topic  = input("  Topic title: ").strip()
-            layout = input("  Beat-2 layout (e.g. BarComparison): ").strip() or "unknown"
+            topic = input("  Topic title: ").strip()
+            layout = (
+                input("  Beat-2 layout (e.g. BarComparison): ").strip() or "unknown"
+            )
 
     # Post date
-    today  = date.today().isoformat()
+    today = date.today().isoformat()
     pd_raw = input(f"  Posted date [YYYY-MM-DD, default={today}]: ").strip()
     posted_at = pd_raw if pd_raw else today
 
@@ -260,32 +274,35 @@ def log_stats_interactive():
             return
 
     print("\n  Enter metrics (press Enter to skip any):\n")
-    views_24h      = _prompt_int("Views at 24h")
-    views_48h      = _prompt_int("Views at 48h")
-    views_72h      = _prompt_int("Views at 72h")
+    views_24h = _prompt_int("Views at 24h")
+    views_48h = _prompt_int("Views at 48h")
+    views_72h = _prompt_int("Views at 72h")
     watch_time_pct = _prompt_float("Watch time %", 0, 100)
-    likes          = _prompt_int("Likes")
-    saves          = _prompt_int("Saves")
-    shares         = _prompt_int("Shares")
+    likes = _prompt_int("Likes")
+    saves = _prompt_int("Saves")
+    shares = _prompt_int("Shares")
 
     # Preserve hook + generated_at from skeleton if it exists
-    skeleton_id  = _slug(topic, date.today().isoformat())
-    old_skeleton = next((e for e in entries if e["id"] == skeleton_id and e.get("posted_at") is None), None)
+    skeleton_id = _slug(topic, date.today().isoformat())
+    old_skeleton = next(
+        (e for e in entries if e["id"] == skeleton_id and e.get("posted_at") is None),
+        None,
+    )
 
     entry = {
-        "id":             _slug(topic, posted_at),
-        "topic":          topic,
-        "layout":         layout,
-        "hook":           old_skeleton.get("hook") if old_skeleton else None,
-        "generated_at":   old_skeleton.get("generated_at") if old_skeleton else None,
-        "posted_at":      posted_at,
-        "views_24h":      views_24h,
-        "views_48h":      views_48h,
-        "views_72h":      views_72h,
+        "id": _slug(topic, posted_at),
+        "topic": topic,
+        "layout": layout,
+        "hook": old_skeleton.get("hook") if old_skeleton else None,
+        "generated_at": old_skeleton.get("generated_at") if old_skeleton else None,
+        "posted_at": posted_at,
+        "views_24h": views_24h,
+        "views_48h": views_48h,
+        "views_72h": views_72h,
         "watch_time_pct": watch_time_pct,
-        "likes":          likes,
-        "saves":          saves,
-        "shares":         shares,
+        "likes": likes,
+        "saves": saves,
+        "shares": shares,
     }
     entry["score"] = _compute_score(entry)
 
@@ -301,6 +318,7 @@ def log_stats_interactive():
 
 # ── Signal extraction for ranker ─────────────────────────────────────────────
 
+
 def get_layout_scores() -> dict[str, float]:
     """
     Returns avg performance score per beat-2 layout.
@@ -311,10 +329,11 @@ def get_layout_scores() -> dict[str, float]:
         return {}
 
     from collections import defaultdict
+
     bucket: dict[str, list[float]] = defaultdict(list)
     for e in entries:
         layout = e.get("layout")
-        score  = e.get("score")
+        score = e.get("score")
         if layout and score is not None:
             bucket[layout].append(score)
 
@@ -326,9 +345,32 @@ def get_layout_scores() -> dict[str, float]:
 
 
 _STOP_WORDS = {
-    "a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for",
-    "with", "how", "why", "what", "this", "that", "from", "via", "vs",
-    "using", "new", "ai", "ml", "llm", "gpu",
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "of",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "with",
+    "how",
+    "why",
+    "what",
+    "this",
+    "that",
+    "from",
+    "via",
+    "vs",
+    "using",
+    "new",
+    "ai",
+    "ml",
+    "llm",
+    "gpu",
 }
 
 
@@ -343,11 +385,12 @@ def get_topic_signals() -> list[tuple[str, float]]:
         return []
 
     # Take top half by score
-    scored  = [e for e in entries if e.get("score") is not None]
+    scored = [e for e in entries if e.get("score") is not None]
     scored.sort(key=lambda e: e["score"], reverse=True)
-    top     = scored[: max(1, len(scored) // 2)]
+    top = scored[: max(1, len(scored) // 2)]
 
     from collections import defaultdict
+
     kw_scores: dict[str, list[float]] = defaultdict(list)
     for e in top:
         words = re.findall(r"[a-zA-Z0-9]+", e["topic"].lower())
@@ -366,18 +409,29 @@ def get_topic_signals() -> list[tuple[str, float]]:
 
 # ── Summary table ─────────────────────────────────────────────────────────────
 
+
 def print_summary():
     entries = _load()
     if not entries:
         print("  No analytics data yet. Run --log-stats after posting a video.\n")
         return
 
-    posted  = [e for e in entries if e.get("posted_at") is not None]
+    posted = [e for e in entries if e.get("posted_at") is not None]
     pending = [e for e in entries if e.get("posted_at") is None]
 
     posted_sorted = sorted(posted, key=lambda e: e.get("posted_at", ""), reverse=True)
 
-    cols   = ("Date", "Layout", "V-24h", "V-48h", "WT%", "Saves", "Score", "Hook", "Topic")
+    cols = (
+        "Date",
+        "Layout",
+        "V-24h",
+        "V-48h",
+        "WT%",
+        "Saves",
+        "Score",
+        "Hook",
+        "Topic",
+    )
     widths = [len(c) for c in cols]
 
     rows = []
@@ -399,12 +453,16 @@ def print_summary():
             widths[i] = max(widths[i], len(cell))
 
     def fmt(row):
-        return "║ " + " ║ ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)) + " ║"
+        return (
+            "║ "
+            + " ║ ".join(cell.ljust(widths[i]) for i, cell in enumerate(row))
+            + " ║"
+        )
 
     sep_top = "╔═" + "═╦═".join("═" * w for w in widths) + "═╗"
     sep_mid = "╠═" + "═╬═".join("═" * w for w in widths) + "═╣"
     sep_bot = "╚═" + "═╩═".join("═" * w for w in widths) + "═╝"
-    title   = "║" + " ANALYTICS ".center(len(sep_top) - 2) + "║"
+    title = "║" + " ANALYTICS ".center(len(sep_top) - 2) + "║"
 
     print()
     print(sep_top)
@@ -427,7 +485,9 @@ def print_summary():
     layout_scores = get_layout_scores()
     if layout_scores:
         print("\n  Layout avg scores:")
-        for layout, avg in sorted(layout_scores.items(), key=lambda x: x[1], reverse=True):
+        for layout, avg in sorted(
+            layout_scores.items(), key=lambda x: x[1], reverse=True
+        ):
             print(f"    {layout:<20} {avg}")
 
     print()

@@ -7,6 +7,7 @@ Three steps:
   3. PCM segments stitched into output/narration.wav
      output/narration_timing.json saved with per-section timecodes
 """
+
 import base64
 import json
 import os
@@ -18,14 +19,12 @@ import wave
 from pipeline import claude_client
 from pipeline.video_spec import update_video_spec_timing
 
-SCRIPT_PATH = os.path.join(os.path.dirname(
-    __file__), "..", "output", "script.json")
-TOPIC_PATH = os.path.join(os.path.dirname(
-    __file__), "..", "output", "topic.json")
-AUDIO_PATH = os.path.join(os.path.dirname(
-    __file__), "..", "output", "narration.wav")
-TIMING_PATH = os.path.join(os.path.dirname(
-    __file__), "..", "output", "narration_timing.json")
+SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
+TOPIC_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
+AUDIO_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "narration.wav")
+TIMING_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "narration_timing.json"
+)
 
 # TTS model fallback chain — tried in order until one succeeds.
 # Verified available via ListModels API (2026-04-09):
@@ -35,7 +34,7 @@ TTS_MODELS = [
     os.environ.get("TTS_MODEL", "gemini-2.5-flash-preview-tts"),
     "gemini-2.5-pro-preview-tts",
 ]
-TTS_MODEL = TTS_MODELS[0]   # kept for backward-compat references
+TTS_MODEL = TTS_MODELS[0]  # kept for backward-compat references
 # Aoede = calm, precise female voice — best retention for tech content
 VOICE_NAME = os.environ.get("TTS_VOICE", "Aoede")
 
@@ -71,6 +70,7 @@ VOICE_DIRECTIVE = _DEFAULT_VOICE_DIRECTIVE  # kept for backward compat imports
 
 
 # ── Step 1: LLM rewrites visual script → segmented narration ─────────────────
+
 
 def build_narration_prompt(topic: dict, script: dict) -> str:
     n = len(script["concept_bullets"])
@@ -155,19 +155,20 @@ def generate_segmented_script(topic: dict, script: dict) -> dict:
     # keys narrator needs for TTS. Only use it if the key set matches what the
     # current script requires — stale files from a different pipeline mode or a
     # different bullet count would cause a beat/timing mismatch downstream.
-    _spoken_path = os.path.join(os.path.dirname(
-        __file__), "..", "output", "spoken_narration.json")
+    _spoken_path = os.path.join(
+        os.path.dirname(__file__), "..", "output", "spoken_narration.json"
+    )
     if os.path.exists(_spoken_path):
         with open(_spoken_path) as _f:
             _spoken = json.load(_f)
         n_bullets = len(script.get("concept_bullets", []))
         _expected_keys = set(
-            ["hook"] +
-            [f"concept_{i+1}" for i in range(n_bullets)] + ["takeaway_cta"]
+            ["hook"] + [f"concept_{i+1}" for i in range(n_bullets)] + ["takeaway_cta"]
         )
         if set(_spoken.keys()) == _expected_keys:
             print(
-                "[narrator] spoken_narration.json matches script — skipping LLM rewrite step.")
+                "[narrator] spoken_narration.json matches script — skipping LLM rewrite step."
+            )
             return _spoken
         else:
             print(
@@ -177,12 +178,12 @@ def generate_segmented_script(topic: dict, script: dict) -> dict:
             )
 
     import re as _re
+
     prompt = build_narration_prompt(topic, script)
     last_err = None
     for attempt in range(1, 4):
         try:
-            raw = claude_client.call(
-                prompt, stage="narrator", json_mode=True).strip()
+            raw = claude_client.call(prompt, stage="narrator", json_mode=True).strip()
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -193,17 +194,20 @@ def generate_segmented_script(topic: dict, script: dict) -> dict:
             end = raw.rfind("}") + 1
             if start != -1 and end > start:
                 raw = raw[start:end]
-            raw = _re.sub(r',\s*([\]}])', r'\1', raw)
+            raw = _re.sub(r",\s*([\]}])", r"\1", raw)
             return json.loads(raw)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             last_err = e
             print(
-                f"[narrator] JSON parse failed (attempt {attempt}/3): {e} — retrying...")
+                f"[narrator] JSON parse failed (attempt {attempt}/3): {e} — retrying..."
+            )
     raise RuntimeError(
-        f"Narrator failed to produce valid JSON after 3 attempts. Last error: {last_err}")
+        f"Narrator failed to produce valid JSON after 3 attempts. Last error: {last_err}"
+    )
 
 
 # ── Step 2: Gemini TTS ────────────────────────────────────────────────────────
+
 
 class _TTSRateLimited(Exception):
     pass
@@ -211,6 +215,7 @@ class _TTSRateLimited(Exception):
 
 class _TTSModelDenied(Exception):
     """403 PERMISSION_DENIED — this model requires project allowlisting. Try next model."""
+
     pass
 
 
@@ -219,17 +224,17 @@ def call_tts(text: str, api_key: str, model: str | None = None) -> bytes:
     tts_model = model or TTS_MODEL
     # TTS models do not support system_instruction (500) or prepended directives (400).
     # Voice delivery is shaped via the voiceName selection only — Aoede is calm + precise.
-    payload = json.dumps({
-        "contents": [{"parts": [{"text": text}]}],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-                "voiceConfig": {
-                    "prebuiltVoiceConfig": {"voiceName": VOICE_NAME}
-                }
+    payload = json.dumps(
+        {
+            "contents": [{"parts": [{"text": text}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": VOICE_NAME}}
+                },
             },
-        },
-    }).encode()
+        }
+    ).encode()
 
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -256,17 +261,17 @@ def call_tts(text: str, api_key: str, model: str | None = None) -> bytes:
         body = e.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Gemini TTS HTTP {e.code}: {body[:400]}") from e
     except (TimeoutError, OSError) as e:
-        raise _TTSRateLimited() from e   # treat timeout as RPM — rotate to next key
+        raise _TTSRateLimited() from e  # treat timeout as RPM — rotate to next key
 
     candidate = data.get("candidates", [{}])[0]
     if "content" not in candidate:
         finish_reason = candidate.get("finishReason", "UNKNOWN")
-        print(
-            f" [no content: finishReason={finish_reason}]", end="", flush=True)
+        print(f" [no content: finishReason={finish_reason}]", end="", flush=True)
         raise _TTSRateLimited()
     audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
     try:
         from pipeline import quota as _q
+
         _q.record_call("narrator")
     except Exception:
         pass
@@ -286,6 +291,7 @@ def save_wav(pcm_data: bytes, path: str, sample_rate: int = 24000):
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def _get_tts_keys() -> list[str]:
     """Return all available Gemini API keys for TTS rotation."""
@@ -320,7 +326,10 @@ def call_tts_with_rotation(text: str, keys: list[str]) -> bytes:
                     if len(denied_keys) == len(keys):
                         # Every key denied — model is fully blocked, skip it
                         if model_idx < len(TTS_MODELS) - 1:
-                            print(f" [all keys denied for {model} → trying {TTS_MODELS[model_idx + 1]}]", flush=True)
+                            print(
+                                f" [all keys denied for {model} → trying {TTS_MODELS[model_idx + 1]}]",
+                                flush=True,
+                            )
                         break
                     if i < len(keys) - 1:
                         print(f" [key {i+1} 403 → key {i+2}]", end="", flush=True)
@@ -332,23 +341,28 @@ def call_tts_with_rotation(text: str, keys: list[str]) -> bytes:
                 break  # move to next model
 
             print(
-                f" [all {len(keys)} keys failed — waiting {cycle_wait}s (cycle {cycle+1}/{max_full_cycles})]", flush=True)
+                f" [all {len(keys)} keys failed — waiting {cycle_wait}s (cycle {cycle+1}/{max_full_cycles})]",
+                flush=True,
+            )
             time.sleep(cycle_wait)
 
         if len(denied_keys) < len(keys):
             # Not all keys were denied — we exhausted rate-limit cycles
             raise RuntimeError(
-                f"TTS failed after {max_full_cycles} full key rotation cycles on model {model}.")
+                f"TTS failed after {max_full_cycles} full key rotation cycles on model {model}."
+            )
 
     raise RuntimeError(
-        f"TTS failed: all models in fallback chain denied or exhausted. Models tried: {TTS_MODELS}")
+        f"TTS failed: all models in fallback chain denied or exhausted. Models tried: {TTS_MODELS}"
+    )
 
 
 def main():
     keys = _get_tts_keys()
     if not keys:
         raise RuntimeError(
-            "GEMINI_API_KEY or GEMINI_API_KEYS not set — narrator requires Gemini TTS.")
+            "GEMINI_API_KEY or GEMINI_API_KEYS not set — narrator requires Gemini TTS."
+        )
 
     with open(SCRIPT_PATH) as f:
         script = json.load(f)
@@ -360,12 +374,14 @@ def main():
     segments = generate_segmented_script(topic, script)
 
     n_bullets = len(script["concept_bullets"])
-    segment_keys = ["hook"] + \
-        [f"concept_{i+1}" for i in range(n_bullets)] + ["takeaway_cta"]
+    segment_keys = (
+        ["hook"] + [f"concept_{i+1}" for i in range(n_bullets)] + ["takeaway_cta"]
+    )
 
     # Step 2 — TTS each segment with key rotation, measure duration, stitch PCM
     print(
-        f"Calling Gemini TTS  model={TTS_MODEL}  voice={VOICE_NAME}  keys={len(keys)}...")
+        f"Calling Gemini TTS  model={TTS_MODEL}  voice={VOICE_NAME}  keys={len(keys)}..."
+    )
     timing = {}
     all_pcm = b""
     cursor = 0.0
@@ -380,10 +396,10 @@ def main():
         pcm = call_tts_with_rotation(text, keys)
         dur = pcm_duration(pcm)
         timing[key] = {
-            "start":    round(cursor, 3),
+            "start": round(cursor, 3),
             "duration": round(dur, 3),
-            "end":      round(cursor + dur, 3),
-            "text":     text,
+            "end": round(cursor + dur, 3),
+            "text": text,
         }
         all_pcm += pcm
         cursor += dur
@@ -409,5 +425,6 @@ def main():
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv()
     main()

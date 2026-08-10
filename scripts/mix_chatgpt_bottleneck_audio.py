@@ -7,7 +7,9 @@ import wave
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-COMP_DIR = ROOT / "output" / "hyperframes_custom" / "2026-04-28_chatgpt-typing-bottleneck-hf"
+COMP_DIR = (
+    ROOT / "output" / "hyperframes_custom" / "2026-04-28_chatgpt-typing-bottleneck-hf"
+)
 SRC = COMP_DIR / "narration.wav"
 OUT_A = COMP_DIR / "narration_a.wav"
 OUT_B = COMP_DIR / "narration_b.wav"
@@ -59,7 +61,14 @@ def add(samples: array.array, t: float, value: float) -> None:
         samples[i] = clamp(samples[i] + value)
 
 
-def sine_mix(samples: array.array, start: float, duration: float, freq: float, amp: float, fade: float = 0.01) -> None:
+def sine_mix(
+    samples: array.array,
+    start: float,
+    duration: float,
+    freq: float,
+    amp: float,
+    fade: float = 0.01,
+) -> None:
     n0 = int(start * SR)
     count = int(duration * SR)
     fade_n = max(1, int(fade * SR))
@@ -71,7 +80,13 @@ def sine_mix(samples: array.array, start: float, duration: float, freq: float, a
         add(samples, idx / SR, math.sin(2 * math.pi * freq * n / SR) * amp * env)
 
 
-def click(samples: array.array, start: float, amp: float, freq: float = 2400.0, duration: float = 0.018) -> None:
+def click(
+    samples: array.array,
+    start: float,
+    amp: float,
+    freq: float = 2400.0,
+    duration: float = 0.018,
+) -> None:
     n0 = int(start * SR)
     count = int(duration * SR)
     for n in range(count):
@@ -119,7 +134,9 @@ def vacuum(samples: array.array, center: float) -> None:
         samples[idx] = clamp(samples[idx] * gain)
 
 
-def resample_segment(samples: array.array, start: float, end: float, target_duration: float) -> array.array:
+def resample_segment(
+    samples: array.array, start: float, end: float, target_duration: float
+) -> array.array:
     src = samples[int(start * SR) : int(end * SR)]
     target = max(1, int(target_duration * SR))
     if not src:
@@ -149,7 +166,22 @@ def mix(samples: array.array, seconds: float, final_thud_at: float) -> array.arr
     sine_mix(out, 0, seconds, 80, 450, fade=0.25)
     sine_mix(out, 0, seconds, 145, 150, fade=0.25)
 
-    for t in [0.0, 0.34, 0.7, 1.05, 1.4, 1.78, 2.16, 2.55, 2.95, 3.35, 3.74, 4.15, 4.58, 5.0]:
+    for t in [
+        0.0,
+        0.34,
+        0.7,
+        1.05,
+        1.4,
+        1.78,
+        2.16,
+        2.55,
+        2.95,
+        3.35,
+        3.74,
+        4.15,
+        4.58,
+        5.0,
+    ]:
         click(out, t, 1700, 2800, 0.014)
     for t in [3.05, 3.85, 4.65, 5.45]:
         click(out, t, 950, 920, 0.025)

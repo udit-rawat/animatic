@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from renderers.hyperframes.helpers.primitives import e
-from renderers.hyperframes.templates.base import beat_meta_html, scene_data, section_label_html
+from renderers.hyperframes.templates.base import (
+    beat_meta_html,
+    scene_data,
+    section_label_html,
+)
 
 TEMPLATE_ID = "BarComparison"
 
@@ -28,16 +32,18 @@ def build_scene(config: dict, context: dict) -> dict:
             '<div class="hf-bar-topline">'
             f'<div class="hf-bar-label">{e(label)}</div>'
             f'<div class="hf-bar-value">{e(value_text)}</div>'
-            '</div>'
+            "</div>"
             '<div class="hf-bar-track">'
             f'<div class="hf-bar-fill {"hf-pulse" if item.get("highlight") else ""}" style="width: {width}%;"></div>'
-            '</div>'
-            '</div>'
+            "</div>"
+            "</div>"
         )
     html = (
         beat_meta_html(context)
         + section_label_html(data.get("section_label", "Bar Comparison"))
-        + '<div class="hf-bar-list">' + "".join(rows) + "</div>"
+        + '<div class="hf-bar-list">'
+        + "".join(rows)
+        + "</div>"
     )
     return {
         "template_id": TEMPLATE_ID,

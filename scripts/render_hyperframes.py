@@ -84,9 +84,17 @@ def render(spec_path: str, dry_run: bool = False) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Render a HyperFrames reel from a spec.")
-    parser.add_argument("--spec", default="reels/current/spec.json", help="Path to reel spec JSON.")
-    parser.add_argument("--dry-run", action="store_true", help="Prepare and print the render command without running it.")
+    parser = argparse.ArgumentParser(
+        description="Render a HyperFrames reel from a spec."
+    )
+    parser.add_argument(
+        "--spec", default="reels/current/spec.json", help="Path to reel spec JSON."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Prepare and print the render command without running it.",
+    )
     args = parser.parse_args()
     render(args.spec, dry_run=args.dry_run)
 

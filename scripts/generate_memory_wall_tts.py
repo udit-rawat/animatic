@@ -42,9 +42,7 @@ SCENES = [
         "scene": "Problem",
         "target_start": 0.0,
         "target_end": 5.5,
-        "text": (
-            "You added a vector database, and the agent still makes things up."
-        ),
+        "text": ("You added a vector database, and the agent still makes things up."),
     },
     {
         "key": "isolation",
@@ -61,10 +59,7 @@ SCENES = [
         "scene": "Connection",
         "target_start": 12.5,
         "target_end": 19.0,
-        "text": (
-            "Production agents need context. "
-            "Semantic memory. State memory."
-        ),
+        "text": ("Production agents need context. " "Semantic memory. State memory."),
     },
     {
         "key": "intelligence",
@@ -72,8 +67,7 @@ SCENES = [
         "target_start": 19.0,
         "target_end": 25.5,
         "text": (
-            "Who triggered it. "
-            "What changed. When it happened. What else it touched."
+            "Who triggered it. " "What changed. When it happened. What else it touched."
         ),
     },
     {
@@ -179,12 +173,21 @@ def _fit_pcm(pcm: bytes, target_seconds: float) -> bytes:
             _save_wav(pcm, raw_path)
             subprocess.run(
                 [
-                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-i", str(raw_path),
-                    "-af", _atempo_filter(speed),
-                    "-ar", str(SAMPLE_RATE),
-                    "-ac", str(CHANNELS),
-                    "-c:a", "pcm_s16le",
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(raw_path),
+                    "-af",
+                    _atempo_filter(speed),
+                    "-ar",
+                    str(SAMPLE_RATE),
+                    "-ac",
+                    str(CHANNELS),
+                    "-c:a",
+                    "pcm_s16le",
                     str(fit_path),
                 ],
                 check=True,
@@ -274,7 +277,9 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     keys = _get_tts_keys()
     if not keys:
-        raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS.")
+        raise RuntimeError(
+            "GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS."
+        )
 
     total_seconds = SCENES[-1]["target_end"]
     canvas = bytearray(b"\x00" * int(total_seconds * SAMPLE_RATE) * SAMPLE_WIDTH)
@@ -293,7 +298,11 @@ def main() -> None:
         spoken_start = round(start + LEAD_PAD, 3)
         raw_path = CHUNK_DIR / f"{key}.wav"
 
-        print(f"  {scene['scene']} / {key}: {len(text.split())} words...", end="", flush=True)
+        print(
+            f"  {scene['scene']} / {key}: {len(text.split())} words...",
+            end="",
+            flush=True,
+        )
         if raw_path.exists():
             raw_pcm = _read_wav_pcm(raw_path)
             print(" cached", end="", flush=True)

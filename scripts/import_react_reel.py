@@ -179,7 +179,9 @@ def _patch_source(source: str) -> str:
     return REACT_IMPORTS + source
 
 
-def _build_shell(title: str, composition_id: str, duration: float, source_styles: str) -> str:
+def _build_shell(
+    title: str, composition_id: str, duration: float, source_styles: str
+) -> str:
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -243,7 +245,14 @@ def _segments_from_narration(narration: dict) -> list[dict]:
     return items
 
 
-def _build_spec(slug: str, title: str, composition_dir: Path, output_file: str, duration: float, narration: dict) -> dict:
+def _build_spec(
+    slug: str,
+    title: str,
+    composition_dir: Path,
+    output_file: str,
+    duration: float,
+    narration: dict,
+) -> dict:
     return {
         "slug": slug,
         "title": title,
@@ -268,7 +277,13 @@ def _build_spec(slug: str, title: str, composition_dir: Path, output_file: str, 
     }
 
 
-def import_reel(source_html: Path, composition_dir: Path, spec_path: Path, slug: str, output_file: str) -> None:
+def import_reel(
+    source_html: Path,
+    composition_dir: Path,
+    spec_path: Path,
+    slug: str,
+    output_file: str,
+) -> None:
     html = source_html.read_text()
     title = _extract_title(html)
     styles = _extract_styles(html)
@@ -279,7 +294,9 @@ def import_reel(source_html: Path, composition_dir: Path, spec_path: Path, slug:
     composition_dir.mkdir(parents=True, exist_ok=True)
     (composition_dir / "original.html").write_text(html)
     (composition_dir / "app.source.jsx").write_text(source)
-    (composition_dir / "index.html").write_text(_build_shell(title, slug, duration, styles))
+    (composition_dir / "index.html").write_text(
+        _build_shell(title, slug, duration, styles)
+    )
 
     subprocess.run(
         [
@@ -294,12 +311,21 @@ def import_reel(source_html: Path, composition_dir: Path, spec_path: Path, slug:
         check=True,
     )
 
-    spec = _build_spec(slug, title.replace("Reel · ", "").strip(), composition_dir, output_file, duration, narration)
+    spec = _build_spec(
+        slug,
+        title.replace("Reel · ", "").strip(),
+        composition_dir,
+        output_file,
+        duration,
+        narration,
+    )
     spec_path.write_text(json.dumps(spec, indent=2) + "\n")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Import a React/Babel reel HTML into a render-safe HyperFrames composition.")
+    parser = argparse.ArgumentParser(
+        description="Import a React/Babel reel HTML into a render-safe HyperFrames composition."
+    )
     parser.add_argument("--source-html", required=True)
     parser.add_argument("--composition-dir", required=True)
     parser.add_argument("--spec-path", required=True)

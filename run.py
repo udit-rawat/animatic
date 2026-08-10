@@ -9,11 +9,18 @@ load_dotenv()
 
 # Active pipeline only. Legacy scraper/ranker/multi-stage content generation is
 # archived under legacy/phase1-pipeline/ and no longer wired into the runner.
-STAGES = ["content_generator", "narrator", "word_aligner", "brief_generator", "animator", "notifier"]
+STAGES = [
+    "content_generator",
+    "narrator",
+    "word_aligner",
+    "brief_generator",
+    "animator",
+    "notifier",
+]
 STAGES_CUSTOM = STAGES
 
-OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), "output")
-TOPIC_PATH  = os.path.join(OUTPUT_DIR, "topic.json")
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
+TOPIC_PATH = os.path.join(OUTPUT_DIR, "topic.json")
 SCRIPT_PATH = os.path.join(OUTPUT_DIR, "script.json")
 PARAMS_PATH = os.path.join(OUTPUT_DIR, "params.json")
 
@@ -23,17 +30,26 @@ def apply_provider(provider: str, model: str | None):
         os.environ["FORCE_PROVIDER"] = "claude"
     elif provider == "openrouter":
         if not os.environ.get("OPENROUTER_API_KEY"):
-            print("[ERROR] --provider openrouter requires OPENROUTER_API_KEY in .env", file=sys.stderr)
+            print(
+                "[ERROR] --provider openrouter requires OPENROUTER_API_KEY in .env",
+                file=sys.stderr,
+            )
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "openrouter"
     elif provider == "gemini":
         if not os.environ.get("GEMINI_API_KEY"):
-            print("[ERROR] --provider gemini requires GEMINI_API_KEY in .env", file=sys.stderr)
+            print(
+                "[ERROR] --provider gemini requires GEMINI_API_KEY in .env",
+                file=sys.stderr,
+            )
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "gemini"
     elif provider == "anthropic":
         if not os.environ.get("ANTHROPIC_API_KEY"):
-            print("[ERROR] --provider anthropic requires ANTHROPIC_API_KEY in .env", file=sys.stderr)
+            print(
+                "[ERROR] --provider anthropic requires ANTHROPIC_API_KEY in .env",
+                file=sys.stderr,
+            )
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "anthropic"
     elif provider == "handoff":
@@ -42,7 +58,9 @@ def apply_provider(provider: str, model: str | None):
     if model:
         os.environ["OPENROUTER_MODEL"] = model
         if provider != "openrouter":
-            print(f"[WARN] --model flag only applies to OpenRouter mode, ignored for '{provider}'")
+            print(
+                f"[WARN] --model flag only applies to OpenRouter mode, ignored for '{provider}'"
+            )
 
 
 def _is_gemini_active() -> bool:
@@ -56,9 +74,9 @@ def _write_custom_topic(title: str, summary: str):
     """Write a topic.json from CLI args for the active custom-topic flow."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     topic = {
-        "title":      title,
-        "summary":    summary,
-        "source":     "custom",
+        "title": title,
+        "summary": summary,
+        "source": "custom",
         "why_picked": "Provided via --custom flag.",
     }
     with open(TOPIC_PATH, "w") as f:
@@ -120,8 +138,8 @@ def _intervention_checkpoint() -> bool:
         for beat_key in sorted(params):
             d = params[beat_key].get("data", {})
             layout = d.get("layout", "?")
-            label  = d.get("section_label", "")
-            extra  = ""
+            label = d.get("section_label", "")
+            extra = ""
             if layout == "MetricFocus":
                 hero = d.get("hero", {})
                 extra = f"  hero={hero.get('value','?')} {hero.get('label','')}"
@@ -129,7 +147,7 @@ def _intervention_checkpoint() -> bool:
                 steps = d.get("steps", [])
                 extra = f"  steps={len(steps)} dir={d.get('flow_direction','?')}"
             elif layout == "ComparisonSplit":
-                lh = d.get("left",  {}).get("heading", "?")
+                lh = d.get("left", {}).get("heading", "?")
                 rh = d.get("right", {}).get("heading", "?")
                 extra = f"  {lh} vs {rh}"
             elif layout == "TakeawayScene":
@@ -164,7 +182,7 @@ def _narration_preview_pause():
         text = narration.get(seg, "")
         if text:
             print(f"\n  [{seg}]")
-            print(f"  \"{text}\"")
+            print(f'  "{text}"')
     print("\n" + "═" * 70)
     print("  Review the script above. If it looks good, press Enter to continue.")
     print("  To abort and edit, press Ctrl+C.\n")
@@ -172,11 +190,15 @@ def _narration_preview_pause():
     try:
         input("  Continue to TTS → ")
     except (EOFError, KeyboardInterrupt):
-        print("\n[narration] Aborted — edit spoken_narration.json and re-run with --stage narrator")
+        print(
+            "\n[narration] Aborted — edit spoken_narration.json and re-run with --stage narrator"
+        )
         sys.exit(0)
 
 
-def _print_veo2_prompts(topic_title: str, narration_data: dict, timing_data: dict) -> None:
+def _print_veo2_prompts(
+    topic_title: str, narration_data: dict, timing_data: dict
+) -> None:
     """
     Read params.json for animation_hook beats and print one Veo2 video prompt per beat.
     Also saves to output/veo2_prompts.txt for Telegram delivery.
@@ -191,10 +213,10 @@ def _print_veo2_prompts(topic_title: str, narration_data: dict, timing_data: dic
     scenes = params.get("scenes", {})
     hook_beats = []
     for beat in beats:
-        bid  = f"beat_{beat['beat']}"
+        bid = f"beat_{beat['beat']}"
         scene = scenes.get(bid, {})
         if scene.get("template_variant") == "animation_hook":
-            narr  = narration_data.get(
+            narr = narration_data.get(
                 ["hook", "concept_1", "concept_2", "takeaway_cta"][beat["beat"] - 1], ""
             )
             timing = timing_data.get(
@@ -215,7 +237,7 @@ def _print_veo2_prompts(topic_title: str, narration_data: dict, timing_data: dic
         prompt = (
             f"Portrait video, 1080x1920, {dur} seconds, black background, no text, no UI.\n"
             f"Topic: {topic_title}\n"
-            f"Scene: {layout} beat — visually represents \"{narr}\"\n"
+            f'Scene: {layout} beat — visually represents "{narr}"\n'
             f"Style: dark cinematic, neon cyan accent #00E5FF, technical/sci-fi aesthetic. "
             f"Slow camera push-in. Ambient particle drift. No cuts. Loop-friendly ending."
         )
@@ -247,15 +269,15 @@ def _compositor_pause() -> str:
             topic_title = json.load(f).get("title", "video")
     slug = _re.sub(r"[^a-z0-9]+", "-", topic_title.lower()).strip("-")[:40]
     today = _date.today().isoformat()
-    comp_dir  = os.path.join(OUTPUT_DIR, "compositions", f"{today}_{slug}")
+    comp_dir = os.path.join(OUTPUT_DIR, "compositions", f"{today}_{slug}")
     drop_path = os.path.join(comp_dir, "CustomVideo.tsx")
     os.makedirs(comp_dir, exist_ok=True)
 
     # ── Load narration + timing for inline display ───────────────────────────
     narration_path = os.path.join(OUTPUT_DIR, "spoken_narration.json")
-    timing_path    = os.path.join(OUTPUT_DIR, "narration_timing.json")
+    timing_path = os.path.join(OUTPUT_DIR, "narration_timing.json")
     narration_data = {}
-    timing_data    = {}
+    timing_data = {}
     if os.path.exists(narration_path):
         with open(narration_path) as f:
             narration_data = json.load(f)
@@ -263,9 +285,11 @@ def _compositor_pause() -> str:
         with open(timing_path) as f:
             timing_data = json.load(f)
 
-    total_dur = max(
-        (v.get("end", 0) for v in timing_data.values()), default=0
-    ) if timing_data else 0
+    total_dur = (
+        max((v.get("end", 0) for v in timing_data.values()), default=0)
+        if timing_data
+        else 0
+    )
 
     print("\n" + "═" * 70)
     print("  ⏸  COMPOSITOR PAUSE  —  generate a custom render composition")
@@ -278,16 +302,16 @@ def _compositor_pause() -> str:
         print("  ─────────────────────────────────────────────────────────────")
         segment_order = ["hook", "concept_1", "concept_2", "takeaway_cta"]
         for seg in segment_order:
-            text   = narration_data.get(seg, "")
+            text = narration_data.get(seg, "")
             timing = timing_data.get(seg, {})
             if not text:
                 continue
-            start  = timing.get("start", 0)
-            end    = timing.get("end", start + timing.get("duration", 0))
+            start = timing.get("start", 0)
+            end = timing.get("end", start + timing.get("duration", 0))
             s_from = round(start * 30)
-            s_to   = round(end   * 30)
+            s_to = round(end * 30)
             print(f"\n  [{seg}]  frames {s_from}–{s_to}  ({start:.1f}s – {end:.1f}s)")
-            print(f"  \"{text}\"")
+            print(f'  "{text}"')
         print()
 
     print("  ─────────────────────────────────────────────────────────────")
@@ -366,7 +390,7 @@ def _studio_pause() -> bool:
     import subprocess
 
     remotion_dir = os.path.join(os.path.dirname(__file__), "remotion")
-    video_path   = os.path.join(OUTPUT_DIR, "video.mp4")
+    video_path = os.path.join(OUTPUT_DIR, "video.mp4")
 
     print("\n" + "═" * 70)
     print("  STUDIO REVIEW  —  inspect video before sending to Telegram")
@@ -438,14 +462,23 @@ def _apply_narration_override(narration_arg: str):
             narration = _json.loads(cleaned)
             print("[narration] Loaded custom narration from inline JSON")
         except _json.JSONDecodeError as e:
-            print(f"[ERROR] --narration value is not valid JSON and not a file path: {e}", file=sys.stderr)
+            print(
+                f"[ERROR] --narration value is not valid JSON and not a file path: {e}",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
     required = {"hook", "concept_1", "takeaway_cta"}
-    missing  = required - set(narration.keys())
+    missing = required - set(narration.keys())
     if missing:
-        print(f"[ERROR] --narration JSON missing required keys: {missing}", file=sys.stderr)
-        print('  Required: "hook", "concept_1", "concept_2" (optional), "takeaway_cta"', file=sys.stderr)
+        print(
+            f"[ERROR] --narration JSON missing required keys: {missing}",
+            file=sys.stderr,
+        )
+        print(
+            '  Required: "hook", "concept_1", "concept_2" (optional), "takeaway_cta"',
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     spoken_path = os.path.join(OUTPUT_DIR, "spoken_narration.json")
@@ -455,11 +488,14 @@ def _apply_narration_override(narration_arg: str):
 
     segments = list(narration.keys())
     print(f"[narration] Written → {spoken_path}  segments={segments}")
-    print("[narration] Narrator LLM rewrite will be skipped — using your narration directly.")
+    print(
+        "[narration] Narrator LLM rewrite will be skipped — using your narration directly."
+    )
 
 
 def run_stage(name: str):
     from pipeline.logger import get as get_log
+
     get_log().info(f"Stage START: {name}")
     print(f"\n--- Running: {name} ---")
     if name == "content_generator":
@@ -497,26 +533,36 @@ def main():
     parser.add_argument("--hop", action="store_true")
     parser.add_argument("--single-shot", action="store_true")
     parser.add_argument(
-        "--gemini", action="store_true",
+        "--gemini",
+        action="store_true",
         help="Run full pipeline on Gemini only (gemini-2.5-flash-lite).",
     )
     parser.add_argument("--check-quota", action="store_true")
     parser.add_argument("--rca", action="store_true")
-    parser.add_argument("--log-stats",  action="store_true",
-                        help="Log performance stats for the last posted video.")
-    parser.add_argument("--analytics",  action="store_true",
-                        help="Print analytics summary table.")
+    parser.add_argument(
+        "--log-stats",
+        action="store_true",
+        help="Log performance stats for the last posted video.",
+    )
+    parser.add_argument(
+        "--analytics", action="store_true", help="Print analytics summary table."
+    )
 
     # ── Custom content path ───────────────────────────────────────────────────
     parser.add_argument(
-        "--custom", action="store_true",
+        "--custom",
+        action="store_true",
         help=(
             "Provide topic via --title and --summary. "
             "Runs content_generator directly."
         ),
     )
-    parser.add_argument("--title",   default="", help="Topic title (required with --custom)")
-    parser.add_argument("--summary", default="", help="Topic summary or context (used with --custom)")
+    parser.add_argument(
+        "--title", default="", help="Topic title (required with --custom)"
+    )
+    parser.add_argument(
+        "--summary", default="", help="Topic summary or context (used with --custom)"
+    )
 
     # ── Custom narration + tone ───────────────────────────────────────────────
     parser.add_argument(
@@ -542,7 +588,8 @@ def main():
 
     # ── Compositor ───────────────────────────────────────────────────────────
     parser.add_argument(
-        "--compositor", action="store_true",
+        "--compositor",
+        action="store_true",
         help=(
             "Pause after narrator, print context file paths + drop directory, "
             "wait for you to paste a custom compositor artifact, then continue to render."
@@ -551,11 +598,14 @@ def main():
 
     # ── Intervention checkpoint ───────────────────────────────────────────────
     parser.add_argument(
-        "--no-notify", action="store_true", dest="no_notify",
+        "--no-notify",
+        action="store_true",
+        dest="no_notify",
         help="Skip Telegram notification entirely — video saved to output/video.mp4 only.",
     )
     parser.add_argument(
-        "--checkpoint", action="store_true",
+        "--checkpoint",
+        action="store_true",
         help=(
             "Pause after content generation, print script + beat layout plan, "
             "and ask for confirmation before TTS + render."
@@ -566,16 +616,19 @@ def main():
 
     if args.gemini:
         if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEYS")):
-            print("[ERROR] --gemini requires GEMINI_API_KEY or GEMINI_API_KEYS in .env", file=sys.stderr)
+            print(
+                "[ERROR] --gemini requires GEMINI_API_KEY or GEMINI_API_KEYS in .env",
+                file=sys.stderr,
+            )
             sys.exit(1)
         os.environ["FORCE_PROVIDER"] = "gemini"
-        os.environ.setdefault("GEMINI_MODEL_RANKER",             "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_SCRIPTER",           "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_VERIFIER",           "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_SCENE_PLANNER",     "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_NARRATOR",           "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_PARAM_EXTRACTOR",   "gemini-2.5-flash-lite")
-        os.environ.setdefault("GEMINI_MODEL_ANIMATOR",           "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_RANKER", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCRIPTER", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_VERIFIER", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_SCENE_PLANNER", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_NARRATOR", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_PARAM_EXTRACTOR", "gemini-2.5-flash-lite")
+        os.environ.setdefault("GEMINI_MODEL_ANIMATOR", "gemini-2.5-flash-lite")
         # content_generator uses flash when generating narration from scratch.
         # With --narration override it only structures data — flash-lite is enough
         # and avoids 403s on keys without gemini-2.5-flash project access.
@@ -594,29 +647,33 @@ def main():
 
     if args.check_quota:
         from pipeline.quota import print_status
+
         print_status(verbose=True)
         return
 
     if args.rca:
         from pipeline.quota import print_status, print_rca
+
         print_status(verbose=True)
         print_rca()
         return
 
     if args.log_stats:
         from pipeline.analytics import log_stats_interactive
+
         log_stats_interactive()
         return
 
     if args.analytics:
         from pipeline.analytics import print_summary
+
         print_summary()
         return
 
     # ── Tone override: set env var before narrator stage ─────────────────────
     if args.tone:
         os.environ["NARRATOR_TONE_OVERRIDE"] = args.tone
-        print(f"[tone] Custom tone set → \"{args.tone[:80]}\"")
+        print(f'[tone] Custom tone set → "{args.tone[:80]}"')
 
     # ── Narration override: signal content_generator to skip word-count check ─
     if args.narration:
@@ -638,9 +695,11 @@ def main():
         sys.exit(1)
 
     from pipeline.logger import setup as log_setup
+
     log = log_setup()
 
     from pipeline.claude_client import get_mode
+
     mode = get_mode()
     log.info(f"Pipeline starting — LLM mode: {mode}")
     print(f"\n🔧 LLM mode: {mode}\n")
@@ -648,10 +707,14 @@ def main():
     if _is_gemini_active() and not args.stage:
         try:
             from pipeline.quota import print_status, get_status
+
             print_status(verbose=True)
             s = get_status()
             if not s["can_run_minimal"]:
-                print("[ERROR] Gemini quota too low to attempt a full run.", file=sys.stderr)
+                print(
+                    "[ERROR] Gemini quota too low to attempt a full run.",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
         except Exception:
             pass
@@ -677,6 +740,7 @@ def main():
     if _is_gemini_active():
         try:
             from pipeline.quota import start_run
+
             run_id = start_run(run_type)
         except Exception:
             pass
@@ -691,6 +755,7 @@ def main():
                 if run_id is not None:
                     try:
                         from pipeline.quota import end_run
+
                         end_run(run_id, outcome="aborted", failed_stage="checkpoint")
                     except Exception:
                         pass
@@ -715,11 +780,13 @@ def main():
             except Exception as e:
                 failed_stage = stage
                 from pipeline.logger import get as get_log
+
                 get_log().error(f"Stage FAILED: {stage} — {e}", exc_info=True)
                 print(f"\n[ERROR] Stage '{stage}' failed: {e}", file=sys.stderr)
                 if run_id is not None:
                     try:
                         from pipeline.quota import end_run
+
                         end_run(run_id, outcome="failed", failed_stage=stage)
                     except Exception:
                         pass
@@ -734,11 +801,13 @@ def main():
         except Exception as e:
             failed_stage = stage
             from pipeline.logger import get as get_log
+
             get_log().error(f"Stage FAILED: {stage} — {e}", exc_info=True)
             print(f"\n[ERROR] Stage '{stage}' failed: {e}", file=sys.stderr)
             if run_id is not None:
                 try:
                     from pipeline.quota import end_run
+
                     end_run(run_id, outcome="failed", failed_stage=stage)
                 except Exception:
                     pass
@@ -747,6 +816,7 @@ def main():
     if run_id is not None:
         try:
             from pipeline.quota import end_run
+
             end_run(run_id, outcome="success")
         except Exception:
             pass
@@ -754,6 +824,7 @@ def main():
     if not args.stage:
         try:
             from pipeline.auditor import build_report, print_report, save_report
+
             report = build_report()
             print_report(report)
             save_report(report)
@@ -762,6 +833,7 @@ def main():
 
         try:
             from pipeline.analytics import create_skeleton
+
             create_skeleton()
         except Exception as e:
             print(f"[WARN] Analytics skeleton failed: {e}", file=sys.stderr)

@@ -26,7 +26,9 @@ def scaffold(title: str, slug: str | None, force: bool) -> None:
     spec_path = current / "spec.json"
     index_path = current / "index.html"
     if not force and (spec_path.exists() or index_path.exists()):
-        raise RuntimeError("reels/current already exists. Pass --force to replace spec only.")
+        raise RuntimeError(
+            "reels/current already exists. Pass --force to replace spec only."
+        )
 
     if force and spec_path.exists():
         backup = ROOT / "cache" / "old_specs" / f"{reel_slug}.spec.json"
@@ -46,10 +48,30 @@ def scaffold(title: str, slug: str | None, force: bool) -> None:
         "render": {"quality": "high", "crf": 6, "workers": 1},
         "audio": {"sample_rate": 24000, "channels": 1, "mastering": True},
         "segments": [
-            {"id": "hook", "start": 0.35, "duration": 3.2, "text": "Replace this with the hook."},
-            {"id": "explain", "start": 3.95, "duration": 7.5, "text": "Replace this with the main explanation."},
-            {"id": "payoff", "start": 11.8, "duration": 5.0, "text": "Replace this with the payoff."},
-            {"id": "cta", "start": 17.1, "duration": 2.4, "text": "Replace this with the call to action."},
+            {
+                "id": "hook",
+                "start": 0.35,
+                "duration": 3.2,
+                "text": "Replace this with the hook.",
+            },
+            {
+                "id": "explain",
+                "start": 3.95,
+                "duration": 7.5,
+                "text": "Replace this with the main explanation.",
+            },
+            {
+                "id": "payoff",
+                "start": 11.8,
+                "duration": 5.0,
+                "text": "Replace this with the payoff.",
+            },
+            {
+                "id": "cta",
+                "start": 17.1,
+                "duration": 2.4,
+                "text": "Replace this with the call to action.",
+            },
         ],
     }
     spec_path.write_text(json.dumps(spec, indent=2) + "\n")
@@ -58,10 +80,14 @@ def scaffold(title: str, slug: str | None, force: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create a new reel spec in reels/current.")
+    parser = argparse.ArgumentParser(
+        description="Create a new reel spec in reels/current."
+    )
     parser.add_argument("--title", required=True, help="Human-readable reel title.")
     parser.add_argument("--slug", help="Optional URL/file-safe slug.")
-    parser.add_argument("--force", action="store_true", help="Replace current spec after backing it up.")
+    parser.add_argument(
+        "--force", action="store_true", help="Replace current spec after backing it up."
+    )
     args = parser.parse_args()
     scaffold(args.title, args.slug, args.force)
 

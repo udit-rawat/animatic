@@ -21,19 +21,20 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import pipeline.narrator as narrator_module
+
 narrator_module.VOICE_NAME = "Kore"  # More dramatic female voice for this content
 
 from pipeline.narrator import call_tts_with_rotation, _get_tts_keys
 
-OUT_DIR  = ROOT / "output" / "hyperframes_custom" / "2026-04-22_opensre-reel"
-OUT_WAV  = OUT_DIR / "narration.wav"
+OUT_DIR = ROOT / "output" / "hyperframes_custom" / "2026-04-22_opensre-reel"
+OUT_WAV = OUT_DIR / "narration.wav"
 CHUNK_DIR = ROOT / "output" / "opensre_tts_chunks"
 
-SAMPLE_RATE  = 24_000
+SAMPLE_RATE = 24_000
 SAMPLE_WIDTH = 2
-CHANNELS     = 1
+CHANNELS = 1
 TOTAL_SECONDS = 60.0
-HEADROOM      = 0.90  # occupy 90% of each window, leaving natural pause edges
+HEADROOM = 0.90  # occupy 90% of each window, leaving natural pause edges
 
 SEGMENTS = [
     {
@@ -130,11 +131,22 @@ def _fit_pcm(pcm: bytes, target_seconds: float) -> bytes:
             _save_wav(pcm, raw_path)
             subprocess.run(
                 [
-                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-i", str(raw_path),
-                    "-af", _atempo_filter(speed),
-                    "-ar", str(SAMPLE_RATE), "-ac", str(CHANNELS),
-                    "-c:a", "pcm_s16le", str(fit_path),
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(raw_path),
+                    "-af",
+                    _atempo_filter(speed),
+                    "-ar",
+                    str(SAMPLE_RATE),
+                    "-ac",
+                    str(CHANNELS),
+                    "-c:a",
+                    "pcm_s16le",
+                    str(fit_path),
                 ],
                 check=True,
             )
@@ -146,7 +158,7 @@ def _fit_pcm(pcm: bytes, target_seconds: float) -> bytes:
 
 def _overlay(base: bytearray, pcm: bytes, start_seconds: float) -> None:
     start_byte = int(round(start_seconds * SAMPLE_RATE)) * SAMPLE_WIDTH
-    end_byte   = min(len(base), start_byte + len(pcm))
+    end_byte = min(len(base), start_byte + len(pcm))
     if start_byte >= len(base) or end_byte <= start_byte:
         return
     base[start_byte:end_byte] = pcm[: end_byte - start_byte]
@@ -165,12 +177,14 @@ def main() -> None:
 
     print(f"Generating OpenSRE narration ({TOTAL_SECONDS:.0f}s, voice=Kore)")
     for seg in SEGMENTS:
-        window      = seg["end"] - seg["start"]
-        spoken_dur  = round(window * HEADROOM, 3)
+        window = seg["end"] - seg["start"]
+        spoken_dur = round(window * HEADROOM, 3)
         spoken_start = seg["start"] + round((window - spoken_dur) / 2, 3)
-        chunk_path  = CHUNK_DIR / f"{seg['key']}.wav"
+        chunk_path = CHUNK_DIR / f"{seg['key']}.wav"
 
-        print(f"  {seg['key']}: {len(seg['text'].split())} words ...", end="", flush=True)
+        print(
+            f"  {seg['key']}: {len(seg['text'].split())} words ...", end="", flush=True
+        )
         if chunk_path.exists():
             raw_pcm = _read_wav_pcm(chunk_path)
             print(" (cached)", end="", flush=True)
@@ -180,7 +194,9 @@ def main() -> None:
 
         fitted = _fit_pcm(raw_pcm, spoken_dur)
         _overlay(canvas, fitted, spoken_start)
-        print(f" raw={_pcm_duration(raw_pcm):.2f}s → fit={_pcm_duration(fitted):.2f}s @ t={spoken_start:.1f}s")
+        print(
+            f" raw={_pcm_duration(raw_pcm):.2f}s → fit={_pcm_duration(fitted):.2f}s @ t={spoken_start:.1f}s"
+        )
 
     _save_wav(bytes(canvas), OUT_WAV)
     print(f"\nSaved: {OUT_WAV}")

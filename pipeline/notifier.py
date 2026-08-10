@@ -8,12 +8,16 @@ from telegram.request import HTTPXRequest
 
 load_dotenv()
 
-SCRIPT_PATH      = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
-TOPIC_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
-AUDIT_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "audit.json")
-RETRIES_PATH     = os.path.join(os.path.dirname(__file__), "..", "output", "animator_retries.json")
-VIDEO_PATH       = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
-VEO2_PROMPTS_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "veo2_prompts.txt")
+SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "script.json")
+TOPIC_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "topic.json")
+AUDIT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "audit.json")
+RETRIES_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "animator_retries.json"
+)
+VIDEO_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "video.mp4")
+VEO2_PROMPTS_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "veo2_prompts.txt"
+)
 
 
 def build_audit_block() -> str:
@@ -23,10 +27,10 @@ def build_audit_block() -> str:
         report = json.load(f)
 
     stages = report.get("stages", {})
-    total  = report.get("total", {})
+    total = report.get("total", {})
     has_tokens = report.get("has_token_counts", False)
 
-    gemini_stages      = report.get("gemini_stages", {})
+    gemini_stages = report.get("gemini_stages", {})
     gemini_total_calls = report.get("gemini_total_calls", 0)
 
     lines = ["📊 Usage"]
@@ -36,10 +40,14 @@ def build_audit_block() -> str:
         lines.append("-" * 38)
         for stage, d in stages.items():
             tok = d["input_tokens"] + d["output_tokens"]
-            lines.append(f"{stage:<12} {d['input_tokens']:>7,} {d['output_tokens']:>7,} {tok:>8,}")
+            lines.append(
+                f"{stage:<12} {d['input_tokens']:>7,} {d['output_tokens']:>7,} {tok:>8,}"
+            )
         lines.append("-" * 38)
         grand = total["input_tokens"] + total["output_tokens"]
-        lines.append(f"{'TOTAL':<12} {total['input_tokens']:>7,} {total['output_tokens']:>7,} {grand:>8,}")
+        lines.append(
+            f"{'TOTAL':<12} {total['input_tokens']:>7,} {total['output_tokens']:>7,} {grand:>8,}"
+        )
         lines.append("```")
         lines.append(f"Cost: ${total['cost_usd']:.4f}")
         if gemini_total_calls:
@@ -56,7 +64,9 @@ def build_audit_block() -> str:
         lines.append("```")
         lines.append("(Gemini free tier — no token counts)")
     else:
-        lines.append(f"Calls: {total.get('calls', 0)}  |  Cost: ${total['cost_usd']:.4f}")
+        lines.append(
+            f"Calls: {total.get('calls', 0)}  |  Cost: ${total['cost_usd']:.4f}"
+        )
 
     return "\n".join(lines)
 
@@ -69,13 +79,14 @@ def build_run_stats() -> str:
         with open(RETRIES_PATH) as f:
             r = json.load(f)
         attempts = r.get("attempts", 1)
-        max_r    = r.get("max_retries", 3)
-        icon     = "✅" if attempts == 1 else ("⚠️" if attempts < max_r else "🔴")
+        max_r = r.get("max_retries", 3)
+        icon = "✅" if attempts == 1 else ("⚠️" if attempts < max_r else "🔴")
         lines.append(f"{icon} Animator: {attempts}/{max_r} attempts")
 
     # Runs remaining today
     try:
         from pipeline.quota import get_status
+
         s = get_status()
         remaining_calls = s.get("remaining", 0)
         # estimate calls per run from today's usage ÷ completed runs
@@ -96,11 +107,8 @@ def build_run_stats() -> str:
 
 def build_message(topic: dict, script: dict) -> str:
     audit_block = build_audit_block()
-    run_stats   = build_run_stats()
-    msg = (
-        f"\u2705 Today's video is ready\n\n"
-        f"\U0001f4cc Topic: {topic['title']}"
-    )
+    run_stats = build_run_stats()
+    msg = f"\u2705 Today's video is ready\n\n" f"\U0001f4cc Topic: {topic['title']}"
     if run_stats:
         msg += f"\n\n{run_stats}"
     if audit_block:
@@ -125,7 +133,10 @@ async def send_notification():
     with open(SCRIPT_PATH) as f:
         script = json.load(f)
 
-    bot = Bot(token=token, request=HTTPXRequest(read_timeout=300, write_timeout=300, connect_timeout=60))
+    bot = Bot(
+        token=token,
+        request=HTTPXRequest(read_timeout=300, write_timeout=300, connect_timeout=60),
+    )
 
     print("Sending Telegram message...")
     await bot.send_message(chat_id=chat_id, text=build_message(topic, script))
@@ -152,13 +163,14 @@ async def send_notification():
             print("Sending Veo2 prompts...")
             # Telegram message limit is 4096 chars — chunk if needed
             for i in range(0, len(veo2_text), 4000):
-                await bot.send_message(chat_id=chat_id, text=veo2_text[i:i+4000])
+                await bot.send_message(chat_id=chat_id, text=veo2_text[i : i + 4000])
 
     print("Notification sent successfully.")
 
     # Commit topic to history only after a video is successfully delivered.
     try:
         from pipeline.topic_history import load_history, save_history
+
         history = load_history()
         save_history(history, topic["title"])
         print(f"Topic saved to history: {topic['title']}")

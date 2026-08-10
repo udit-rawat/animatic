@@ -18,6 +18,7 @@ Usage:
 Install deps (not in requirements.txt yet):
     pip install instructor anthropic pydantic>=2.0
 """
+
 from __future__ import annotations
 
 import json
@@ -33,33 +34,36 @@ from pipeline.video_spec import build_video_spec, write_video_spec
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
-_ROOT       = os.path.join(os.path.dirname(__file__), "..")
-TOPIC_PATH  = os.path.join(_ROOT, "output", "topic.json")
-SCRIPT_OUT  = os.path.join(_ROOT, "output", "script.json")
-SPOKEN_OUT  = os.path.join(_ROOT, "output", "spoken_narration.json")
-PARAMS_OUT  = os.path.join(_ROOT, "output", "params.json")
-PLAN_OUT    = os.path.join(_ROOT, "output", "scene_plan.json")
-CUES_OUT    = os.path.join(_ROOT, "cue_definitions.json")
+_ROOT = os.path.join(os.path.dirname(__file__), "..")
+TOPIC_PATH = os.path.join(_ROOT, "output", "topic.json")
+SCRIPT_OUT = os.path.join(_ROOT, "output", "script.json")
+SPOKEN_OUT = os.path.join(_ROOT, "output", "spoken_narration.json")
+PARAMS_OUT = os.path.join(_ROOT, "output", "params.json")
+PLAN_OUT = os.path.join(_ROOT, "output", "scene_plan.json")
+CUES_OUT = os.path.join(_ROOT, "cue_definitions.json")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # § 1  PYDANTIC SCHEMAS
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class LayoutMode(str, Enum):
-    METRIC      = "metric"
-    COMPARISON  = "comparison"
-    PIPELINE    = "pipeline"
-    TIMELINE    = "timeline"
-    TRISTAT     = "tristat"
+    METRIC = "metric"
+    COMPARISON = "comparison"
+    PIPELINE = "pipeline"
+    TIMELINE = "timeline"
+    TRISTAT = "tristat"
     LEADERBOARD = "leaderboard"
-    BAR         = "bar"
-    CODEDIFF    = "codediff"
+    BAR = "bar"
+    CODEDIFF = "codediff"
 
 
 # ── Shared sub-objects ────────────────────────────────────────────────────────
 
+
 class MetricItem(BaseModel):
     """One data point on a card (≤ 8 chars each for mobile legibility)."""
+
     label: str = Field(max_length=10, description="Short axis label, e.g. 'dequant %'")
     value: str = Field(max_length=10, description="Formatted value, e.g. '40 %'")
     color: Literal["green", "cyan", "yellow", "red", "white"] = "white"
@@ -67,14 +71,16 @@ class MetricItem(BaseModel):
 
 
 class PipelineStep(BaseModel):
-    label:    str = Field(max_length=14, description="Node name shown on screen")
-    sublabel: str | None = Field(default=None, max_length=10, description="e.g. '12 ms'")
-    state:    Literal["idle", "active", "bottleneck"] = "idle"
+    label: str = Field(max_length=14, description="Node name shown on screen")
+    sublabel: str | None = Field(
+        default=None, max_length=10, description="e.g. '12 ms'"
+    )
+    state: Literal["idle", "active", "bottleneck"] = "idle"
 
 
 class ComparisonPanel(BaseModel):
     heading: str = Field(max_length=16)
-    color:   Literal["green", "cyan", "yellow", "red", "white"]
+    color: Literal["green", "cyan", "yellow", "red", "white"]
     metrics: list[MetricItem] = Field(min_length=1, max_length=4)
 
 
@@ -82,12 +88,16 @@ class ComparisonPanel(BaseModel):
 # Discriminated union on the `layout` literal field.
 # Each type maps 1-to-1 to a Remotion layout component.
 
+
 class MetricUIContent(BaseModel):
     """Hero metric card — single big number + supporting context."""
-    layout:        Literal["MetricFocus"]
-    section_label: str = Field(max_length=24, description="UPPERCASE micro-label, e.g. 'THE BOTTLENECK'")
-    hero:          MetricItem = Field(description="The ONE number that lands the point")
-    context:       str  = Field(
+
+    layout: Literal["MetricFocus"]
+    section_label: str = Field(
+        max_length=24, description="UPPERCASE micro-label, e.g. 'THE BOTTLENECK'"
+    )
+    hero: MetricItem = Field(description="The ONE number that lands the point")
+    context: str = Field(
         max_length=140,
         description=(
             "1-2 declarative sentences. No markdown. "
@@ -95,7 +105,8 @@ class MetricUIContent(BaseModel):
         ),
     )
     chips: list[str] = Field(
-        min_length=2, max_length=3,
+        min_length=2,
+        max_length=3,
         description="2-3 short tags ≤ 16 chars each, e.g. ['llama.cpp', 'M5 Max', '32K ctx']",
     )
     supporting_metrics: list[MetricItem] = Field(
@@ -120,116 +131,164 @@ class MetricUIContent(BaseModel):
 
 class ComparisonUIContent(BaseModel):
     """Side-by-side A vs B panel."""
-    layout:         Literal["ComparisonSplit"]
-    section_label:  str = Field(max_length=24)
-    left:           ComparisonPanel
-    right:          ComparisonPanel
-    divider_label:  str = Field(default="vs", max_length=5)
+
+    layout: Literal["ComparisonSplit"]
+    section_label: str = Field(max_length=24)
+    left: ComparisonPanel
+    right: ComparisonPanel
+    divider_label: str = Field(default="vs", max_length=5)
 
 
 class PipelineUIContent(BaseModel):
     """Step-by-step process flow with bottleneck annotation."""
-    layout:             Literal["PipelineFlow"]
-    section_label:      str = Field(max_length=24)
-    steps:              list[PipelineStep] = Field(min_length=3, max_length=5)
-    flow_direction:     Literal["horizontal", "vertical"] = "horizontal"
-    bottleneck_label:   str | None = Field(
-        default=None, max_length=30,
+
+    layout: Literal["PipelineFlow"]
+    section_label: str = Field(max_length=24)
+    steps: list[PipelineStep] = Field(min_length=3, max_length=5)
+    flow_direction: Literal["horizontal", "vertical"] = "horizontal"
+    bottleneck_label: str | None = Field(
+        default=None,
+        max_length=30,
         description="Short annotation below the bottleneck step, e.g. '40 % of decode time'",
     )
 
 
 class TimelineMilestone(BaseModel):
     """One milestone in a TimelineFlow beat."""
-    date:      str  = Field(max_length=12, description="e.g. 'Nov 2025' or 'Day 1'")
-    label:     str  = Field(max_length=20, description="Event name, e.g. 'Peak Downloads'")
-    value:     str | None = Field(default=None, max_length=10, description="Optional metric, e.g. '3.3M'")
-    highlight: bool = Field(default=False, description="Accent this milestone — use for the key inflection point")
+
+    date: str = Field(max_length=12, description="e.g. 'Nov 2025' or 'Day 1'")
+    label: str = Field(max_length=20, description="Event name, e.g. 'Peak Downloads'")
+    value: str | None = Field(
+        default=None, max_length=10, description="Optional metric, e.g. '3.3M'"
+    )
+    highlight: bool = Field(
+        default=False,
+        description="Accent this milestone — use for the key inflection point",
+    )
 
 
 class TimelineUIContent(BaseModel):
     """Chronological sequence of 3-5 milestones with optional metrics."""
-    layout:        Literal["TimelineFlow"]
+
+    layout: Literal["TimelineFlow"]
     section_label: str = Field(max_length=24)
-    items:         list[TimelineMilestone] = Field(min_length=3, max_length=5)
-    accent_color:  Literal["green", "cyan", "yellow"] = "cyan"
+    items: list[TimelineMilestone] = Field(min_length=3, max_length=5)
+    accent_color: Literal["green", "cyan", "yellow"] = "cyan"
 
 
 class TriStatItem(BaseModel):
     """One stat card in a TriStat beat."""
-    value:    str      = Field(max_length=10, description="Formatted number, e.g. '$130' or '64%'")
-    label:    str      = Field(max_length=20, description="What this number measures, e.g. 'compute/clip'")
-    sublabel: str | None = Field(default=None, max_length=32, description="Supporting detail, e.g. 'per 10-second video'")
-    color:    Literal["green", "cyan", "yellow", "red", "white"] = "white"
-    glow:     bool = False
+
+    value: str = Field(
+        max_length=10, description="Formatted number, e.g. '$130' or '64%'"
+    )
+    label: str = Field(
+        max_length=20, description="What this number measures, e.g. 'compute/clip'"
+    )
+    sublabel: str | None = Field(
+        default=None,
+        max_length=32,
+        description="Supporting detail, e.g. 'per 10-second video'",
+    )
+    color: Literal["green", "cyan", "yellow", "red", "white"] = "white"
+    glow: bool = False
 
 
 class TriStatUIContent(BaseModel):
     """2-3 key numbers stacked as cards — for topics with distinct metrics."""
-    layout:        Literal["TriStat"]
+
+    layout: Literal["TriStat"]
     section_label: str = Field(max_length=24)
-    stats:         list[TriStatItem] = Field(min_length=2, max_length=3)
-    accent_color:  Literal["green", "cyan", "yellow"] = "cyan"
+    stats: list[TriStatItem] = Field(min_length=2, max_length=3)
+    accent_color: Literal["green", "cyan", "yellow"] = "cyan"
 
 
 class LeaderboardItem(BaseModel):
     """One row in a LeaderboardRank beat."""
-    rank:      int  = Field(ge=1, le=10)
-    name:      str  = Field(max_length=24, description="Model or item name")
-    score:     str  = Field(max_length=10, description="Benchmark result, e.g. '86.9%'")
-    highlight: bool = Field(default=False, description="Accent this row — use for the notable result, not necessarily rank 1")
+
+    rank: int = Field(ge=1, le=10)
+    name: str = Field(max_length=24, description="Model or item name")
+    score: str = Field(max_length=10, description="Benchmark result, e.g. '86.9%'")
+    highlight: bool = Field(
+        default=False,
+        description="Accent this row — use for the notable result, not necessarily rank 1",
+    )
 
 
 class LeaderboardUIContent(BaseModel):
     """Ordered ranking table — for benchmark comparisons and model rankings."""
-    layout:        Literal["LeaderboardRank"]
+
+    layout: Literal["LeaderboardRank"]
     section_label: str = Field(max_length=24)
-    metric_label:  str = Field(max_length=20, description="What's being ranked, e.g. 'GPQA Diamond' or 'tok/s'")
-    items:         list[LeaderboardItem] = Field(min_length=2, max_length=6)
-    accent_color:  Literal["green", "cyan", "yellow"] = "cyan"
+    metric_label: str = Field(
+        max_length=20, description="What's being ranked, e.g. 'GPQA Diamond' or 'tok/s'"
+    )
+    items: list[LeaderboardItem] = Field(min_length=2, max_length=6)
+    accent_color: Literal["green", "cyan", "yellow"] = "cyan"
 
 
 class BarItem(BaseModel):
     """One bar in a BarComparison beat."""
-    label:     str       = Field(max_length=24, description="Item name")
-    value:     str       = Field(max_length=10, description="Numeric string ONLY — no units here, e.g. '382' not '382 tok/s'")
-    unit:      str | None = Field(default=None, max_length=8, description="Unit label, e.g. 'tok/s' or '%'")
+
+    label: str = Field(max_length=24, description="Item name")
+    value: str = Field(
+        max_length=10,
+        description="Numeric string ONLY — no units here, e.g. '382' not '382 tok/s'",
+    )
+    unit: str | None = Field(
+        default=None, max_length=8, description="Unit label, e.g. 'tok/s' or '%'"
+    )
     highlight: bool = Field(default=False, description="Accent the standout bar")
 
 
 class BarComparisonUIContent(BaseModel):
     """Horizontal bar chart — use when the SIZE of the gap between values is the story."""
-    layout:        Literal["BarComparison"]
+
+    layout: Literal["BarComparison"]
     section_label: str = Field(max_length=24)
-    items:         list[BarItem] = Field(min_length=2, max_length=5)
-    accent_color:  Literal["green", "cyan", "yellow"] = "cyan"
+    items: list[BarItem] = Field(min_length=2, max_length=5)
+    accent_color: Literal["green", "cyan", "yellow"] = "cyan"
 
 
 class CodeBlock(BaseModel):
     """One code block (before or after)."""
-    label: str       = Field(max_length=10, description="e.g. 'BEFORE' or 'AFTER'")
-    lines: list[str] = Field(min_length=1, max_length=6, description="Code lines ≤ 50 chars each — simplified for visual impact")
+
+    label: str = Field(max_length=10, description="e.g. 'BEFORE' or 'AFTER'")
+    lines: list[str] = Field(
+        min_length=1,
+        max_length=6,
+        description="Code lines ≤ 50 chars each — simplified for visual impact",
+    )
 
 
 class CodeDiffUIContent(BaseModel):
     """Before/after code comparison — for drop-in replacements, API migrations, single-line fixes."""
-    layout:        Literal["CodeDiff"]
+
+    layout: Literal["CodeDiff"]
     section_label: str = Field(max_length=24)
-    before:        CodeBlock
-    after:         CodeBlock
-    accent_color:  Literal["green", "cyan", "yellow"] = "green"
+    before: CodeBlock
+    after: CodeBlock
+    accent_color: Literal["green", "cyan", "yellow"] = "green"
 
 
 # Discriminated union — Pydantic narrows automatically on `layout` field
 UIContent = Annotated[
-    Union[MetricUIContent, ComparisonUIContent, PipelineUIContent,
-          TimelineUIContent, TriStatUIContent,
-          LeaderboardUIContent, BarComparisonUIContent, CodeDiffUIContent],
+    Union[
+        MetricUIContent,
+        ComparisonUIContent,
+        PipelineUIContent,
+        TimelineUIContent,
+        TriStatUIContent,
+        LeaderboardUIContent,
+        BarComparisonUIContent,
+        CodeDiffUIContent,
+    ],
     Field(discriminator="layout"),
 ]
 
 
 # ── Narration schema ──────────────────────────────────────────────────────────
+
 
 class NarrationScript(BaseModel):
     """
@@ -241,6 +300,7 @@ class NarrationScript(BaseModel):
         insight  →  9-12 s ≈  13-17 words
         takeaway →  5-7 s  ≈  7-10 words
     """
+
     hook: str = Field(
         description=(
             "Stop-scroll in 3 seconds. ≤ 10 words. "
@@ -324,6 +384,7 @@ class NarrationScript(BaseModel):
 
 # ── Cue definitions ───────────────────────────────────────────────────────────
 
+
 class CueDefinition(BaseModel):
     """
     Intent-based animation trigger aligned to a word in the narration.
@@ -331,27 +392,30 @@ class CueDefinition(BaseModel):
     Convention for `label` — use verb_noun:
         metric_reveal, split_enter, bottleneck_show, insight_drop, takeaway_flash
     """
-    label:         str = Field(
+
+    label: str = Field(
         pattern=r"^[a-z][a-z0-9_]{2,29}$",
         description="Snake-case intent label, e.g. 'metric_reveal'",
     )
-    trigger_word:  str = Field(
+    trigger_word: str = Field(
         min_length=3,
         description="Exact word in the narration that fires this cue",
     )
-    occurrence:    int = Field(
+    occurrence: int = Field(
         default=0,
         ge=-1,
         description="0 = first match, 1 = second, -1 = last match in narration",
     )
     offset_frames: int = Field(
         default=0,
-        ge=-30, le=30,
+        ge=-30,
+        le=30,
         description="Frame offset from trigger word onset. Negative = anticipate.",
     )
 
 
 # ── Root payload ──────────────────────────────────────────────────────────────
+
 
 class VideoPayload(BaseModel):
     """
@@ -360,11 +424,13 @@ class VideoPayload(BaseModel):
     layout_mode selects the Remotion layout component for concept beats.
     ui_content is auto-narrowed by Pydantic to the matching sub-type.
     """
-    layout_mode:     LayoutMode
-    ui_content:      UIContent
-    narration:       NarrationScript
+
+    layout_mode: LayoutMode
+    ui_content: UIContent
+    narration: NarrationScript
     cue_definitions: list[CueDefinition] = Field(
-        min_length=2, max_length=5,
+        min_length=2,
+        max_length=5,
         description="2-5 cues aligned to meaningful moments in the narration",
     )
 
@@ -372,17 +438,17 @@ class VideoPayload(BaseModel):
     def layout_content_agreement(self) -> "VideoPayload":
         """layout_mode and ui_content.layout must refer to the same template."""
         mapping = {
-            LayoutMode.METRIC:       "MetricFocus",
-            LayoutMode.COMPARISON:   "ComparisonSplit",
-            LayoutMode.PIPELINE:     "PipelineFlow",
-            LayoutMode.TIMELINE:     "TimelineFlow",
-            LayoutMode.TRISTAT:      "TriStat",
-            LayoutMode.LEADERBOARD:  "LeaderboardRank",
-            LayoutMode.BAR:          "BarComparison",
-            LayoutMode.CODEDIFF:     "CodeDiff",
+            LayoutMode.METRIC: "MetricFocus",
+            LayoutMode.COMPARISON: "ComparisonSplit",
+            LayoutMode.PIPELINE: "PipelineFlow",
+            LayoutMode.TIMELINE: "TimelineFlow",
+            LayoutMode.TRISTAT: "TriStat",
+            LayoutMode.LEADERBOARD: "LeaderboardRank",
+            LayoutMode.BAR: "BarComparison",
+            LayoutMode.CODEDIFF: "CodeDiff",
         }
         expected = mapping[self.layout_mode]
-        actual   = self.ui_content.layout
+        actual = self.ui_content.layout
         if actual != expected:
             raise ValueError(
                 f"layout_mode='{self.layout_mode}' expects ui_content.layout='{expected}' "
@@ -552,7 +618,8 @@ def _user_prompt(topic: dict) -> str:
     rotation_hint = (
         f"\n        LAYOUT ROTATION — do NOT use '{last_layout}' again. "
         f"The previous video used it. Pick a different layout_mode.\n"
-        if last_layout else ""
+        if last_layout
+        else ""
     )
     return textwrap.dedent(f"""
         TOPIC:   {topic["title"]}
@@ -609,6 +676,7 @@ def generate(topic: dict, max_retries: int = 3) -> VideoPayload:
 
 # ── Gemini path (instructor) ───────────────────────────────────────────────────
 
+
 def _get_all_gemini_keys() -> list[str]:
     multi = os.environ.get("GEMINI_API_KEYS", "")
     if multi:
@@ -635,9 +703,13 @@ def _generate_gemini(topic: dict, max_retries: int) -> VideoPayload:
     # on keys that don't have gemini-2.5-flash access. Full flash only needed when
     # generating narration from scratch (word budget + field constraints).
     narration_override = os.environ.get("NARRATION_OVERRIDE") == "1"
-    default_model = "gemini-2.5-flash-lite" if narration_override else "gemini-2.5-flash"
+    default_model = (
+        "gemini-2.5-flash-lite" if narration_override else "gemini-2.5-flash"
+    )
     model_name = os.environ.get("GEMINI_MODEL_CONTENT_GENERATOR", default_model)
-    print(f"[content_generator] Gemini  model={model_name}  keys={len(keys)}  max_retries={max_retries}")
+    print(
+        f"[content_generator] Gemini  model={model_name}  keys={len(keys)}  max_retries={max_retries}"
+    )
 
     last_err = None
     for key in keys:
@@ -657,13 +729,18 @@ def _generate_gemini(topic: dict, max_retries: int) -> VideoPayload:
             )
             try:
                 from pipeline import quota as _q
+
                 _q.record_call("content_generator")
             except Exception:
                 pass
             return payload
         except Exception as e:
             err_str = str(e)
-            if "429" in err_str or "quota" in err_str.lower() or "exhausted" in err_str.lower():
+            if (
+                "429" in err_str
+                or "quota" in err_str.lower()
+                or "exhausted" in err_str.lower()
+            ):
                 print(f"  [key rotation] key ...{key[-8:]} exhausted — trying next key")
                 last_err = e
                 continue
@@ -676,21 +753,20 @@ def _generate_gemini(topic: dict, max_retries: int) -> VideoPayload:
 
 # ── Anthropic path (instructor) ───────────────────────────────────────────────
 
+
 def _generate_anthropic(topic: dict, max_retries: int) -> VideoPayload:
     try:
         import instructor
         from anthropic import Anthropic
     except ImportError:
-        raise ImportError(
-            "Anthropic path requires: pip install instructor anthropic"
-        )
+        raise ImportError("Anthropic path requires: pip install instructor anthropic")
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY not set.")
 
     client = instructor.from_anthropic(Anthropic(api_key=api_key))
-    model  = "claude-sonnet-4-6"
+    model = "claude-sonnet-4-6"
 
     print(f"[content_generator] Anthropic  model={model}  max_retries={max_retries}")
     payload = client.messages.create(
@@ -706,6 +782,7 @@ def _generate_anthropic(topic: dict, max_retries: int) -> VideoPayload:
 
 # ── Claude CLI fallback (no SDK key needed) ───────────────────────────────────
 
+
 def _generate_claude_cli(topic: dict, max_retries: int) -> VideoPayload:
     """
     Uses the existing claude_client.py subprocess path.
@@ -720,7 +797,9 @@ def _generate_claude_cli(topic: dict, max_retries: int) -> VideoPayload:
     last_err: Exception | None = None
     for attempt in range(1, max_retries + 1):
         try:
-            raw = claude_client.call(combined_prompt, stage="content_generator", json_mode=True)
+            raw = claude_client.call(
+                combined_prompt, stage="content_generator", json_mode=True
+            )
 
             # Strip markdown fences if present
             if "```" in raw:
@@ -735,9 +814,9 @@ def _generate_claude_cli(topic: dict, max_retries: int) -> VideoPayload:
             start, end = raw.find("{"), raw.rfind("}") + 1
             if start != -1 and end > start:
                 raw = raw[start:end]
-            raw = re.sub(r",\s*([\]}])", r"\1", raw)   # repair trailing commas
+            raw = re.sub(r",\s*([\]}])", r"\1", raw)  # repair trailing commas
 
-            data    = json.loads(raw)
+            data = json.loads(raw)
             payload = VideoPayload.model_validate(data)
             print(f"[content_generator] Claude CLI  attempt={attempt}  ✓")
             return payload
@@ -758,25 +837,25 @@ def _generate_claude_cli(topic: dict, max_retries: int) -> VideoPayload:
 # ══════════════════════════════════════════════════════════════════════════════
 
 _LAYOUT_TO_ANIMATE_IN = {
-    "MetricFocus":     "spring_scale",
+    "MetricFocus": "spring_scale",
     "ComparisonSplit": "spring_in",
-    "PipelineFlow":    "slide_up",
-    "TimelineFlow":    "slide_up",
-    "TriStat":         "spring_in",
+    "PipelineFlow": "slide_up",
+    "TimelineFlow": "slide_up",
+    "TriStat": "spring_in",
     "LeaderboardRank": "slide_up",
-    "BarComparison":   "spring_in",
-    "CodeDiff":        "fade",
+    "BarComparison": "spring_in",
+    "CodeDiff": "fade",
 }
 
 _LAYOUT_TO_TEMPLATE = {
-    "MetricFocus":     "stats_grid",
+    "MetricFocus": "stats_grid",
     "ComparisonSplit": "comparison",
-    "PipelineFlow":    "pipeline",
-    "TimelineFlow":    "pipeline",
-    "TriStat":         "stats_grid",
+    "PipelineFlow": "pipeline",
+    "TimelineFlow": "pipeline",
+    "TriStat": "stats_grid",
     "LeaderboardRank": "comparison",
-    "BarComparison":   "stats_grid",
-    "CodeDiff":        "pipeline",
+    "BarComparison": "stats_grid",
+    "CodeDiff": "pipeline",
 }
 
 
@@ -793,9 +872,13 @@ def _build_script_json(payload: VideoPayload, topic: dict) -> dict:
     elif isinstance(ui, ComparisonUIContent):
         hook_visual = f"{ui.left.heading} vs {ui.right.heading}. {ui.section_label}."
     elif isinstance(ui, PipelineUIContent):
-        hook_visual = f"{ui.section_label}. {ui.steps[0].label} → … → {ui.steps[-1].label}."
+        hook_visual = (
+            f"{ui.section_label}. {ui.steps[0].label} → … → {ui.steps[-1].label}."
+        )
     elif isinstance(ui, TimelineUIContent):
-        hook_visual = f"{ui.section_label}. {' → '.join(item.label for item in ui.items[:3])}."
+        hook_visual = (
+            f"{ui.section_label}. {' → '.join(item.label for item in ui.items[:3])}."
+        )
     elif isinstance(ui, TriStatUIContent):
         hook_visual = f"{ui.stats[0].value} {ui.stats[0].label}. {ui.section_label}."
     elif isinstance(ui, LeaderboardUIContent):
@@ -805,7 +888,9 @@ def _build_script_json(payload: VideoPayload, topic: dict) -> dict:
         hl = next((item for item in ui.items if item.highlight), ui.items[0])
         hook_visual = f"{hl.value}{' ' + hl.unit if hl.unit else ''} — {hl.label}. {ui.section_label}."
     elif isinstance(ui, CodeDiffUIContent):
-        hook_visual = f"{ui.section_label}. {len(ui.before.lines)} lines → {len(ui.after.lines)}."
+        hook_visual = (
+            f"{ui.section_label}. {len(ui.before.lines)} lines → {len(ui.after.lines)}."
+        )
     else:
         hook_visual = ui.section_label
 
@@ -816,11 +901,11 @@ def _build_script_json(payload: VideoPayload, topic: dict) -> dict:
     ]
 
     return {
-        "hook":            payload.narration.hook,
+        "hook": payload.narration.hook,
         "concept_bullets": concept_bullets,
-        "takeaway":        payload.narration.takeaway,
-        "hook_visual":     hook_visual,  # extra field — narrator.py ignores unknown keys
-        "cta":             "",
+        "takeaway": payload.narration.takeaway,
+        "hook_visual": hook_visual,  # extra field — narrator.py ignores unknown keys
+        "cta": "",
         "caption": (
             f"{topic['title']}. "
             f"{payload.narration.hook} "
@@ -836,9 +921,9 @@ def _build_spoken_narration(payload: VideoPayload) -> dict:
     Bypasses narrator.py's LLM-rewrite step entirely.
     """
     return {
-        "hook":         payload.narration.hook,
-        "concept_1":    payload.narration.context,
-        "concept_2":    payload.narration.insight,
+        "hook": payload.narration.hook,
+        "concept_1": payload.narration.context,
+        "concept_2": payload.narration.insight,
         "takeaway_cta": payload.narration.takeaway,
     }
 
@@ -853,7 +938,7 @@ def _build_params_json(payload: VideoPayload) -> dict:
         beat_3: StatementSlam  ← 2-3 punchy insight lines — never a duplicate of beat_2
         beat_4: TakeawayScene  ← outro
     """
-    ui   = payload.ui_content
+    ui = payload.ui_content
     data = ui.model_dump()
     anim = _LAYOUT_TO_ANIMATE_IN.get(ui.layout, "spring_in")
 
@@ -869,22 +954,34 @@ def _build_params_json(payload: VideoPayload) -> dict:
             "label": ui.hero.label[:8],
             "value": ui.hero.value[:8],
             "color": ui.hero.color,
-            "glow":  True,
+            "glow": True,
         }
         support_cards = [
-            {"label": m.label[:8], "value": m.value[:8], "color": m.color, "glow": m.glow}
+            {
+                "label": m.label[:8],
+                "value": m.value[:8],
+                "color": m.color,
+                "glow": m.glow,
+            }
             for m in ui.supporting_metrics
         ]
         beat2_metrics = [hero_card] + support_cards
         # Guarantee at least 2 cards so the grid isn't a single orphan cell
         if len(beat2_metrics) == 1 and ui.chips:
-            beat2_metrics.append({"label": "on", "value": ui.chips[0][:8], "color": "white", "glow": False})
+            beat2_metrics.append(
+                {
+                    "label": "on",
+                    "value": ui.chips[0][:8],
+                    "color": "white",
+                    "glow": False,
+                }
+            )
         beat2_data = {
-            "layout":          "DataGrid",
-            "section_label":   hook_section,
-            "metrics":         beat2_metrics,
+            "layout": "DataGrid",
+            "section_label": hook_section,
+            "metrics": beat2_metrics,
             "highlight_index": 0,
-            "caption":         ui.context[:80] if ui.context else "",
+            "caption": ui.context[:80] if ui.context else "",
         }
     elif isinstance(ui, ComparisonUIContent):
         # beat_1: pull the most salient metric from the comparison panels as hero
@@ -892,60 +989,77 @@ def _build_params_json(payload: VideoPayload) -> dict:
         best = ui.right if ui.right.color in ("green", "cyan") else ui.left
         hero_m = best.metrics[0]
         hook_data = {
-            "layout":        "MetricFocus",
+            "layout": "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": hero_m.value[:8], "label": hero_m.label[:8], "color": best.color},
-            "context":       payload.narration.hook,
-            "chips":         [ui.left.heading[:16], ui.right.heading[:16]],
+            "hero": {
+                "value": hero_m.value[:8],
+                "label": hero_m.label[:8],
+                "color": best.color,
+            },
+            "context": payload.narration.hook,
+            "chips": [ui.left.heading[:16], ui.right.heading[:16]],
         }
         beat2_data = data
     elif isinstance(ui, PipelineUIContent):
         # beat_1: use bottleneck sublabel as hero (if present), else step count
         bottleneck = next((s for s in ui.steps if s.state == "bottleneck"), None)
-        hero_value = (bottleneck.sublabel[:8] if bottleneck and bottleneck.sublabel
-                      else f"{len(ui.steps)} steps")
+        hero_value = (
+            bottleneck.sublabel[:8]
+            if bottleneck and bottleneck.sublabel
+            else f"{len(ui.steps)} steps"
+        )
         hero_label = bottleneck.label[:8] if bottleneck else "pipeline"
         hook_data = {
-            "layout":        "MetricFocus",
+            "layout": "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": hero_value, "label": hero_label,
-                              "color": "red" if bottleneck else "cyan"},
-            "context":       payload.narration.hook,
-            "chips":         [s.label[:16] for s in ui.steps[:3]],
+            "hero": {
+                "value": hero_value,
+                "label": hero_label,
+                "color": "red" if bottleneck else "cyan",
+            },
+            "context": payload.narration.hook,
+            "chips": [s.label[:16] for s in ui.steps[:3]],
         }
         beat2_data = data
     elif isinstance(ui, TimelineUIContent):
         # beat_1: use highlighted milestone (or last) as hero
         highlighted = next((item for item in ui.items if item.highlight), ui.items[-1])
         hook_data = {
-            "layout":        "MetricFocus",
+            "layout": "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": highlighted.value or highlighted.date[:8],
-                              "label": highlighted.label[:8], "color": "cyan"},
-            "context":       payload.narration.hook,
-            "chips":         [item.label[:16] for item in ui.items[:3]],
+            "hero": {
+                "value": highlighted.value or highlighted.date[:8],
+                "label": highlighted.label[:8],
+                "color": "cyan",
+            },
+            "context": payload.narration.hook,
+            "chips": [item.label[:16] for item in ui.items[:3]],
         }
         beat2_data = data
     elif isinstance(ui, TriStatUIContent):
         # beat_1: use primary stat as hero
         first = ui.stats[0]
         hook_data = {
-            "layout":        "MetricFocus",
+            "layout": "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": first.value, "label": first.label[:8], "color": first.color},
-            "context":       payload.narration.hook,
-            "chips":         [s.label[:16] for s in ui.stats],
+            "hero": {
+                "value": first.value,
+                "label": first.label[:8],
+                "color": first.color,
+            },
+            "context": payload.narration.hook,
+            "chips": [s.label[:16] for s in ui.stats],
         }
         beat2_data = data
     elif isinstance(ui, LeaderboardUIContent):
         # beat_1: highlighted item's score as hero
         hl = next((item for item in ui.items if item.highlight), ui.items[0])
         hook_data = {
-            "layout":        "MetricFocus",
+            "layout": "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": hl.score, "label": f"#{hl.rank} rank", "color": "cyan"},
-            "context":       payload.narration.hook,
-            "chips":         [item.name[:16] for item in ui.items[:3]],
+            "hero": {"value": hl.score, "label": f"#{hl.rank} rank", "color": "cyan"},
+            "context": payload.narration.hook,
+            "chips": [item.name[:16] for item in ui.items[:3]],
         }
         beat2_data = data
     elif isinstance(ui, BarComparisonUIContent):
@@ -953,32 +1067,36 @@ def _build_params_json(payload: VideoPayload) -> dict:
         hl = next((item for item in ui.items if item.highlight), ui.items[0])
         hero_val = f"{hl.value}{hl.unit or ''}"
         hook_data = {
-            "layout":        "MetricFocus",
+            "layout": "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": hero_val[:8], "label": hl.label[:8], "color": "cyan"},
-            "context":       payload.narration.hook,
-            "chips":         [item.label[:16] for item in ui.items[:3]],
+            "hero": {"value": hero_val[:8], "label": hl.label[:8], "color": "cyan"},
+            "context": payload.narration.hook,
+            "chips": [item.label[:16] for item in ui.items[:3]],
         }
         beat2_data = data
     elif isinstance(ui, CodeDiffUIContent):
         # beat_1: line count reduction as hero
         before_n = len(ui.before.lines)
-        after_n  = len(ui.after.lines)
+        after_n = len(ui.after.lines)
         hook_data = {
-            "layout":        "MetricFocus",
+            "layout": "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": f"{before_n}→{after_n}", "label": "lines", "color": "green"},
-            "context":       payload.narration.hook,
-            "chips":         [ui.before.label[:16], ui.after.label[:16]],
+            "hero": {
+                "value": f"{before_n}→{after_n}",
+                "label": "lines",
+                "color": "green",
+            },
+            "context": payload.narration.hook,
+            "chips": [ui.before.label[:16], ui.after.label[:16]],
         }
         beat2_data = data
     else:
         hook_data = {
-            "layout":        "MetricFocus",
+            "layout": "MetricFocus",
             "section_label": hook_section,
-            "hero":          {"value": "—", "label": ui.section_label[:10], "color": "cyan"},
-            "context":       payload.narration.hook,
-            "chips":         [ui.section_label[:16]],
+            "hero": {"value": "—", "label": ui.section_label[:10], "color": "cyan"},
+            "context": payload.narration.hook,
+            "chips": [ui.section_label[:16]],
         }
         beat2_data = data
 
@@ -1004,19 +1122,19 @@ def _build_params_json(payload: VideoPayload) -> dict:
         "beat_3": {
             "animate_in": "fade",
             "data": {
-                "layout":        "StatementSlam",
+                "layout": "StatementSlam",
                 "section_label": hook_section,
-                "lines":         payload.narration.statement_lines,
-                "accent_color":  "cyan",
+                "lines": payload.narration.statement_lines,
+                "accent_color": "cyan",
             },
         },
         "beat_4": {
             "animate_in": "none",
             "data": {
-                "layout":        "TakeawayScene",
+                "layout": "TakeawayScene",
                 "section_label": "TAKEAWAY",
-                "headline":      headline,
-                "accent_color":  "cyan",
+                "headline": headline,
+                "accent_color": "cyan",
             },
         },
     }
@@ -1043,10 +1161,10 @@ def _build_cue_definitions(payload: VideoPayload) -> dict:
     fixed segment cues (always present).
     """
     segment_cues = [
-        {"label": "hook_start",      "segment": "hook",         "offset_frames": 0},
-        {"label": "concept_1_start", "segment": "concept_1",    "offset_frames": 0},
-        {"label": "concept_2_start", "segment": "concept_2",    "offset_frames": 0},
-        {"label": "takeaway_start",  "segment": "takeaway_cta", "offset_frames": 0},
+        {"label": "hook_start", "segment": "hook", "offset_frames": 0},
+        {"label": "concept_1_start", "segment": "concept_1", "offset_frames": 0},
+        {"label": "concept_2_start", "segment": "concept_2", "offset_frames": 0},
+        {"label": "takeaway_start", "segment": "takeaway_cta", "offset_frames": 0},
     ]
     word_cues = [c.model_dump() for c in payload.cue_definitions]
     return {"segment_cues": segment_cues, "word_cues": word_cues}
@@ -1056,12 +1174,12 @@ def save_outputs(payload: VideoPayload, topic: dict) -> None:
     """Write legacy pipeline files plus renderer-neutral video_spec.json."""
     os.makedirs(os.path.join(_ROOT, "output"), exist_ok=True)
 
-    script  = _build_script_json(payload, topic)
-    spoken  = _build_spoken_narration(payload)
-    params  = _build_params_json(payload)
-    plan    = _build_scene_plan()
-    cues    = _build_cue_definitions(payload)
-    spec    = build_video_spec(
+    script = _build_script_json(payload, topic)
+    spoken = _build_spoken_narration(payload)
+    params = _build_params_json(payload)
+    plan = _build_scene_plan()
+    cues = _build_cue_definitions(payload)
+    spec = build_video_spec(
         topic=topic,
         script=script,
         spoken=spoken,
@@ -1074,8 +1192,8 @@ def save_outputs(payload: VideoPayload, topic: dict) -> None:
         (SCRIPT_OUT, script),
         (SPOKEN_OUT, spoken),
         (PARAMS_OUT, params),
-        (PLAN_OUT,   plan),
-        (CUES_OUT,   cues),
+        (PLAN_OUT, plan),
+        (CUES_OUT, cues),
     ]:
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
@@ -1101,6 +1219,7 @@ def save_outputs(payload: VideoPayload, topic: dict) -> None:
 
 def main():
     from dotenv import load_dotenv
+
     load_dotenv()
 
     # Accept topic on CLI or fall back to output/topic.json
@@ -1116,19 +1235,28 @@ def main():
             topic = json.load(f)
 
     print(f"\n[content_generator] Topic: {topic['title']}")
-    print(f"[content_generator] Provider: {os.environ.get('FORCE_PROVIDER', 'claude')}\n")
+    print(
+        f"[content_generator] Provider: {os.environ.get('FORCE_PROVIDER', 'claude')}\n"
+    )
 
     payload = generate(topic)
 
     print(f"\n  layout_mode : {payload.layout_mode}")
-    print(f"  narration   : {len(payload.narration.hook.split())}w hook  "
-          f"/ {len(payload.narration.context.split())}w context  "
-          f"/ {len(payload.narration.insight.split())}w insight  "
-          f"/ {len(payload.narration.takeaway.split())}w takeaway")
-    total = sum(len(s.split()) for s in [
-        payload.narration.hook, payload.narration.context,
-        payload.narration.insight, payload.narration.takeaway,
-    ])
+    print(
+        f"  narration   : {len(payload.narration.hook.split())}w hook  "
+        f"/ {len(payload.narration.context.split())}w context  "
+        f"/ {len(payload.narration.insight.split())}w insight  "
+        f"/ {len(payload.narration.takeaway.split())}w takeaway"
+    )
+    total = sum(
+        len(s.split())
+        for s in [
+            payload.narration.hook,
+            payload.narration.context,
+            payload.narration.insight,
+            payload.narration.takeaway,
+        ]
+    )
     print(f"  total words : {total}  (budget: 50-60)")
     print(f"  cues        : {[c.label for c in payload.cue_definitions]}")
     print()

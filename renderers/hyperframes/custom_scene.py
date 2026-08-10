@@ -8,9 +8,11 @@ def build_custom_scene(scene: dict, context: dict) -> dict:
     assets = scene.get("assets", [])
     assets_html = ""
     if assets:
-        assets_html = '<div class="hf-chip-row">' + "".join(
-            f'<span class="hf-chip">{e(asset)}</span>' for asset in assets
-        ) + "</div>"
+        assets_html = (
+            '<div class="hf-chip-row">'
+            + "".join(f'<span class="hf-chip">{e(asset)}</span>' for asset in assets)
+            + "</div>"
+        )
 
     entrypoint = scene.get("entrypoint", "")
     brief_ref = scene.get("brief_ref", "")

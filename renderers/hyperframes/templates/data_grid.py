@@ -31,7 +31,9 @@ def build_scene(config: dict, context: dict) -> dict:
     html = (
         beat_meta_html(context)
         + section_label_html(data.get("section_label", "Data Grid"))
-        + '<div class="hf-grid">' + "".join(cards) + "</div>"
+        + '<div class="hf-grid">'
+        + "".join(cards)
+        + "</div>"
     )
     return {
         "template_id": TEMPLATE_ID,

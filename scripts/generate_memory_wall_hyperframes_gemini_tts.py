@@ -225,7 +225,9 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     keys = _get_tts_keys()
     if not keys:
-        raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS.")
+        raise RuntimeError(
+            "GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS."
+        )
 
     CHUNK_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -272,9 +274,7 @@ def main() -> None:
                 "duration": TOTAL_SECONDS,
                 "provider": "gemini",
                 "voice": narrator_module.VOICE_NAME,
-                "segments": [
-                    {"id": key, **value} for key, value in timing.items()
-                ],
+                "segments": [{"id": key, **value} for key, value in timing.items()],
             },
             indent=2,
         ),

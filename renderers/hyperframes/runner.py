@@ -143,7 +143,9 @@ def _package_composition(config: HyperFramesRenderConfig) -> tuple[dict, Path]:
                 "output_path": str(config.output_path),
                 "mode": config.mode,
                 "render_command": config.render_command,
-                "entry_html_path": str(config.entry_html_path) if config.entry_html_path else "",
+                "entry_html_path": (
+                    str(config.entry_html_path) if config.entry_html_path else ""
+                ),
                 "package_entrypoint": str(html_path),
             },
             f,
@@ -283,7 +285,9 @@ def _run_streaming_command(command: str, cwd: Path, timeout_seconds: int) -> int
             progress_bar.close()
 
 
-def _run_external_render(config: HyperFramesRenderConfig, html_path: Path) -> Path | None:
+def _run_external_render(
+    config: HyperFramesRenderConfig, html_path: Path
+) -> Path | None:
     cmd_template = _resolved_render_command(config)
     if not cmd_template:
         return None

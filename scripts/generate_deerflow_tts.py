@@ -24,7 +24,6 @@ sys.path.insert(0, str(ROOT))
 
 from pipeline.narrator import call_tts_with_rotation, _get_tts_keys
 
-
 PREVIEW_PATH = ROOT / "output" / "deerflow_narration_preview.json"
 OUT_WAV = ROOT / "output" / "deerflow_narration_30s.wav"
 OUT_TIMING = ROOT / "output" / "deerflow_narration_30s_timing.json"
@@ -113,12 +112,21 @@ def _fit_pcm(pcm: bytes, target_seconds: float) -> bytes:
             _save_wav(pcm, raw_path)
             subprocess.run(
                 [
-                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-i", str(raw_path),
-                    "-af", _atempo_filter(speed),
-                    "-ar", str(SAMPLE_RATE),
-                    "-ac", str(CHANNELS),
-                    "-c:a", "pcm_s16le",
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(raw_path),
+                    "-af",
+                    _atempo_filter(speed),
+                    "-ar",
+                    str(SAMPLE_RATE),
+                    "-ac",
+                    str(CHANNELS),
+                    "-c:a",
+                    "pcm_s16le",
                     str(fit_path),
                 ],
                 check=True,
@@ -151,7 +159,9 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     keys = _get_tts_keys()
     if not keys:
-        raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS.")
+        raise RuntimeError(
+            "GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS."
+        )
 
     with PREVIEW_PATH.open() as f:
         preview = json.load(f)
@@ -171,7 +181,11 @@ def main() -> None:
         spoken_start = start + round((window - target_spoken) / 2, 3)
         raw_path = CHUNK_DIR / f"{key}.wav"
 
-        print(f"  {scene['scene']} / {key}: {len(text.split())} words...", end="", flush=True)
+        print(
+            f"  {scene['scene']} / {key}: {len(text.split())} words...",
+            end="",
+            flush=True,
+        )
         if raw_path.exists():
             raw_pcm = _read_wav_pcm(raw_path)
             print(" cached", end="", flush=True)

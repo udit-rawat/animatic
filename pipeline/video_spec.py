@@ -6,7 +6,9 @@ import os
 import re
 from datetime import datetime
 
-VIDEO_SPEC_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "video_spec.json")
+VIDEO_SPEC_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "video_spec.json"
+)
 FPS = 30
 WIDTH = 1080
 HEIGHT = 1920
@@ -89,13 +91,20 @@ def build_video_spec(
     timing: dict | None = None,
     audio_src: str = "",
 ) -> dict:
-    timing_block = _estimate_timing(spoken) if timing is None else {
-        "segments": timing,
-        "total_duration_seconds": round(
-            max((v.get("end", 0) for v in timing.values()), default=0), 3
-        ),
-        "total_frames": math.ceil(max((v.get("end", 0) for v in timing.values()), default=0) * FPS) + FPS,
-    }
+    timing_block = (
+        _estimate_timing(spoken)
+        if timing is None
+        else {
+            "segments": timing,
+            "total_duration_seconds": round(
+                max((v.get("end", 0) for v in timing.values()), default=0), 3
+            ),
+            "total_frames": math.ceil(
+                max((v.get("end", 0) for v in timing.values()), default=0) * FPS
+            )
+            + FPS,
+        }
+    )
 
     beats_cfg = scene_plan.get("beats", [])
     total_beats = len(beats_cfg)
@@ -106,19 +115,27 @@ def build_video_spec(
         beat_id = f"beat_{index}"
         payload = params.get(beat_id, {})
         segment_ref = _segment_ref_for_beat(index, total_beats)
-        timing_entry = timing_block["segments"].get(segment_ref, {"start": 0, "duration": 3, "end": 3})
-        beats.append({
-            "id": beat_id,
-            "index": index,
-            "segment_ref": segment_ref,
-            "start_frame": round(timing_entry["start"] * FPS),
-            "duration_frames": max(1, round(timing_entry["duration"] * FPS)),
-            "text_frame": _beat_text_frame(index, payload),
-            "layout_mode": "full_scene",
-            "scene": _scene_for_beat(beat_id, payload),
-            "cue_labels": [f"{segment_ref}_start"] if segment_ref != "takeaway_cta" else ["takeaway_start"],
-            "notes": [f"legacy_template={beat_meta.get('template', 'unknown')}"],
-        })
+        timing_entry = timing_block["segments"].get(
+            segment_ref, {"start": 0, "duration": 3, "end": 3}
+        )
+        beats.append(
+            {
+                "id": beat_id,
+                "index": index,
+                "segment_ref": segment_ref,
+                "start_frame": round(timing_entry["start"] * FPS),
+                "duration_frames": max(1, round(timing_entry["duration"] * FPS)),
+                "text_frame": _beat_text_frame(index, payload),
+                "layout_mode": "full_scene",
+                "scene": _scene_for_beat(beat_id, payload),
+                "cue_labels": (
+                    [f"{segment_ref}_start"]
+                    if segment_ref != "takeaway_cta"
+                    else ["takeaway_start"]
+                ),
+                "notes": [f"legacy_template={beat_meta.get('template', 'unknown')}"],
+            }
+        )
 
     return {
         "version": "1.0",
@@ -190,8 +207,13 @@ def update_video_spec_timing(
 
     spec["timing"] = {
         "segments": timing,
-        "total_duration_seconds": round(max((v.get("end", 0) for v in timing.values()), default=0), 3),
-        "total_frames": math.ceil(max((v.get("end", 0) for v in timing.values()), default=0) * FPS) + FPS,
+        "total_duration_seconds": round(
+            max((v.get("end", 0) for v in timing.values()), default=0), 3
+        ),
+        "total_frames": math.ceil(
+            max((v.get("end", 0) for v in timing.values()), default=0) * FPS
+        )
+        + FPS,
     }
 
     spec.setdefault("assets", {})

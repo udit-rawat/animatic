@@ -1,7 +1,9 @@
 import json
 import os
 
-HISTORY_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "picked_history.json")
+HISTORY_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "picked_history.json"
+)
 MAX_HISTORY = 30
 
 

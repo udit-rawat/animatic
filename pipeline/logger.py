@@ -2,6 +2,7 @@
 Pipeline logger — writes timestamped logs to output/pipeline.log.
 Every Claude call, every stage transition, every error is recorded.
 """
+
 import logging
 import os
 import sys

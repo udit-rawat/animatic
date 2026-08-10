@@ -219,7 +219,9 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     keys = _get_tts_keys()
     if not keys:
-        raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS.")
+        raise RuntimeError(
+            "GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS."
+        )
 
     CHUNK_DIR.mkdir(parents=True, exist_ok=True)
     canvas = bytearray(b"\x00" * int(TOTAL_SECONDS * SAMPLE_RATE) * SAMPLE_WIDTH)

@@ -44,9 +44,11 @@ def section_label_html(label: str) -> str:
 def chip_row_html(chips: list[str]) -> str:
     if not chips:
         return ""
-    return '<div class="hf-chip-row">' + "".join(
-        f'<span class="hf-chip">{e(chip)}</span>' for chip in chips
-    ) + "</div>"
+    return (
+        '<div class="hf-chip-row">'
+        + "".join(f'<span class="hf-chip">{e(chip)}</span>' for chip in chips)
+        + "</div>"
+    )
 
 
 def placeholder_scene(template_id: str, config: dict, context: dict) -> dict:

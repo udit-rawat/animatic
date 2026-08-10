@@ -18,18 +18,23 @@ Output format:
     ...
   ]
 """
+
 import json
 import os
 import sys
 
-AUDIO_PATH  = os.path.join(os.path.dirname(__file__), "..", "output", "narration.wav")
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "word_timings.json")
+AUDIO_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "narration.wav")
+OUTPUT_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "word_timings.json"
+)
 
 
 def _write_empty(reason: str) -> None:
     with open(OUTPUT_PATH, "w") as f:
         json.dump([], f)
-    print(f"[word_aligner] {reason} — writing empty word_timings.json (segment-level cues only)")
+    print(
+        f"[word_aligner] {reason} — writing empty word_timings.json (segment-level cues only)"
+    )
 
 
 def main() -> list[dict]:
@@ -59,8 +64,8 @@ def main() -> list[dict]:
         result = model.transcribe(
             AUDIO_PATH,
             word_timestamps=True,
-            language="en",          # skip language detection — we know it's English
-            fp16=False,             # CPU-safe (no CUDA required)
+            language="en",  # skip language detection — we know it's English
+            fp16=False,  # CPU-safe (no CUDA required)
             verbose=False,
         )
     except Exception as e:
@@ -74,11 +79,13 @@ def main() -> list[dict]:
             raw = word.get("word", "").strip()
             if not raw:
                 continue
-            word_timings.append({
-                "word":  raw,
-                "start": round(float(word["start"]), 3),
-                "end":   round(float(word["end"]),   3),
-            })
+            word_timings.append(
+                {
+                    "word": raw,
+                    "start": round(float(word["start"]), 3),
+                    "end": round(float(word["end"]), 3),
+                }
+            )
 
     with open(OUTPUT_PATH, "w") as f:
         json.dump(word_timings, f, indent=2)
@@ -94,5 +101,6 @@ def main() -> list[dict]:
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv()
     main()

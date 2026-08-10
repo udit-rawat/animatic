@@ -8,7 +8,6 @@ import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / "output"
 VIDEO_SPEC = OUTPUT_DIR / "video_spec.json"
@@ -129,7 +128,9 @@ def _backend_summary(name: str, path: Path, spec_duration: float) -> dict:
         "exists": path.exists(),
         "size_bytes": path.stat().st_size if path.exists() else 0,
         "duration_seconds": duration,
-        "duration_delta_vs_spec": None if duration is None else round(duration - spec_duration, 3),
+        "duration_delta_vs_spec": (
+            None if duration is None else round(duration - spec_duration, 3)
+        ),
         "sha256": _sha256(path) if path.exists() else "",
         "sample_frames": _extract_sample_frames(name, path, duration or 0),
     }
@@ -158,18 +159,24 @@ def _render_hyperframes(target: Path, workdir: Path) -> str:
         {
             "ANIMATOR_OUTPUT_PATH": str(target),
             "HYPERFRAMES_WORKDIR": str(workdir),
-            "HYPERFRAMES_CUSTOM_COMPOSITION": os.environ.get("HYPERFRAMES_CUSTOM_COMPOSITION"),
+            "HYPERFRAMES_CUSTOM_COMPOSITION": os.environ.get(
+                "HYPERFRAMES_CUSTOM_COMPOSITION"
+            ),
         }
     ):
         artifact = Path(str(hyper_main()))
     if artifact.suffix.lower() != ".mp4" or not artifact.exists():
-        raise RuntimeError(f"HyperFrames parity render did not produce an MP4: {artifact}")
+        raise RuntimeError(
+            f"HyperFrames parity render did not produce an MP4: {artifact}"
+        )
     return str(artifact)
 
 
 def main():
     if not VIDEO_SPEC.exists():
-        raise RuntimeError(f"video_spec.json not found at {VIDEO_SPEC}. Run content_generator first.")
+        raise RuntimeError(
+            f"video_spec.json not found at {VIDEO_SPEC}. Run content_generator first."
+        )
 
     spec_duration = _load_spec_duration()
     REMOTION_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -178,13 +185,22 @@ def main():
     remotion_path = Path(_render_remotion(REMOTION_OUTPUT))
 
     print("[parity] Rendering HyperFrames output...")
-    hyperframes_path = Path(_render_hyperframes(HYPERFRAMES_OUTPUT, OUTPUT_DIR / "hyperframes_build_parity"))
+    hyperframes_path = Path(
+        _render_hyperframes(HYPERFRAMES_OUTPUT, OUTPUT_DIR / "hyperframes_build_parity")
+    )
 
     remotion_summary = _backend_summary("remotion", remotion_path, spec_duration)
-    hyperframes_summary = _backend_summary("hyperframes", hyperframes_path, spec_duration)
+    hyperframes_summary = _backend_summary(
+        "hyperframes", hyperframes_path, spec_duration
+    )
 
-    primary_backend = (os.environ.get("PARITY_PRIMARY_RENDERER", "hyperframes").strip().lower() or "hyperframes")
-    primary_path = hyperframes_path if primary_backend == "hyperframes" else remotion_path
+    primary_backend = (
+        os.environ.get("PARITY_PRIMARY_RENDERER", "hyperframes").strip().lower()
+        or "hyperframes"
+    )
+    primary_path = (
+        hyperframes_path if primary_backend == "hyperframes" else remotion_path
+    )
     shutil.copy2(primary_path, PRIMARY_OUTPUT)
 
     report = {
@@ -196,10 +212,18 @@ def main():
             "hyperframes": hyperframes_summary,
         },
         "comparisons": {
-            "duration_delta_seconds": None
-            if remotion_summary["duration_seconds"] is None or hyperframes_summary["duration_seconds"] is None
-            else round(remotion_summary["duration_seconds"] - hyperframes_summary["duration_seconds"], 3),
-            "size_delta_bytes": remotion_summary["size_bytes"] - hyperframes_summary["size_bytes"],
+            "duration_delta_seconds": (
+                None
+                if remotion_summary["duration_seconds"] is None
+                or hyperframes_summary["duration_seconds"] is None
+                else round(
+                    remotion_summary["duration_seconds"]
+                    - hyperframes_summary["duration_seconds"],
+                    3,
+                )
+            ),
+            "size_delta_bytes": remotion_summary["size_bytes"]
+            - hyperframes_summary["size_bytes"],
         },
     }
 

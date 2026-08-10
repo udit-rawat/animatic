@@ -126,7 +126,9 @@ def _fit_pcm(
         return _resize_pcm_linear(fitted, target_seconds, sample_rate)
 
 
-def _overlay(base: bytearray, pcm: bytes, start_seconds: float, sample_rate: int) -> None:
+def _overlay(
+    base: bytearray, pcm: bytes, start_seconds: float, sample_rate: int
+) -> None:
     start_byte = int(round(start_seconds * sample_rate)) * SAMPLE_WIDTH
     end_byte = min(len(base), start_byte + len(pcm))
     if start_byte >= len(base) or end_byte <= start_byte:
@@ -134,7 +136,9 @@ def _overlay(base: bytearray, pcm: bytes, start_seconds: float, sample_rate: int
     base[start_byte:end_byte] = pcm[: end_byte - start_byte]
 
 
-def _master_wav(input_path: Path, output_path: Path, sample_rate: int, channels: int, enabled: bool) -> None:
+def _master_wav(
+    input_path: Path, output_path: Path, sample_rate: int, channels: int, enabled: bool
+) -> None:
     if not enabled:
         output_path.write_bytes(input_path.read_bytes())
         return
@@ -183,7 +187,9 @@ def generate(spec_path: str, validate_only: bool = False) -> None:
 
     keys = _get_tts_keys()
     if not keys:
-        raise RuntimeError("GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS.")
+        raise RuntimeError(
+            "GEMINI_API_KEY or GEMINI_API_KEYS is required for Gemini TTS."
+        )
 
     audio_cfg = spec.get("audio", {})
     sample_rate = int(audio_cfg.get("sample_rate", 24_000))
@@ -261,9 +267,17 @@ def generate(spec_path: str, validate_only: bool = False) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate Gemini TTS from a reel spec.")
-    parser.add_argument("--spec", default="reels/current/spec.json", help="Path to reel spec JSON.")
-    parser.add_argument("--validate-only", action="store_true", help="Validate the spec without calling TTS.")
+    parser = argparse.ArgumentParser(
+        description="Generate Gemini TTS from a reel spec."
+    )
+    parser.add_argument(
+        "--spec", default="reels/current/spec.json", help="Path to reel spec JSON."
+    )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate the spec without calling TTS.",
+    )
     args = parser.parse_args()
     generate(args.spec, validate_only=args.validate_only)
 

@@ -46,7 +46,9 @@ def build_composition(spec: dict) -> dict:
             if builder:
                 built = builder(scene.get("config", {}), context)
             else:
-                built = placeholder_scene(template_id or "UnknownTemplate", scene.get("config", {}), context)
+                built = placeholder_scene(
+                    template_id or "UnknownTemplate", scene.get("config", {}), context
+                )
         elif kind == "custom":
             built = build_custom_scene(scene, context)
         elif kind == "external_clip":

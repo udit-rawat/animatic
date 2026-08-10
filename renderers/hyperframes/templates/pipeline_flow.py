@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from renderers.hyperframes.helpers.primitives import e
-from renderers.hyperframes.templates.base import beat_meta_html, scene_data, section_label_html
+from renderers.hyperframes.templates.base import (
+    beat_meta_html,
+    scene_data,
+    section_label_html,
+)
 
 TEMPLATE_ID = "PipelineFlow"
 
@@ -21,14 +25,16 @@ def build_scene(config: dict, context: dict) -> dict:
                 if step.get("sublabel")
                 else ""
             )
-            + '</div>'
-            '</article>'
+            + "</div>"
+            "</article>"
         )
     bottleneck = data.get("bottleneck_label", "")
     html = (
         beat_meta_html(context)
         + section_label_html(data.get("section_label", "Pipeline"))
-        + '<div class="hf-flow">' + "".join(steps) + "</div>"
+        + '<div class="hf-flow">'
+        + "".join(steps)
+        + "</div>"
         + (f'<div class="hf-muted-card">{e(bottleneck)}</div>' if bottleneck else "")
     )
     return {

@@ -28,6 +28,7 @@ Per-stage Gemini model defaults (overridable via env):
   animator → gemini-2.5-pro     (code generation, best quality, 100 RPD free)
   TTS      → gemini-2.5-flash-preview-tts (audio output, always Gemini)
 """
+
 import json
 import os
 import re
@@ -37,29 +38,29 @@ import time
 from pipeline import logger as _logger_mod
 
 # ── Model config ──────────────────────────────────────────────────────────────
-CLAUDE_MODEL       = "claude-sonnet-4-6"
-GEMINI_MODEL       = "gemini-2.5-flash-lite"     # global fallback
+CLAUDE_MODEL = "claude-sonnet-4-6"
+GEMINI_MODEL = "gemini-2.5-flash-lite"  # global fallback
 DEFAULT_MAX_TOKENS = 4096
 
 GEMINI_STAGE_DEFAULTS = {
-    "ranker":   "gemini-2.5-flash-lite",
+    "ranker": "gemini-2.5-flash-lite",
     "scripter": "gemini-2.5-flash-lite",
     "narrator": "gemini-2.5-flash-lite",
     "animator": "gemini-2.5-flash-lite",
 }
 
 OPENROUTER_STAGE_DEFAULTS = {
-    "ranker":   "meta-llama/llama-3.3-70b-instruct:free",
+    "ranker": "meta-llama/llama-3.3-70b-instruct:free",
     "scripter": "meta-llama/llama-3.3-70b-instruct:free",
     "animator": "qwen/qwen3-coder:free",
 }
 OPENROUTER_FALLBACK = "meta-llama/llama-3.3-70b-instruct:free"
 
 # Handoff file paths
-_OUTPUT_DIR        = os.path.join(os.path.dirname(__file__), "..", "output")
-_HANDOFF_PROMPT    = os.path.join(_OUTPUT_DIR, "handoff_{stage}_prompt.txt")
-_HANDOFF_OUTPUT    = os.path.join(_OUTPUT_DIR, "handoff_{stage}_output.txt")
-_HANDOFF_TIMEOUT   = 900   # 15 minutes
+_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "output")
+_HANDOFF_PROMPT = os.path.join(_OUTPUT_DIR, "handoff_{stage}_prompt.txt")
+_HANDOFF_OUTPUT = os.path.join(_OUTPUT_DIR, "handoff_{stage}_output.txt")
+_HANDOFF_TIMEOUT = 900  # 15 minutes
 
 
 def _gemini_model_for(stage: str) -> str:
@@ -73,7 +74,9 @@ def _openrouter_model_for(stage: str) -> str:
     if os.environ.get("OPENROUTER_MODEL"):
         return os.environ["OPENROUTER_MODEL"]
     stage_key = f"OPENROUTER_MODEL_{stage.upper()}"
-    return os.environ.get(stage_key, OPENROUTER_STAGE_DEFAULTS.get(stage, OPENROUTER_FALLBACK))
+    return os.environ.get(
+        stage_key, OPENROUTER_STAGE_DEFAULTS.get(stage, OPENROUTER_FALLBACK)
+    )
 
 
 def _get_all_gemini_keys() -> list[str]:
@@ -91,11 +94,13 @@ _usage_log: list[dict] = []
 class _GeminiQuotaExhausted(Exception):
     """Raised when ALL configured Gemini keys are daily-quota exhausted."""
 
+
 class _GeminiRPMLimited(Exception):
     """Raised immediately on RPM 429 — caller rotates to next key."""
 
 
 # ── Mode 1: Handoff (manual Claude session) ───────────────────────────────────
+
 
 def _call_handoff(prompt: str, stage: str) -> str:
     """
@@ -136,10 +141,10 @@ def _call_handoff(prompt: str, stage: str) -> str:
     print(f"║  ⚡ HOP — {stage.upper()} stage paused")
     print(f"╠{sep}╣")
     print(f"║  1. Copy the prompt below into Claude chat:")
-    print(f"║     cat \"{abs_prompt}\"")
+    print(f'║     cat "{abs_prompt}"')
     print(f"║")
     print(f"║  2. Once Claude gives you the code, run in a new terminal:")
-    print(f"║     pbpaste > \"{abs_output}\"")
+    print(f'║     pbpaste > "{abs_output}"')
     print(f"║")
     print(f"║  Pipeline resumes automatically. No timeout.")
     print(f"╚{sep}╝\n")
@@ -148,14 +153,20 @@ def _call_handoff(prompt: str, stage: str) -> str:
     poll_interval = 5
     elapsed = 0
     while True:
-        if os.path.exists(output_path) and os.path.getmtime(output_path) >= os.path.getmtime(prompt_path):
+        if os.path.exists(output_path) and os.path.getmtime(
+            output_path
+        ) >= os.path.getmtime(prompt_path):
             with open(output_path) as f:
                 content = f.read().strip()
             if content:
                 log.info(f"[{stage}] Handoff output received — {len(content)} chars")
-                print(f"\n✅ Handoff output received ({len(content)} chars) — resuming pipeline.\n")
+                print(
+                    f"\n✅ Handoff output received ({len(content)} chars) — resuming pipeline.\n"
+                )
                 os.remove(prompt_path)
-                _usage_log.append({"stage": stage, "mode": "handoff/claude", "cost_usd": 0.0})
+                _usage_log.append(
+                    {"stage": stage, "mode": "handoff/claude", "cost_usd": 0.0}
+                )
                 return content
         time.sleep(poll_interval)
         elapsed += poll_interval
@@ -165,22 +176,30 @@ def _call_handoff(prompt: str, stage: str) -> str:
                 f"Output not found: {output_path}"
             )
         if elapsed % 60 == 0:
-            print(f"  ⏳ Still waiting... ({elapsed//60}m)  →  pbpaste > \"{abs_output}\"")
+            print(
+                f'  ⏳ Still waiting... ({elapsed//60}m)  →  pbpaste > "{abs_output}"'
+            )
 
 
 # ── Mode 2: Gemini API (with key rotation) ────────────────────────────────────
 
-def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str, json_mode: bool = False) -> str:
+
+def _call_gemini_with_key(
+    prompt: str, stage: str, max_tokens: int, api_key: str, json_mode: bool = False
+) -> str:
     """Single Gemini call using a specific API key.
     Raises _GeminiQuotaExhausted on daily quota exhaustion.
     Raises _GeminiRPMLimited immediately on RPM 429 — caller rotates, no waiting here.
     """
     import urllib.request
     import urllib.error
+
     log = _logger_mod.get()
     model = _gemini_model_for(stage)
     key_id = api_key[-8:]
-    log.debug(f"[{stage}] Gemini call — model: {model}, key: ...{key_id}, prompt: {len(prompt)} chars")
+    log.debug(
+        f"[{stage}] Gemini call — model: {model}, key: ...{key_id}, prompt: {len(prompt)} chars"
+    )
     t0 = time.time()
 
     gen_config: dict = {"maxOutputTokens": max_tokens}
@@ -199,7 +218,9 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
     # before picking a topic, so the ranker isn't limited to scraped Reddit/arXiv candidates.
     # Grounding is incompatible with responseMimeType (json_mode), so ranker must NOT
     # use json_mode — its JSON output is parsed manually via extract_json().
-    use_grounding = (stage == "ranker") and os.environ.get("GEMINI_GROUNDING", "1") != "0"
+    use_grounding = (stage == "ranker") and os.environ.get(
+        "GEMINI_GROUNDING", "1"
+    ) != "0"
 
     body: dict = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -215,7 +236,8 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
         f"{model}:generateContent?key={api_key}"
     )
     req = urllib.request.Request(
-        url, data=payload,
+        url,
+        data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
@@ -231,6 +253,7 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
                 print(f"⚠️  Gemini key ...{key_id} exhausted — trying next key...")
                 try:
                     from pipeline import quota as _q
+
                     _q.mark_key_exhausted(api_key, model=model)
                 except Exception:
                     pass
@@ -246,29 +269,38 @@ def _call_gemini_with_key(prompt: str, stage: str, max_tokens: int, api_key: str
     #   parts[1] = actual response text
     # Always pick the first non-thought part to get the real output.
     _parts = data["candidates"][0]["content"]["parts"]
-    _output_parts = [p["text"] for p in _parts if not p.get("thought", False) and "text" in p]
+    _output_parts = [
+        p["text"] for p in _parts if not p.get("thought", False) and "text" in p
+    ]
     text = _output_parts[0] if _output_parts else _parts[0]["text"]
     usage = data.get("usageMetadata", {})
-    input_tok  = usage.get("promptTokenCount", 0)
+    input_tok = usage.get("promptTokenCount", 0)
     output_tok = usage.get("candidatesTokenCount", 0)
     elapsed = round(time.time() - t0, 1)
-    log.debug(f"[{stage}] Gemini success in {elapsed}s — key ...{key_id}, in:{input_tok} out:{output_tok}")
-    _usage_log.append({
-        "stage":        stage,
-        "mode":         f"gemini/{model}/key...{key_id}",
-        "input_tokens": input_tok,
-        "output_tokens": output_tok,
-        "cost_usd":     0.0,
-    })
+    log.debug(
+        f"[{stage}] Gemini success in {elapsed}s — key ...{key_id}, in:{input_tok} out:{output_tok}"
+    )
+    _usage_log.append(
+        {
+            "stage": stage,
+            "mode": f"gemini/{model}/key...{key_id}",
+            "input_tokens": input_tok,
+            "output_tokens": output_tok,
+            "cost_usd": 0.0,
+        }
+    )
     try:
         from pipeline import quota as _q
+
         _q.record_call(stage)
     except Exception:
         pass
     return text
 
 
-def _call_gemini(prompt: str, stage: str, max_tokens: int, json_mode: bool = False) -> str:
+def _call_gemini(
+    prompt: str, stage: str, max_tokens: int, json_mode: bool = False
+) -> str:
     """
     Rotate-first key strategy:
     - On RPM 429: rotate to next key immediately (no waiting on same key).
@@ -277,6 +309,7 @@ def _call_gemini(prompt: str, stage: str, max_tokens: int, json_mode: bool = Fal
     - Gives up after 6 full rotation cycles (~6 minutes max wait total).
     """
     from pipeline import quota as _q
+
     log = _logger_mod.get()
     all_keys = _get_all_gemini_keys()
     if not all_keys:
@@ -284,7 +317,7 @@ def _call_gemini(prompt: str, stage: str, max_tokens: int, json_mode: bool = Fal
 
     model = _gemini_model_for(stage)
     max_cycles = 6
-    cycle_wait = 60   # seconds to wait between full rotation cycles
+    cycle_wait = 60  # seconds to wait between full rotation cycles
 
     for cycle in range(max_cycles):
         rpm_hit = []
@@ -292,44 +325,58 @@ def _call_gemini(prompt: str, stage: str, max_tokens: int, json_mode: bool = Fal
             if _q.is_key_exhausted(key, model=model):
                 continue
             try:
-                return _call_gemini_with_key(prompt, stage, max_tokens, key, json_mode=json_mode)
+                return _call_gemini_with_key(
+                    prompt, stage, max_tokens, key, json_mode=json_mode
+                )
             except _GeminiQuotaExhausted:
-                continue   # daily limit — skip permanently (already marked inside)
+                continue  # daily limit — skip permanently (already marked inside)
             except _GeminiRPMLimited:
                 rpm_hit.append(key[-8:])
-                continue   # rotate immediately — no waiting
+                continue  # rotate immediately — no waiting
 
         # Check if any non-quota-exhausted keys remain
         available = [k for k in all_keys if not _q.is_key_exhausted(k, model=model)]
         if not available:
-            break   # every key is daily-exhausted
+            break  # every key is daily-exhausted
 
         if cycle < max_cycles - 1:
             log.warning(
                 f"[{stage}] All {len(rpm_hit)} available key(s) RPM-limited "
                 f"(cycle {cycle+1}/{max_cycles}) — waiting {cycle_wait}s"
             )
-            print(f"⏳ All {len(rpm_hit)} key(s) RPM-limited — waiting {cycle_wait}s (cycle {cycle+1}/{max_cycles})...")
+            print(
+                f"⏳ All {len(rpm_hit)} key(s) RPM-limited — waiting {cycle_wait}s (cycle {cycle+1}/{max_cycles})..."
+            )
             time.sleep(cycle_wait)
 
     _q.mark_exhausted()
     n = len(all_keys)
-    print(f"⚠️  All {n} Gemini key(s) exhausted/RPM-limited — falling back to OpenRouter...")
-    raise _GeminiQuotaExhausted(f"All {n} configured Gemini keys are exhausted for today.")
+    print(
+        f"⚠️  All {n} Gemini key(s) exhausted/RPM-limited — falling back to OpenRouter..."
+    )
+    raise _GeminiQuotaExhausted(
+        f"All {n} configured Gemini keys are exhausted for today."
+    )
 
 
 # ── Mode 3: OpenRouter ────────────────────────────────────────────────────────
 
-def _call_openrouter(prompt: str, stage: str, max_tokens: int, _model: str | None = None) -> str:
+
+def _call_openrouter(
+    prompt: str, stage: str, max_tokens: int, _model: str | None = None
+) -> str:
     import urllib.request
     import urllib.error
+
     log = _logger_mod.get()
     model = _model or _openrouter_model_for(stage)
-    payload = json.dumps({
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
+    payload = json.dumps(
+        {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+    ).encode()
 
     wait_times = [30, 60, 120]
     for attempt, wait in enumerate(wait_times + [None], start=1):
@@ -351,55 +398,73 @@ def _call_openrouter(prompt: str, stage: str, max_tokens: int, _model: str | Non
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 if model != OPENROUTER_FALLBACK:
-                    log.warning(f"[{stage}] OpenRouter 404 for '{model}' — retrying with {OPENROUTER_FALLBACK}")
-                    print(f"⚠️  OpenRouter model not found ({model}) — switching to {OPENROUTER_FALLBACK}...")
-                    return _call_openrouter(prompt, stage, max_tokens, _model=OPENROUTER_FALLBACK)
+                    log.warning(
+                        f"[{stage}] OpenRouter 404 for '{model}' — retrying with {OPENROUTER_FALLBACK}"
+                    )
+                    print(
+                        f"⚠️  OpenRouter model not found ({model}) — switching to {OPENROUTER_FALLBACK}..."
+                    )
+                    return _call_openrouter(
+                        prompt, stage, max_tokens, _model=OPENROUTER_FALLBACK
+                    )
                 err_body = e.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"[{stage}] OpenRouter 404 even for fallback model: {err_body[:200]}") from e
+                raise RuntimeError(
+                    f"[{stage}] OpenRouter 404 even for fallback model: {err_body[:200]}"
+                ) from e
             elif e.code == 429 and wait is not None:
-                log.warning(f"[{stage}] OpenRouter 429 — waiting {wait}s before retry {attempt+1}")
+                log.warning(
+                    f"[{stage}] OpenRouter 429 — waiting {wait}s before retry {attempt+1}"
+                )
                 print(f"⏳ Rate limited by OpenRouter — waiting {wait}s...")
                 time.sleep(wait)
             else:
                 raise
 
-    text      = data["choices"][0]["message"]["content"]
-    usage     = data.get("usage", {})
-    cost_usd  = float(data.get("usage", {}).get("cost", 0.0))
-    _usage_log.append({
-        "stage":         stage,
-        "mode":          f"openrouter/{model}",
-        "input_tokens":  usage.get("prompt_tokens", 0),
-        "output_tokens": usage.get("completion_tokens", 0),
-        "cost_usd":      round(cost_usd, 6),
-    })
+    text = data["choices"][0]["message"]["content"]
+    usage = data.get("usage", {})
+    cost_usd = float(data.get("usage", {}).get("cost", 0.0))
+    _usage_log.append(
+        {
+            "stage": stage,
+            "mode": f"openrouter/{model}",
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+            "cost_usd": round(cost_usd, 6),
+        }
+    )
     return text
 
 
 # ── Mode 4: Anthropic SDK ─────────────────────────────────────────────────────
+
 
 def _call_sdk(prompt: str, stage: str, max_tokens: int) -> str:
     log = _logger_mod.get()
     log.debug(f"[{stage}] SDK call starting — prompt: {len(prompt)} chars")
     t0 = time.time()
     from anthropic import Anthropic
+
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     response = client.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
-    usage    = response.usage
-    elapsed  = round(time.time() - t0, 1)
+    usage = response.usage
+    elapsed = round(time.time() - t0, 1)
     cost_usd = (usage.input_tokens * 3.00 + usage.output_tokens * 15.00) / 1_000_000
-    log.debug(f"[{stage}] SDK success in {elapsed}s — in:{usage.input_tokens} out:{usage.output_tokens} ${cost_usd:.4f}")
-    _usage_log.append({
-        "stage":         stage,
-        "mode":          "anthropic_sdk",
-        "input_tokens":  usage.input_tokens,
-        "output_tokens": usage.output_tokens,
-        "cost_usd":      round(cost_usd, 6),
-    })
+    log.debug(
+        f"[{stage}] SDK success in {elapsed}s — in:{usage.input_tokens} out:{usage.output_tokens} ${cost_usd:.4f}"
+    )
+    _usage_log.append(
+        {
+            "stage": stage,
+            "mode": "anthropic_sdk",
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "cost_usd": round(cost_usd, 6),
+        }
+    )
     return response.content[0].text
 
 
@@ -409,13 +474,14 @@ _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 def kill_claude_processes() -> list[int]:
     import psutil
+
     killed = []
     current = os.getpid()
     for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
             if proc.pid == current:
                 continue
-            name    = (proc.info["name"] or "").lower()
+            name = (proc.info["name"] or "").lower()
             cmdline = " ".join(proc.info["cmdline"] or []).lower()
             if "claude" in name or ("claude" in cmdline and "-p" in cmdline):
                 proc.kill()
@@ -437,8 +503,11 @@ def _call_cli(prompt: str, stage: str) -> str:
     try:
         result = subprocess.run(
             ["claude", "-p", prompt],
-            capture_output=True, text=True, timeout=300,
-            start_new_session=True, env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            start_new_session=True,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"[{stage}] claude CLI timed out after 300s.")
@@ -446,8 +515,12 @@ def _call_cli(prompt: str, stage: str) -> str:
     elapsed = round(time.time() - t0, 1)
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "")[:400]
-        log.error(f"[{stage}] CLI failed in {elapsed}s (exit {result.returncode})\n{err}")
-        raise RuntimeError(f"[{stage}] claude CLI failed (exit {result.returncode}):\n{err}")
+        log.error(
+            f"[{stage}] CLI failed in {elapsed}s (exit {result.returncode})\n{err}"
+        )
+        raise RuntimeError(
+            f"[{stage}] claude CLI failed (exit {result.returncode}):\n{err}"
+        )
 
     raw = _ANSI_ESCAPE.sub("", result.stdout).strip()
     log.debug(f"[{stage}] CLI success in {elapsed}s — {len(raw)} chars")
@@ -456,6 +529,7 @@ def _call_cli(prompt: str, stage: str) -> str:
 
 
 # ── Public interface ──────────────────────────────────────────────────────────
+
 
 def get_mode() -> str:
     force = os.environ.get("FORCE_PROVIDER")
@@ -501,10 +575,17 @@ def get_mode() -> str:
     return f"claude_cli ({CLAUDE_MODEL})"
 
 
-def call(prompt: str, stage: str, max_tokens: int = DEFAULT_MAX_TOKENS, json_mode: bool = False) -> str:
+def call(
+    prompt: str,
+    stage: str,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    json_mode: bool = False,
+) -> str:
     # Per-stage override takes priority over global provider
     # e.g. FORCE_PROVIDER_ANIMATOR=handoff lets you handoff just the animator
-    force = os.environ.get(f"FORCE_PROVIDER_{stage.upper()}") or os.environ.get("FORCE_PROVIDER")
+    force = os.environ.get(f"FORCE_PROVIDER_{stage.upper()}") or os.environ.get(
+        "FORCE_PROVIDER"
+    )
 
     if force == "handoff":
         return _call_handoff(prompt, stage)

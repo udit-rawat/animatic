@@ -17,6 +17,7 @@ Lambda setup (one-time, when USE_REMOTION_LAMBDA=1):
   npx remotion lambda sites create src/index.ts --site-name adamax
   Set in .env: REMOTION_LAMBDA_FUNCTION_NAME, REMOTION_LAMBDA_REGION, REMOTION_SERVE_URL
 """
+
 import json
 import math
 import os
@@ -26,24 +27,27 @@ import sys
 import threading
 import time
 
-_ROOT         = os.path.join(os.path.dirname(__file__), "..")
-PARAMS_INPUT  = os.path.join(_ROOT, "output", "params.json")
-SCENE_PLAN    = os.path.join(_ROOT, "output", "scene_plan.json")
-TIMING_INPUT  = os.path.join(_ROOT, "output", "narration_timing.json")
-WORD_TIMINGS  = os.path.join(_ROOT, "output", "word_timings.json")
-CUE_DEFS      = os.path.join(_ROOT, "cue_definitions.json")
-AUDIO_INPUT   = os.path.join(_ROOT, "output", "narration.wav")
-PROPS_PATH    = os.path.join(_ROOT, "output", "remotion_props.json")
-OUTPUT_VIDEO  = os.path.join(_ROOT, "output", "video.mp4")
-REMOTION_DIR  = os.path.join(_ROOT, "remotion")
-VIDEO_SPEC    = os.path.join(_ROOT, "output", "video_spec.json")
+_ROOT = os.path.join(os.path.dirname(__file__), "..")
+PARAMS_INPUT = os.path.join(_ROOT, "output", "params.json")
+SCENE_PLAN = os.path.join(_ROOT, "output", "scene_plan.json")
+TIMING_INPUT = os.path.join(_ROOT, "output", "narration_timing.json")
+WORD_TIMINGS = os.path.join(_ROOT, "output", "word_timings.json")
+CUE_DEFS = os.path.join(_ROOT, "cue_definitions.json")
+AUDIO_INPUT = os.path.join(_ROOT, "output", "narration.wav")
+PROPS_PATH = os.path.join(_ROOT, "output", "remotion_props.json")
+OUTPUT_VIDEO = os.path.join(_ROOT, "output", "video.mp4")
+REMOTION_DIR = os.path.join(_ROOT, "remotion")
+VIDEO_SPEC = os.path.join(_ROOT, "output", "video_spec.json")
 
 FPS = 30
 
 
 # ── Cue map builder ────────────────────────────────────────────────────────────
 
-def build_cue_map(timing: dict, word_timings: list[dict], cue_defs: dict) -> dict[str, int]:
+
+def build_cue_map(
+    timing: dict, word_timings: list[dict], cue_defs: dict
+) -> dict[str, int]:
     """
     Build {label: frame_number} from two sources:
 
@@ -62,9 +66,9 @@ def build_cue_map(timing: dict, word_timings: list[dict], cue_defs: dict) -> dic
 
     # ── Segment cues ─────────────────────────────────────────────────────────
     for cue in cue_defs.get("segment_cues", []):
-        label   = cue.get("label")
+        label = cue.get("label")
         segment = cue.get("segment")
-        offset  = cue.get("offset_frames", 0)
+        offset = cue.get("offset_frames", 0)
         if not label or not segment:
             continue
         entry = timing.get(segment)
@@ -78,10 +82,10 @@ def build_cue_map(timing: dict, word_timings: list[dict], cue_defs: dict) -> dic
         return cue_map
 
     for cue in cue_defs.get("word_cues", []):
-        label    = cue.get("label")
-        keyword  = (cue.get("trigger_word") or "").lower()
-        occ      = cue.get("occurrence", 0)
-        offset   = cue.get("offset_frames", 0)
+        label = cue.get("label")
+        keyword = (cue.get("trigger_word") or "").lower()
+        occ = cue.get("occurrence", 0)
+        offset = cue.get("offset_frames", 0)
         if not label or not keyword:
             continue
 
@@ -89,7 +93,9 @@ def build_cue_map(timing: dict, word_timings: list[dict], cue_defs: dict) -> dic
         if not matches:
             continue
 
-        match = matches[-1] if occ == -1 else (matches[occ] if len(matches) > occ else None)
+        match = (
+            matches[-1] if occ == -1 else (matches[occ] if len(matches) > occ else None)
+        )
         if not match:
             continue
 
@@ -98,17 +104,19 @@ def build_cue_map(timing: dict, word_timings: list[dict], cue_defs: dict) -> dic
 
     return cue_map
 
-RENDER_TIMEOUT = 300   # seconds — Remotion is ~3-5× faster than Manim
+
+RENDER_TIMEOUT = 300  # seconds — Remotion is ~3-5× faster than Manim
 
 
 # ── Spinner ───────────────────────────────────────────────────────────────────
+
 
 class Spinner:
     CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
     def __init__(self, message: str):
         self.message = message
-        self._stop   = threading.Event()
+        self._stop = threading.Event()
         self._thread = threading.Thread(target=self._spin, daemon=True)
 
     def _spin(self):
@@ -116,7 +124,9 @@ class Spinner:
         start = time.time()
         while not self._stop.is_set():
             elapsed = int(time.time() - start)
-            sys.stdout.write(f"\r{self.CHARS[i % len(self.CHARS)]}  {self.message} ({elapsed}s elapsed)  ")
+            sys.stdout.write(
+                f"\r{self.CHARS[i % len(self.CHARS)]}  {self.message} ({elapsed}s elapsed)  "
+            )
             sys.stdout.flush()
             i += 1
             time.sleep(0.1)
@@ -133,6 +143,7 @@ class Spinner:
 
 
 # ── Props assembly ─────────────────────────────────────────────────────────────
+
 
 def assemble_props(
     params: dict,
@@ -151,22 +162,22 @@ def assemble_props(
     duration from the actual audio file and overrides this value at render time.
     """
     total_dur = max(
-        v.get("end", v.get("start", 0) + v.get("duration", 0))
-        for v in timing.values()
+        v.get("end", v.get("start", 0) + v.get("duration", 0)) for v in timing.values()
     )
     total_frames = math.ceil(total_dur * FPS) + FPS  # +1s breathing room
 
     return {
-        "beats":       scene_plan.get("beats", []),
-        "scenes":      params,   # v3 ScenePayload format — routed by SceneRouter in Remotion
-        "timing":      timing,
-        "audioSrc":    "narration.wav",
+        "beats": scene_plan.get("beats", []),
+        "scenes": params,  # v3 ScenePayload format — routed by SceneRouter in Remotion
+        "timing": timing,
+        "audioSrc": "narration.wav",
         "totalFrames": total_frames,
-        "cues":        cue_map,
+        "cues": cue_map,
     }
 
 
 # ── Remotion execution ─────────────────────────────────────────────────────────
+
 
 def run_remotion_lambda(props_path: str, output_path: str) -> tuple[bool, str]:
     """
@@ -178,14 +189,18 @@ def run_remotion_lambda(props_path: str, output_path: str) -> tuple[bool, str]:
       REMOTION_LAMBDA_REGION         — e.g. us-east-1
       REMOTION_SERVE_URL             — from: npx remotion lambda sites create
     """
-    fn   = os.environ.get("REMOTION_LAMBDA_FUNCTION_NAME", "")
+    fn = os.environ.get("REMOTION_LAMBDA_FUNCTION_NAME", "")
     region = os.environ.get("REMOTION_LAMBDA_REGION", "us-east-1")
-    serve  = os.environ.get("REMOTION_SERVE_URL", "")
+    serve = os.environ.get("REMOTION_SERVE_URL", "")
 
-    missing = [k for k, v in {
-        "REMOTION_LAMBDA_FUNCTION_NAME": fn,
-        "REMOTION_SERVE_URL":            serve,
-    }.items() if not v]
+    missing = [
+        k
+        for k, v in {
+            "REMOTION_LAMBDA_FUNCTION_NAME": fn,
+            "REMOTION_SERVE_URL": serve,
+        }.items()
+        if not v
+    ]
 
     if missing:
         return False, (
@@ -199,7 +214,10 @@ def run_remotion_lambda(props_path: str, output_path: str) -> tuple[bool, str]:
         )
 
     cmd = [
-        "npx", "remotion", "lambda", "render",
+        "npx",
+        "remotion",
+        "lambda",
+        "render",
         serve,
         "VideoComposition",
         f"--props={os.path.abspath(props_path)}",
@@ -239,12 +257,13 @@ def run_remotion(props_path: str, output_path: str) -> tuple[bool, str]:
 
     if not os.path.isdir(os.path.join(REMOTION_DIR, "node_modules", "remotion")):
         return False, (
-            "remotion/node_modules not found. "
-            "Run: cd remotion && npm install"
+            "remotion/node_modules not found. " "Run: cd remotion && npm install"
         )
 
     cmd = [
-        "npx", "remotion", "render",
+        "npx",
+        "remotion",
+        "render",
         "src/index.ts",
         "VideoComposition",
         os.path.abspath(output_path),
@@ -290,7 +309,9 @@ def run_remotion_custom(compositor_file: str, output_path: str) -> tuple[bool, s
     print(f"✓ CustomVideo.tsx → {dest}")
 
     cmd = [
-        "npx", "remotion", "render",
+        "npx",
+        "remotion",
+        "render",
         "src/index.ts",
         "CustomVideo",
         os.path.abspath(output_path),
@@ -320,20 +341,29 @@ def run_remotion_custom(compositor_file: str, output_path: str) -> tuple[bool, s
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main():
     render_backend = os.environ.get("RENDER_BACKEND", "").strip().lower()
-    output_video = os.environ.get("ANIMATOR_OUTPUT_PATH", OUTPUT_VIDEO).strip() or OUTPUT_VIDEO
+    output_video = (
+        os.environ.get("ANIMATOR_OUTPUT_PATH", OUTPUT_VIDEO).strip() or OUTPUT_VIDEO
+    )
     if render_backend == "hyperframes":
-        print("[animator] RENDER_BACKEND=hyperframes — delegating to pipeline.hyper_animator")
+        print(
+            "[animator] RENDER_BACKEND=hyperframes — delegating to pipeline.hyper_animator"
+        )
         from pipeline.hyper_animator import main as hyper_main
+
         return hyper_main()
     if render_backend == "both":
         print("[animator] RENDER_BACKEND=both — delegating to pipeline.render_parity")
         from pipeline.render_parity import main as parity_main
+
         return parity_main()
 
     if os.path.exists(VIDEO_SPEC):
-        print("[animator] video_spec.json present — Remotion inputs are currently derived artifacts")
+        print(
+            "[animator] video_spec.json present — Remotion inputs are currently derived artifacts"
+        )
 
     # ── Load inputs ──────────────────────────────────────────────────────────
     with open(PARAMS_INPUT) as f:
@@ -380,17 +410,19 @@ def main():
     # ── Assemble props ────────────────────────────────────────────────────────
     props = assemble_props(params, scene_plan, timing, cue_map)
 
-    total_dur      = props["totalFrames"] / FPS
+    total_dur = props["totalFrames"] / FPS
     beat_templates = [b["template"] for b in props["beats"]]
-    print(f"Video duration: {total_dur:.1f}s  ({props['totalFrames']} frames @ {FPS}fps)")
+    print(
+        f"Video duration: {total_dur:.1f}s  ({props['totalFrames']} frames @ {FPS}fps)"
+    )
     print(f"Scene plan:     {' → '.join(beat_templates)}")
 
     # ── Beat / timing segment count validation ────────────────────────────────
     # beats.length must equal timing.length: each narration segment needs a beat
     # or the camera pan schedule fires at the wrong time and TakeawayScene shows
     # as a black screen until its beatStartFrame is reached.
-    n_beats   = len(props["beats"])
-    n_timing  = len(timing)
+    n_beats = len(props["beats"])
+    n_timing = len(timing)
     if n_beats != n_timing:
         print(
             f"\n[animator] ⚠️  BEAT/TIMING MISMATCH: {n_beats} beats vs {n_timing} timing segments.\n"
@@ -410,7 +442,9 @@ def main():
 
     compositor_file = os.environ.get("COMPOSITOR_FILE", "").strip()
     if compositor_file and os.path.exists(compositor_file):
-        print(f"[animator] Compositor mode — rendering CustomVideo from {compositor_file}")
+        print(
+            f"[animator] Compositor mode — rendering CustomVideo from {compositor_file}"
+        )
         success, log = run_remotion_custom(compositor_file, output_video)
     else:
         use_lambda = os.environ.get("USE_REMOTION_LAMBDA", "").strip() == "1"
@@ -430,5 +464,6 @@ def main():
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv()
     main()

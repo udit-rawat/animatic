@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from renderers.hyperframes.helpers.primitives import e
-from renderers.hyperframes.templates.base import beat_meta_html, scene_data, section_label_html
+from renderers.hyperframes.templates.base import (
+    beat_meta_html,
+    scene_data,
+    section_label_html,
+)
 
 TEMPLATE_ID = "TakeawayScene"
 

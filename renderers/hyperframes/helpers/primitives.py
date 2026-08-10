@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from html import escape
 
-
 PRIMITIVE_IDS = ["pulse", "slide_in", "highlight", "count_up", "breath", "cue_seek"]
 
 

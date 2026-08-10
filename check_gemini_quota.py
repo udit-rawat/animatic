@@ -3,6 +3,7 @@
 Check health of all configured Gemini API keys.
 Usage: python check_gemini_quota.py
 """
+
 import json
 import os
 import urllib.request
@@ -11,14 +12,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-KEYS = [k.strip() for k in os.environ.get("GEMINI_API_KEYS", os.environ.get("GEMINI_API_KEY", "")).split(",") if k.strip()]
+KEYS = [
+    k.strip()
+    for k in os.environ.get(
+        "GEMINI_API_KEYS", os.environ.get("GEMINI_API_KEY", "")
+    ).split(",")
+    if k.strip()
+]
 MODEL = "gemini-2.5-flash"
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 
-PAYLOAD = json.dumps({
-    "contents": [{"parts": [{"text": "Reply with just: OK"}]}],
-    "generationConfig": {"maxOutputTokens": 5}
-}).encode()
+PAYLOAD = json.dumps(
+    {
+        "contents": [{"parts": [{"text": "Reply with just: OK"}]}],
+        "generationConfig": {"maxOutputTokens": 5},
+    }
+).encode()
 
 
 def check_key(key: str) -> tuple[str, str, str]:
@@ -27,7 +36,7 @@ def check_key(key: str) -> tuple[str, str, str]:
         f"{URL}?key={key}",
         data=PAYLOAD,
         headers={"Content-Type": "application/json"},
-        method="POST"
+        method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -70,7 +79,9 @@ if __name__ == "__main__":
     exhausted_keys = quota.get("exhausted_keys", [])
 
     print(f"\nGemini key health check — model: {MODEL}")
-    print(f"Quota date: {quota.get('date', 'unknown')}  |  Calls today: {quota.get('calls', 0)}")
+    print(
+        f"Quota date: {quota.get('date', 'unknown')}  |  Calls today: {quota.get('calls', 0)}"
+    )
     print(f"Locally exhausted keys (suffix): {exhausted_keys or 'none'}")
     print("-" * 60)
 
@@ -81,13 +92,24 @@ if __name__ == "__main__":
     results = []
     for key in KEYS:
         suffix, status, detail = check_key(key)
-        local_flag = " [locally marked exhausted]" if any(key.endswith(s) for s in exhausted_keys) else ""
+        local_flag = (
+            " [locally marked exhausted]"
+            if any(key.endswith(s) for s in exhausted_keys)
+            else ""
+        )
         print(f"  {suffix}  {status}{local_flag}")
-        if "ERROR" in status or "EXHAUST" in status or "FORBIDDEN" in status or "BAD" in status:
+        if (
+            "ERROR" in status
+            or "EXHAUST" in status
+            or "FORBIDDEN" in status
+            or "BAD" in status
+        ):
             print(f"             └─ {detail}")
         results.append((suffix, status))
 
     print("-" * 60)
     healthy = sum(1 for _, s in results if "HEALTHY" in s)
     rpm_limited = sum(1 for _, s in results if "RPM" in s)
-    print(f"  {healthy} healthy  |  {rpm_limited} rpm-limited  |  {len(results) - healthy - rpm_limited} exhausted/broken\n")
+    print(
+        f"  {healthy} healthy  |  {rpm_limited} rpm-limited  |  {len(results) - healthy - rpm_limited} exhausted/broken\n"
+    )
