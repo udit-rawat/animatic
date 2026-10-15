@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SPEC = ROOT / "reels" / "current" / "spec.json"
 
 
 def resolve_path(path: str | Path) -> Path:
@@ -13,7 +12,7 @@ def resolve_path(path: str | Path) -> Path:
     return p if p.is_absolute() else ROOT / p
 
 
-def load_spec(path: str | Path = DEFAULT_SPEC) -> dict[str, Any]:
+def load_spec(path: str | Path) -> dict[str, Any]:
     spec_path = resolve_path(path)
     with spec_path.open() as f:
         spec = json.load(f)
