@@ -34,3 +34,7 @@ BRIEF_PROMPT_V4.md
 SCRIPT.md
 DESIGN.md
 legacy/
+
+# Claude Code: shared hooks live in .claude/settings.json; skills are installed per machine (see docs/claude-code.md)
+.claude/settings.local.json
+.claude/skills/
