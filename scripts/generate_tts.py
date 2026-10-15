@@ -178,6 +178,8 @@ def generate(spec_path: str, validate_only: bool = False) -> None:
     load_dotenv(ROOT / ".env")
     spec = load_spec(spec_path)
     narrator_module.VOICE_NAME = str(spec.get("voice", "Aoede"))
+    if spec.get("tts_model"):
+        narrator_module.TTS_MODELS[0] = str(spec["tts_model"])
 
     if validate_only:
         print(f"Spec valid -> {spec['_spec_path']}")
@@ -271,7 +273,7 @@ def main() -> None:
         description="Generate Gemini TTS from a reel spec."
     )
     parser.add_argument(
-        "--spec", default="reels/current/spec.json", help="Path to reel spec JSON."
+        "--spec", required=True, help="Path to reel spec JSON (reels/current/spec_<slug>_v1.json)."
     )
     parser.add_argument(
         "--validate-only",

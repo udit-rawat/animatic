@@ -13,6 +13,8 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.reel_spec import cache_dir, composition_dir, load_spec, output_file
 
+HYPERFRAMES_VERSION = "0.8.154"
+
 
 def _hyperframes_command() -> list[str]:
     hyperframes = shutil.which("hyperframes")
@@ -29,7 +31,7 @@ def _hyperframes_command() -> list[str]:
 
     npx = shutil.which("npx")
     if npx:
-        return [npx, "hyperframes", "render"]
+        return [npx, "-y", f"hyperframes@{HYPERFRAMES_VERSION}", "render"]
 
     raise RuntimeError("HyperFrames CLI not found. Install or run it once through npx.")
 
@@ -88,7 +90,7 @@ def main() -> None:
         description="Render a HyperFrames reel from a spec."
     )
     parser.add_argument(
-        "--spec", default="reels/current/spec.json", help="Path to reel spec JSON."
+        "--spec", required=True, help="Path to reel spec JSON (reels/current/spec_<slug>_v1.json)."
     )
     parser.add_argument(
         "--dry-run",
